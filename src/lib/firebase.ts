@@ -40,12 +40,33 @@ const firebaseConfig = {
   appId: "1:1059388982698:web:3d47c9f5ff1f063988d7d3"
 };
 
+// Connection status listener mechanism
+type FirestoreStatusCallback = (status: 'online' | 'offline' | 'high_latency', latency?: number) => void;
+const statusListeners: Set<FirestoreStatusCallback> = new Set();
+
+export function onFirestoreStatusChange(callback: FirestoreStatusCallback) {
+  statusListeners.add(callback);
+  return () => {
+    statusListeners.delete(callback);
+  };
+}
+
+export function notifyFirestoreStatus(status: 'online' | 'offline' | 'high_latency', latency?: number) {
+  statusListeners.forEach((cb) => {
+    try {
+      cb(status, latency);
+    } catch { /* ignore */ }
+  });
+}
+
 // Initialize Firebase safely
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firestore with fallback to prevent localStorage QuotaExceededError crashes
+// Initialize Firestore with fallback to prevent localStorage QuotaExceededError crashes & handle standard Firebase Hosting
 let firestoreInstance;
-const DB_NAME = "ai-studio-portaladministra-da1cf664-8f69-44de-bd4f-4b85c7035cc8";
+const envDbId = (import.meta as any).env?.VITE_FIREBASE_DATABASE_ID;
+const defaultDbId = "ai-studio-portaladministra-da1cf664-8f69-44de-bd4f-4b85c7035cc8";
+const DB_NAME = envDbId || defaultDbId;
 
 try {
   firestoreInstance = initializeFirestore(app, {
@@ -53,14 +74,19 @@ try {
     localCache: persistentLocalCache({})
   }, DB_NAME);
 } catch (err) {
-  console.warn('[Firestore] persistentLocalCache failed, falling back to memoryLocalCache:', err);
+  console.warn('[Firestore] persistentLocalCache failed with DB_NAME, falling back:', err);
   try {
     firestoreInstance = initializeFirestore(app, {
       ignoreUndefinedProperties: true,
       localCache: memoryLocalCache()
     }, DB_NAME);
   } catch (_) {
-    firestoreInstance = getFirestore(app, DB_NAME);
+    try {
+      firestoreInstance = getFirestore(app, DB_NAME);
+    } catch (e2) {
+      console.warn('[Firestore] Falling back to default database (default):', e2);
+      firestoreInstance = getFirestore(app);
+    }
   }
 }
 
@@ -242,6 +268,7 @@ export function subscribeToAggregatedDoc<T>(
 
   // Pasang onSnapshot SPESIFIK ke SATU DOKUMEN TUNGGAL (Hanya dihitung 1 read per snapshot update!)
   return onSnapshot(docRef, (snapshot) => {
+    notifyFirestoreStatus('online');
     if (!snapshot.exists()) {
       onUpdate([]);
       safeLocalStorageSet(cacheKey, JSON.stringify([]));
@@ -393,6 +420,7 @@ export function syncCollection<T extends { id: string }>(
 
   // 2. Listen for real-time changes across all connected devices and users with offline IndexedDB support
   const unsubscribeSnapshot = onSnapshot(colRef, async (snapshot) => {
+    notifyFirestoreStatus('online');
     const isInitialized = safeLocalStorageGet(initKey) === 'true';
     const deletedIds = getDeletedIds(collectionPath);
 
@@ -519,6 +547,7 @@ export interface KopSuratSettings {
 export function syncHeadmaster(onUpdate: (settings: KopSuratSettings) => void, defaultName: string) {
   const docRef = doc(db, 'settings', 'headmaster');
   return onSnapshot(docRef, async (snapshot) => {
+    notifyFirestoreStatus('online');
     if (!snapshot.exists()) {
       const defaults: KopSuratSettings = {
         name: defaultName,
@@ -579,6 +608,7 @@ export function syncHeadmaster(onUpdate: (settings: KopSuratSettings) => void, d
 export function syncCbtConfig(onUpdate: (pin: string) => void, defaultPin: string = '9999') {
   const docRef = doc(db, 'settings', 'cbt_config');
   return onSnapshot(docRef, async (snapshot) => {
+    notifyFirestoreStatus('online');
     if (!snapshot.exists()) {
       try {
         await setDoc(docRef, { bypassPin: defaultPin });

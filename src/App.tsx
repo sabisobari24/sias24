@@ -127,7 +127,7 @@ import WebAkademik from './components/website/WebAkademik';
 import WebKesiswaan from './components/website/WebKesiswaan';
 import WebSarpras from './components/website/WebSarpras';
 import WebBerita from './components/website/WebBerita';
-import { syncCollection, syncHeadmaster, syncCbtConfig, saveCbtBypassPin, syncCollectionWithArray, saveDocument, deleteDocument, saveDocumentsBatch, deleteDocumentsBatch, clearAllCollections, clearDeletedIds, db, deduplicateStudents } from './lib/firebase';
+import { syncCollection, syncHeadmaster, syncCbtConfig, saveCbtBypassPin, syncCollectionWithArray, saveDocument, deleteDocument, saveDocumentsBatch, deleteDocumentsBatch, clearAllCollections, clearDeletedIds, db, deduplicateStudents, onFirestoreStatusChange } from './lib/firebase';
 import { INITIAL_WEB_CONTENT } from './data/initialWebContent';
 
 export default function App() {
@@ -181,10 +181,13 @@ export default function App() {
     } catch (error) {
       console.warn("Connection ping notice:", error);
       consecutiveFailuresRef.current += 1;
-      // Only set sync error state if 3 consecutive pings fail or device is offline
-      if (consecutiveFailuresRef.current >= 3 || !navigator.onLine) {
+      // Only set offline if device is truly disconnected from browser network
+      if (!navigator.onLine) {
         setDbStatus('offline');
         setHasSyncError(true);
+      } else if (consecutiveFailuresRef.current >= 5) {
+        // If device is online but individual ping was slow, set high_latency instead of hard offline
+        setDbStatus('high_latency');
       }
     } finally {
       setIsCheckingConnection(false);
@@ -229,7 +232,7 @@ export default function App() {
     }
   }, []);
 
-  // Monitor navigator online/offline events
+  // Monitor navigator online/offline & real-time Firestore status events
   useEffect(() => {
     const handleOnline = () => {
       checkFirebaseConnection();
@@ -242,6 +245,17 @@ export default function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    // Listen to live snapshot confirmations from Firestore SDK
+    const unsubscribeFirestoreStatus = onFirestoreStatusChange((status, latency) => {
+      if (status === 'online') {
+        consecutiveFailuresRef.current = 0;
+        setDbStatus('online');
+        setHasSyncError(false);
+        if (latency !== undefined) setDbLatency(latency);
+        setLastSyncTime(Date.now());
+      }
+    });
+
     // Initial check
     checkFirebaseConnection();
 
@@ -253,6 +267,7 @@ export default function App() {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      unsubscribeFirestoreStatus();
       clearInterval(interval);
     };
   }, [checkFirebaseConnection]);
