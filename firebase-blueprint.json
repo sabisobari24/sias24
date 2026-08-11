@@ -1,0 +1,75 @@
+{
+  "entities": {
+    "UserStaticProfile": {
+      "title": "User Static Profile",
+      "description": "Profil statis pengguna (nama, kelas, peran) yang jarang berubah",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "guru", "siswa", "orangtua"]
+        },
+        "userClass": {
+          "type": "string"
+        },
+        "nip": {
+          "type": "string"
+        },
+        "nisn": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["uid", "name", "role"]
+    },
+    "AggregatedRealtimeContainer": {
+      "title": "Aggregated Realtime Data Container",
+      "description": "Dokumen agregat berisi array item real-time untuk hemat kuota read/write",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "lastUpdated": {
+          "type": "string"
+        }
+      },
+      "required": ["items"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserStaticProfile",
+      "description": "Data profil statis per pengguna untuk 1x fetch getDoc saat login"
+    },
+    "/aggregated_announcements/{groupId}": {
+      "schema": "AggregatedRealtimeContainer",
+      "description": "Pengumuman real-time teragregasi dalam 1 dokumen tunggal"
+    },
+    "/aggregated_activities/{classId}": {
+      "schema": "AggregatedRealtimeContainer",
+      "description": "Aktivitas kelas real-time teragregasi dalam 1 dokumen tunggal per kelas"
+    },
+    "/aggregated_messages/{chatId}": {
+      "schema": "AggregatedRealtimeContainer",
+      "description": "Pesan teragregasi dalam 1 dokumen tunggal per percakapan"
+    }
+  }
+}

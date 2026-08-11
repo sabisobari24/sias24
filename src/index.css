@@ -1,0 +1,176 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* --- CLEAN MINIMALISM GLOBAL STYLE SHEET --- */
+
+body {
+  background-color: #f8fafc; /* slate-50 */
+  color: #0f172a; /* slate-900 */
+}
+
+/* Scrollbar Customization - Hidden tracks by default while keeping scrollbars thin & elegant when scrollbar-thin class is used */
+::-webkit-scrollbar {
+  display: none;
+  width: 0px;
+  height: 0px;
+  background: transparent;
+}
+* {
+  scrollbar-width: none; /* Firefox default */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom Thin Elegant Scrollbar Line for Left Menus and Data Tables */
+.scrollbar-thin {
+  scrollbar-width: thin !important;
+  scrollbar-color: #a5b4fc #f1f5f9 !important; /* Firefox: indigo-300 on slate-100 */
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  display: block !important;
+  width: 4px !important;
+  height: 4px !important;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.7) !important;
+  border-radius: 9999px !important;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #a5b4fc !important; /* indigo-300 */
+  border-radius: 9999px !important;
+  transition: all 0.2s ease !important;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #6366f1 !important; /* indigo-500 */
+}
+
+/* Input, Select, Textarea Refinement */
+input, select, textarea {
+  border-radius: 0.75rem !important; /* rounded-xl */
+  border-color: #e2e8f0 !important; /* border-slate-200 */
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  font-size: 0.875rem !important;
+  transition: all 0.2s ease !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #6366f1 !important; /* Indigo 500 */
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1) !important;
+  outline: none !important;
+}
+
+/* Modern tabs indicator color */
+.border-b-2.border-blue-600 {
+  border-bottom-width: 2px !important;
+  border-color: #4f46e5 !important; /* indigo-600 */
+  color: #4f46e5 !important;
+  font-weight: 600 !important;
+}
+
+/* Buttons Standardized to Indigo Accent */
+.bg-blue-600, .bg-indigo-600, .bg-indigo-700 {
+  background-color: #4f46e5 !important; /* Indigo */
+  color: #ffffff !important;
+  transition: all 0.15s ease !important;
+}
+.bg-blue-600:hover, .bg-indigo-600:hover, .bg-indigo-700:hover {
+  background-color: #4338ca !important; /* Indigo Hover */
+}
+
+.text-blue-600, .text-indigo-600 {
+  color: #4f46e5 !important;
+}
+.text-blue-500 {
+  color: #6366f1 !important;
+}
+
+/* Convert all colorful panel headers/banners into elegant, high-contrast, minimalist cards */
+.bg-gradient-to-r {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 1.25rem !important; /* rounded-2xl */
+  color: #0f172a !important; /* Slate 900 */
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05) !important;
+  padding: 1.5rem !important;
+}
+
+/* Reset inner elements of gradient banners */
+.bg-gradient-to-r * {
+  color: #334155 !important; /* Slate 700 */
+}
+
+.bg-gradient-to-r h1, 
+.bg-gradient-to-r h2, 
+.bg-gradient-to-r h3, 
+.bg-gradient-to-r .font-bold {
+  color: #0f172a !important; /* Slate 900 */
+}
+
+/* Sub-headings inside overridden gradient cards */
+.bg-gradient-to-r .text-blue-100,
+.bg-gradient-to-r .text-orange-100,
+.bg-gradient-to-r .text-teal-100,
+.bg-gradient-to-r .text-purple-100,
+.bg-gradient-to-r .text-rose-100,
+.bg-gradient-to-r .text-emerald-100,
+.bg-gradient-to-r .text-indigo-100 {
+  color: #64748b !important; /* Slate 500 */
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* Bubbles & overlay styling inside overridden headers */
+.bg-gradient-to-r .bg-white\/20,
+.bg-gradient-to-r .bg-white\/10 {
+  background-color: #f1f5f9 !important; /* Slate 100 */
+  border-color: #e2e8f0 !important;
+}
+
+.bg-gradient-to-r .border-white\/30,
+.bg-gradient-to-r .border-white\/20 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Enforce smooth corners & light borders for cards */
+.bg-white {
+  background-color: #ffffff;
+}
+
+.rounded-xl {
+  border-radius: 1rem !important;
+}
+
+.rounded-2xl {
+  border-radius: 1.25rem !important;
+}
+
+.border-slate-100 {
+  border-color: #f1f5f9 !important;
+}
+
+.border-slate-200 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Soft minimalist shadows */
+.shadow-sm {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.03), 0 1px 2px -1px rgb(0 0 0 / 0.03) !important;
+}
+
+.shadow-md {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05) !important;
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Portal Administrasi Siswa",
+  "description": "Portal integrasi administrasi siswa untuk Admin, Guru, Wali Kelas, Siswa, Orang Tua, Guru BK, dan Guru Piket, mengelola absensi, pelanggaran, dan catatan bimbingan.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
