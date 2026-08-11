@@ -301,35 +301,36 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
         {/* Navigation Arrows */}
         <button 
           onClick={prevSlide}
-          className="absolute left-5 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/10 hover:bg-amber-400 hover:text-slate-950 text-white flex items-center justify-center border border-white/20 transition-all cursor-pointer backdrop-blur-xs opacity-0 group-hover:opacity-100"
+          className="absolute left-2 sm:left-5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-11 sm:h-11 rounded-full bg-slate-900/40 hover:bg-amber-400 hover:text-slate-950 text-white flex items-center justify-center border border-white/20 transition-all cursor-pointer backdrop-blur-xs opacity-70 sm:opacity-0 sm:group-hover:opacity-100"
         >
-          <ChevronLeft className="w-6 h-6" />
+          <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
         </button>
         <button 
           onClick={nextSlide}
-          className="absolute right-5 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/10 hover:bg-amber-400 hover:text-slate-950 text-white flex items-center justify-center border border-white/20 transition-all cursor-pointer backdrop-blur-xs opacity-0 group-hover:opacity-100"
+          className="absolute right-2 sm:right-5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-11 sm:h-11 rounded-full bg-slate-900/40 hover:bg-amber-400 hover:text-slate-950 text-white flex items-center justify-center border border-white/20 transition-all cursor-pointer backdrop-blur-xs opacity-70 sm:opacity-0 sm:group-hover:opacity-100"
         >
-          <ChevronRight className="w-6 h-6" />
+          <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
         </button>
 
         {/* Content Info */}
-        <div className="absolute bottom-10 left-8 md:left-12 max-w-2xl text-left text-white z-10 space-y-2 pointer-events-none">
+        <div className="absolute bottom-6 sm:bottom-10 left-4 sm:left-8 md:left-12 right-14 sm:right-auto max-w-2xl text-left text-white z-10 space-y-1 sm:space-y-2 pointer-events-none">
           <motion.h1 
             key={`title-${currentSlide}`}
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-2xl md:text-3xl lg:text-4xl font-black leading-tight tracking-tight drop-shadow-md"
-            dangerouslySetInnerHTML={{ __html: slides[currentSlide] ? (slides[currentSlide].title || slides[currentSlide].welcome || '') : '' }}
-          />
+            className="text-base sm:text-2xl md:text-3xl lg:text-4xl font-black leading-snug sm:leading-tight tracking-tight drop-shadow-md break-words line-clamp-2 sm:line-clamp-none"
+          >
+            {slides[currentSlide] ? (slides[currentSlide].title || slides[currentSlide].welcome || '').replace(/<[^>]*>/g, '').trim() : ''}
+          </motion.h1>
           <motion.div 
             key={`ach-${currentSlide}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="inline-flex items-center gap-1.5 text-xs md:text-sm font-semibold text-amber-300 tracking-wide"
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-amber-300 tracking-wide line-clamp-1"
           >
-            <Camera className="w-4 h-4" />
-            <span>{slides[currentSlide] ? (slides[currentSlide].desc || slides[currentSlide].achievement || '') : ''}</span>
+            <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>{slides[currentSlide] ? (slides[currentSlide].desc || slides[currentSlide].achievement || '').replace(/<[^>]*>/g, '').trim() : ''}</span>
           </motion.div>
         </div>
 

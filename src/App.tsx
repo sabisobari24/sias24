@@ -767,6 +767,13 @@ export default function App() {
     const unsubWebContent = syncCollection<any>('web_content', (data) => {
       const homeDoc = data.find(doc => doc.id === 'home');
       if (homeDoc) {
+        if (Array.isArray(homeDoc.slides)) {
+          homeDoc.slides = homeDoc.slides.map((s: any) => s ? {
+            ...s,
+            title: (s.title || '').replace(/<[^>]*>/g, '').trim(),
+            desc: (s.desc || '').replace(/<[^>]*>/g, '').trim()
+          } : s);
+        }
         setWebHomeContent(homeDoc);
         safeLocalStorageSet('siakad_web_home_content', JSON.stringify(homeDoc));
       }

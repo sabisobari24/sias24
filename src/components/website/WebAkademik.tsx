@@ -272,9 +272,9 @@ export default function WebAkademik() {
                 <ChevronRight className="w-5 h-5" />
               </button>
 
-              <div className="absolute bottom-5 left-5 right-5 text-white pointer-events-none space-y-0.5">
-                <span className="text-[10px] font-bold text-amber-300 block">{slides[currentSlide].title}</span>
-                <p className="text-xs text-slate-200 leading-normal">{slides[currentSlide].desc}</p>
+              <div className="absolute bottom-3 sm:bottom-5 left-3 sm:left-5 right-3 sm:right-5 text-white pointer-events-none space-y-0.5">
+                <span className="text-[10px] sm:text-xs font-bold text-amber-300 block line-clamp-1">{(slides[currentSlide].title || '').replace(/<[^>]*>/g, '').trim()}</span>
+                <p className="text-[10px] sm:text-xs text-slate-200 leading-normal line-clamp-2">{(slides[currentSlide].desc || '').replace(/<[^>]*>/g, '').trim()}</p>
               </div>
             </div>
           </div>

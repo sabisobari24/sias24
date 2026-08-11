@@ -299,8 +299,8 @@ export default function WebContentEditor() {
 
     const newSlide: WebSlide = {
       image: slideForm.image || (slideForm.type === 'video' ? 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600' : 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz'),
-      title: slideForm.title || '',
-      desc: slideForm.desc || '',
+      title: (slideForm.title || '').replace(/<[^>]*>/g, '').trim(),
+      desc: (slideForm.desc || '').replace(/<[^>]*>/g, '').trim(),
       type: slideForm.type || 'image',
       videoUrl: slideForm.videoUrl || ''
     };
@@ -1564,7 +1564,7 @@ export default function WebContentEditor() {
                             </div>
                             <div className="text-left space-y-1">
                               <div className="flex items-center gap-2">
-                                <h4 className="text-xs font-bold text-slate-800">{sl.title}</h4>
+                                <h4 className="text-xs font-bold text-slate-800">{(sl.title || '').replace(/<[^>]*>/g, '').trim()}</h4>
                                 {isVideo ? (
                                   <span className="text-[9px] bg-red-100 text-red-700 font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
                                     <Video className="w-2.5 h-2.5" />
@@ -1577,7 +1577,7 @@ export default function WebContentEditor() {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-[10px] text-slate-400 font-medium line-clamp-1">{sl.desc}</p>
+                              <p className="text-[10px] text-slate-400 font-medium line-clamp-1">{(sl.desc || '').replace(/<[^>]*>/g, '').trim()}</p>
                             </div>
                           </div>
 
@@ -1585,7 +1585,11 @@ export default function WebContentEditor() {
                             <button
                               onClick={() => {
                                 setEditingSlideIdx(sIdx);
-                                setSlideForm(sl);
+                                setSlideForm({
+                                  ...sl,
+                                  title: (sl.title || '').replace(/<[^>]*>/g, '').trim(),
+                                  desc: (sl.desc || '').replace(/<[^>]*>/g, '').trim()
+                                });
                               }}
                               className="p-1.5 border border-slate-200 hover:border-emerald-600 rounded-lg text-slate-500 hover:text-emerald-700 transition-colors cursor-pointer"
                             >

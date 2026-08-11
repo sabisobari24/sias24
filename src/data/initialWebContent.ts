@@ -738,17 +738,17 @@ export const INITIAL_WEB_CONTENT: WebSectionContent[] = [
     slides: [
       {
         image: 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz',
-        title: 'Selamat Datang di <span>SMPN 50 Jakarta</span>',
+        title: 'Selamat Datang di SMPN 50 Jakarta',
         desc: 'Gedung Utama Lingkungan Sekolah'
       },
       {
         image: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?q=80&w=1200',
-        title: 'Selamat Atas Raihan <span>Prestasi Provinsi</span>',
+        title: 'Selamat Atas Raihan Prestasi Provinsi',
         desc: 'Juara 1 Lomba Cerdas Cermat'
       },
       {
         image: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=1200',
-        title: 'Mengukir Prestasi di <span>Kancah Nasional</span>',
+        title: 'Mengukir Prestasi di Kancah Nasional',
         desc: 'Medali Emas Olimpiade Sains Nasional'
       }
     ]
