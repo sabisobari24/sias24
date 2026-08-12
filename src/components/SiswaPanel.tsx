@@ -12,7 +12,9 @@ import {
   ExamGrade,
   BimbinganSchedule,
   StudentAchievement,
-  PemberkasanSchedule
+  PemberkasanSchedule,
+  ELearningMaterial,
+  StudentLearningProgress
 } from '../types';
 import {
   User,
@@ -39,10 +41,12 @@ import {
   Printer,
   FileCheck,
   Eye,
-  X
+  X,
+  BookOpen
 } from 'lucide-react';
 import ExamBrowser from './ExamBrowser';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
+import ELearningPanel from './ELearningPanel';
 import { fileToBase64, convertGoogleDriveLink } from '../utils/imageHelper';
 import { printCertificate, printTablePDF } from '../utils/printHelper';
 
@@ -79,10 +83,13 @@ interface SiswaPanelProps {
   bimbinganSchedules: BimbinganSchedule[];
   studentAchievements?: StudentAchievement[];
   pemberkasanSchedules?: PemberkasanSchedule[];
-  activeTabOverride?: 'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | null;
-  onTabChange?: (tab: 'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan') => void;
+  activeTabOverride?: 'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | null;
+  onTabChange?: (tab: 'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan') => void;
   cbtBypassPin?: string;
   headmasterName?: string;
+  elearningMaterials?: ELearningMaterial[];
+  elearningProgress?: StudentLearningProgress[];
+  onUpdateProgress?: (p: StudentLearningProgress) => void;
 }
 
 export default function SiswaPanel({
@@ -104,11 +111,14 @@ export default function SiswaPanel({
   onTabChange,
   cbtBypassPin,
   headmasterName = 'Dra. Hj. Endah Purwani M.M',
+  elearningMaterials = [],
+  elearningProgress = [],
+  onUpdateProgress,
 }: SiswaPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan'>('profil');
+  const [internalActiveTab, setInternalActiveTab] = useState<'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan'>('profil');
   const [previewPhotoRecord, setPreviewPhotoRecord] = useState<Attendance | null>(null);
   const activeTab = activeTabOverride ? activeTabOverride : internalActiveTab;
-  const setActiveTab = (tab: 'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan') => {
+  const setActiveTab = (tab: 'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan') => {
     setInternalActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
@@ -151,70 +161,65 @@ export default function SiswaPanel({
     if (isCameraActive && !capturedPhoto) {
       setCameraError(null);
       
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setCameraError(
-          "Fitur kamera tidak didukung di browser/device ini. Pastikan Anda mengakses via HTTPS " +
-          "dan mengizinkan akses kamera. Jika berada di dalam frame AI Studio, silakan klik tombol 'Buka di Tab Baru' di kanan atas."
-        );
-        return;
-      }
-
-      // Try with optimal mobile constraints (facingMode: user)
-      navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: "user"
-        },
-        audio: false
-      })
-      .then((mediaStream) => {
-        activeStream = mediaStream;
-        setStream(mediaStream);
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-          videoRef.current.play().catch((err) => console.warn("Video play failed:", err));
+      const getCrossBrowserUserMedia = (constraints: MediaStreamConstraints): Promise<MediaStream> => {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          return navigator.mediaDevices.getUserMedia(constraints);
         }
-      })
-      .catch((err) => {
-        console.warn("Mencoba fallback kamera pertama gagal:", err);
-        // Fallback 1: Try with simpler video constraints (just video: true, without ideal size constraints)
-        navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" },
-          audio: false
-        })
-        .then((mediaStream) => {
-          activeStream = mediaStream;
-          setStream(mediaStream);
-          if (videoRef.current) {
-            videoRef.current.srcObject = mediaStream;
-            videoRef.current.play().catch((err) => console.warn("Video play failed:", err));
-          }
-        })
-        .catch((err2) => {
-          console.warn("Mencoba fallback kamera kedua gagal:", err2);
-          // Fallback 2: Absolutely generic video constraints
-          navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false
-          })
+        const legacyGetUserMedia =
+          (navigator as any).webkitGetUserMedia ||
+          (navigator as any).mozGetUserMedia ||
+          (navigator as any).msGetUserMedia ||
+          (navigator as any).getUserMedia;
+
+        if (legacyGetUserMedia) {
+          return new Promise((resolve, reject) => {
+            legacyGetUserMedia.call(navigator, constraints, resolve, reject);
+          });
+        }
+        return Promise.reject(new Error("MediaDevices / getUserMedia API tidak didukung pada browser ini."));
+      };
+
+      // Progressive constraint fallback list for maximum compatibility across older/newer iOS & Android devices
+      const constraintList: MediaStreamConstraints[] = [
+        { video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+        { video: { facingMode: "user" }, audio: false },
+        { video: { facingMode: { exact: "user" } }, audio: false },
+        { video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+        { video: true, audio: false },
+      ];
+
+      let attemptIndex = 0;
+
+      const tryGetStream = () => {
+        if (attemptIndex >= constraintList.length) {
+          setCameraError(
+            "Gagal mengakses kamera langsung. Silakan gunakan opsi 'Ambil Foto via Kamera Bawaan HP' di bawah " +
+            "atau pastikan izin kamera & GPS sudah diaktifkan pada pengaturan HP/browser Anda."
+          );
+          return;
+        }
+
+        const currentConstraint = constraintList[attemptIndex];
+        getCrossBrowserUserMedia(currentConstraint)
           .then((mediaStream) => {
             activeStream = mediaStream;
             setStream(mediaStream);
             if (videoRef.current) {
               videoRef.current.srcObject = mediaStream;
-              videoRef.current.play().catch((err) => console.warn("Video play failed:", err));
+              videoRef.current.setAttribute('playsinline', 'true');
+              videoRef.current.setAttribute('webkit-playsinline', 'true');
+              videoRef.current.muted = true;
+              videoRef.current.play().catch((err) => console.warn("Video play error:", err));
             }
           })
-          .catch((finalErr) => {
-            console.error("Semua metode akses kamera gagal:", finalErr);
-            setCameraError(
-              "Gagal mengakses kamera perangkat Anda. Pastikan Anda telah memberikan " +
-              "izin kamera di pengaturan sistem perangkat Anda (terutama untuk pengguna iOS/Safari)."
-            );
+          .catch((err) => {
+            console.warn(`Attempt ${attemptIndex + 1} with camera constraint failed:`, currentConstraint, err);
+            attemptIndex++;
+            tryGetStream();
           });
-        });
-      });
+      };
+
+      tryGetStream();
     } else {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
@@ -630,233 +635,238 @@ export default function SiswaPanel({
         </div>
       </div>
 
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Attendance Widget */}
-        <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
-            <Calendar className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 font-medium uppercase">Kehadiran Kelas</p>
-            <p className="text-xl font-bold text-slate-800">{hadirPercentage}% Hadir</p>
-            <p className="text-xs text-slate-400 mt-0.5">Dari {totalDays} hari terekam</p>
-          </div>
-        </div>
+      {/* PROFIL TAB SUMMARY WIDGETS */}
+      {activeTab === 'profil' && (
+        <>
+          {/* Overview Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Attendance Widget */}
+            <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium uppercase">Kehadiran Kelas</p>
+                <p className="text-xl font-bold text-slate-800">{hadirPercentage}% Hadir</p>
+                <p className="text-xs text-slate-400 mt-0.5">Dari {totalDays} hari terekam</p>
+              </div>
+            </div>
 
-        {/* Violations Points Widget */}
-        <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 font-medium uppercase">Poin Pelanggaran</p>
-            <p className="text-xl font-bold text-slate-800">{totalViolationPoints} Poin</p>
-            <p className="text-xs text-slate-400 mt-0.5">Jumlah: {studentViolations.length} pelanggaran</p>
-          </div>
-        </div>
+            {/* Violations Points Widget */}
+            <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium uppercase">Poin Pelanggaran</p>
+                <p className="text-xl font-bold text-slate-800">{totalViolationPoints} Poin</p>
+                <p className="text-xs text-slate-400 mt-0.5">Jumlah: {studentViolations.length} pelanggaran</p>
+              </div>
+            </div>
 
-        {/* Discipline Status Widget */}
-        <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600 shrink-0">
-            <ShieldAlert className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 font-medium uppercase">Status Perilaku</p>
-            <div className={`text-sm font-semibold rounded-md px-2 py-1 mt-1 text-center inline-block ${disciplineStatus.color}`}>
-              {disciplineStatus.label}
+            {/* Discipline Status Widget */}
+            <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600 shrink-0">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium uppercase">Status Perilaku</p>
+                <div className={`text-sm font-semibold rounded-md px-2 py-1 mt-1 text-center inline-block ${disciplineStatus.color}`}>
+                  {disciplineStatus.label}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Raihan Prestasi Siswa Widget */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-          <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-            <Award className="w-5 h-5 text-amber-500" />
-            <span>Daftar Raihan Prestasi Saya (Akademik &amp; Non-Akademik)</span>
-          </h3>
-          <div className="flex items-center gap-2 flex-wrap">
-            {myAchievements.length > 0 && (
-              <button
-                onClick={() => {
-                  const headers = ["Judul Prestasi", "Kategori", "Tingkat", "Peringkat", "Tanggal"];
-                  const rows = myAchievements.map((a) => [a.title, a.category, `Tingkat ${a.level}`, a.rank || a.level, a.date]);
-                  printTablePDF(`Rekapitulasi Raihan Prestasi Siswa - ${student.name}`, headers, rows, headmasterName);
-                }}
-                className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer border border-amber-300 shadow-2xs"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Cetak Rekap (PDF)</span>
-              </button>
+          {/* Raihan Prestasi Siswa Widget */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <Award className="w-5 h-5 text-amber-500" />
+                <span>Daftar Raihan Prestasi Saya (Akademik &amp; Non-Akademik)</span>
+              </h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                {myAchievements.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const headers = ["Judul Prestasi", "Kategori", "Tingkat", "Peringkat", "Tanggal"];
+                      const rows = myAchievements.map((a) => [a.title, a.category, `Tingkat ${a.level}`, a.rank || a.level, a.date]);
+                      printTablePDF(`Rekapitulasi Raihan Prestasi Siswa - ${student.name}`, headers, rows, headmasterName);
+                    }}
+                    className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer border border-amber-300 shadow-2xs"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Cetak Rekap (PDF)</span>
+                  </button>
+                )}
+                <span className="bg-amber-50 text-amber-700 font-extrabold px-2.5 py-1 rounded-full text-xs border border-amber-200/60">
+                  {myAchievements.length} Prestasi Terekam
+                </span>
+              </div>
+            </div>
+
+            {myAchievements.length === 0 ? (
+              <p className="text-xs text-slate-400 italic text-center py-4">
+                Belum ada rekam prestasi yang terdaftar. Terus semangat belajar dan berprestasi!
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {myAchievements.map((ach) => (
+                  <div 
+                    key={ach.id} 
+                    className="relative bg-gradient-to-br from-amber-50/80 via-yellow-50/30 to-white p-5 rounded-2xl border-2 border-amber-300/80 space-y-3 shadow-md hover:shadow-lg transition-all overflow-hidden group"
+                  >
+                    {/* Decorative Certificate Background Watermark / Accent */}
+                    <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-amber-200/20 rounded-full blur-xl pointer-events-none" />
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-amber-200/40 to-transparent rounded-bl-full pointer-events-none" />
+
+                    <div className="flex justify-between items-start gap-3 relative z-10">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
+                            ach.category === 'Akademik' 
+                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          }`}>
+                            {ach.category}
+                          </span>
+                          <span className="bg-amber-100/80 text-amber-900 border border-amber-300/80 font-bold text-[10px] px-2 py-0.5 rounded-full">
+                            Tingkat {ach.level}
+                          </span>
+                        </div>
+                        <h4 className="font-extrabold text-slate-900 text-sm leading-snug pt-1">{ach.title}</h4>
+                      </div>
+                      
+                      <div className="bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-black text-xs px-2.5 py-1 rounded-xl shrink-0 shadow-xs border border-amber-300 flex items-center gap-1">
+                        <Award className="w-3.5 h-3.5 text-amber-950 shrink-0" />
+                        <span>{ach.rank || ach.level}</span>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-slate-600 space-y-1 bg-white/70 p-2.5 rounded-xl border border-amber-100 relative z-10">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Penerima:</span>
+                        <strong className="text-slate-800 font-bold">{student.name} ({student.classId})</strong>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Tanggal Raihan:</span>
+                        <strong className="text-slate-700">{ach.date}</strong>
+                      </div>
+                    </div>
+
+                    {/* Digital Certificate Download Buttons */}
+                    <div className="pt-2 border-t border-amber-200/60 flex flex-wrap items-center justify-between gap-2 relative z-10">
+                      <span className="text-[10px] text-amber-800 font-bold flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        Sertifikat Digital Sah
+                      </span>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => setSelectedCertForPreview(ach)}
+                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-2.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-indigo-200 shrink-0"
+                          title="Pratinjau Sertifikat Digital"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Pratinjau</span>
+                        </button>
+                        <button
+                          onClick={() => printCertificate(ach, student, headmasterName)}
+                          className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black text-xs px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1 shadow-sm border border-amber-400 shrink-0"
+                        >
+                          <Download className="w-3.5 h-3.5 text-slate-950" />
+                          <span>Download Sertifikat</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
-            <span className="bg-amber-50 text-amber-700 font-extrabold px-2.5 py-1 rounded-full text-xs border border-amber-200/60">
-              {myAchievements.length} Prestasi Terekam
-            </span>
           </div>
-        </div>
 
-        {myAchievements.length === 0 ? (
-          <p className="text-xs text-slate-400 italic text-center py-4">
-            Belum ada rekam prestasi yang terdaftar. Terus semangat belajar dan berprestasi!
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {myAchievements.map((ach) => (
-              <div 
-                key={ach.id} 
-                className="relative bg-gradient-to-br from-amber-50/80 via-yellow-50/30 to-white p-5 rounded-2xl border-2 border-amber-300/80 space-y-3 shadow-md hover:shadow-lg transition-all overflow-hidden group"
-              >
-                {/* Decorative Certificate Background Watermark / Accent */}
-                <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-amber-200/20 rounded-full blur-xl pointer-events-none" />
-                <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-amber-200/40 to-transparent rounded-bl-full pointer-events-none" />
+          {/* Jadwal Pemberkasan Widget */}
+          <div className="bg-gradient-to-r from-cyan-50/80 via-teal-50/50 to-white border border-cyan-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-cyan-200/60 pb-3">
+              <h3 className="font-extrabold text-slate-800 text-sm tracking-wide uppercase flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-teal-600" />
+                <span>Jadwal Pemberkasan &amp; Verifikasi Dokumen (Tendik)</span>
+              </h3>
+              <span className="text-[10px] font-extrabold text-teal-800 bg-teal-100/90 border border-teal-300 px-2.5 py-1 rounded-full w-fit">
+                Tersinkron Real-time
+              </span>
+            </div>
 
-                <div className="flex justify-between items-start gap-3 relative z-10">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
-                        ach.category === 'Akademik' 
-                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
-                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      }`}>
-                        {ach.category}
-                      </span>
-                      <span className="bg-amber-100/80 text-amber-900 border border-amber-300/80 font-bold text-[10px] px-2 py-0.5 rounded-full">
-                        Tingkat {ach.level}
+            {matchedPemberkasanSchedules.length === 0 ? (
+              <div className="bg-white p-4 rounded-xl border border-cyan-100 text-center text-slate-400 text-xs italic">
+                Belum ada agenda pemberkasan aktif yang diterbitkan oleh Tim Tendik untuk kelas Anda.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {matchedPemberkasanSchedules.map((item) => (
+                  <div key={item.id} className="bg-white p-4.5 rounded-xl border border-cyan-200/90 shadow-xs space-y-2.5">
+                    <div className="flex justify-between items-start gap-2">
+                      <h4 className="font-extrabold text-sm text-slate-800 leading-snug">{item.title}</h4>
+                      <span className="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-extrabold px-2 py-0.5 rounded-md whitespace-nowrap flex items-center gap-1 shrink-0">
+                        <Clock className="w-3 h-3 text-rose-500" />
+                        <span>Batas: {item.endDate}</span>
                       </span>
                     </div>
-                    <h4 className="font-extrabold text-slate-900 text-sm leading-snug pt-1">{ach.title}</h4>
-                  </div>
-                  
-                  <div className="bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-black text-xs px-2.5 py-1 rounded-xl shrink-0 shadow-xs border border-amber-300 flex items-center gap-1">
-                    <Award className="w-3.5 h-3.5 text-amber-950 shrink-0" />
-                    <span>{ach.rank || ach.level}</span>
-                  </div>
-                </div>
 
-                <div className="text-[11px] text-slate-600 space-y-1 bg-white/70 p-2.5 rounded-xl border border-amber-100 relative z-10">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Penerima:</span>
-                    <strong className="text-slate-800 font-bold">{student.name} ({student.classId})</strong>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Tanggal Raihan:</span>
-                    <strong className="text-slate-700">{ach.date}</strong>
-                  </div>
-                </div>
+                    {item.description && (
+                      <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        {item.description}
+                      </p>
+                    )}
 
-                {/* Digital Certificate Download Buttons */}
-                <div className="pt-2 border-t border-amber-200/60 flex flex-wrap items-center justify-between gap-2 relative z-10">
-                  <span className="text-[10px] text-amber-800 font-bold flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-500" />
-                    Sertifikat Digital Sah
-                  </span>
+                    {item.requiredDocs && item.requiredDocs.length > 0 && (
+                      <div className="space-y-1">
+                        <span className="block text-[9px] font-extrabold uppercase text-slate-400">Berkas Wajib Disiapkan:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.requiredDocs.map((docItem, idx) => (
+                            <span key={idx} className="bg-teal-50 text-teal-800 border border-teal-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                              ✓ {docItem}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => setSelectedCertForPreview(ach)}
-                      className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-2.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-indigo-200 shrink-0"
-                      title="Pratinjau Sertifikat Digital"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Pratinjau</span>
-                    </button>
-                    <button
-                      onClick={() => printCertificate(ach, student, headmasterName)}
-                      className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black text-xs px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1 shadow-sm border border-amber-400 shrink-0"
-                    >
-                      <Download className="w-3.5 h-3.5 text-slate-950" />
-                      <span>Download Sertifikat</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Jadwal Pemberkasan Widget */}
-      <div className="bg-gradient-to-r from-cyan-50/80 via-teal-50/50 to-white border border-cyan-200/80 rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-cyan-200/60 pb-3">
-          <h3 className="font-extrabold text-slate-800 text-sm tracking-wide uppercase flex items-center gap-2">
-            <FileCheck className="w-5 h-5 text-teal-600" />
-            <span>Jadwal Pemberkasan &amp; Verifikasi Dokumen (Tendik)</span>
-          </h3>
-          <span className="text-[10px] font-extrabold text-teal-800 bg-teal-100/90 border border-teal-300 px-2.5 py-1 rounded-full w-fit">
-            Tersinkron Real-time
-          </span>
-        </div>
-
-        {matchedPemberkasanSchedules.length === 0 ? (
-          <div className="bg-white p-4 rounded-xl border border-cyan-100 text-center text-slate-400 text-xs italic">
-            Belum ada agenda pemberkasan aktif yang diterbitkan oleh Tim Tendik untuk kelas Anda.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {matchedPemberkasanSchedules.map((item) => (
-              <div key={item.id} className="bg-white p-4.5 rounded-xl border border-cyan-200/90 shadow-xs space-y-2.5">
-                <div className="flex justify-between items-start gap-2">
-                  <h4 className="font-extrabold text-sm text-slate-800 leading-snug">{item.title}</h4>
-                  <span className="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-extrabold px-2 py-0.5 rounded-md whitespace-nowrap flex items-center gap-1 shrink-0">
-                    <Clock className="w-3 h-3 text-rose-500" />
-                    <span>Batas: {item.endDate}</span>
-                  </span>
-                </div>
-
-                {item.description && (
-                  <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-2 rounded-lg border border-slate-100">
-                    {item.description}
-                  </p>
-                )}
-
-                {item.requiredDocs && item.requiredDocs.length > 0 && (
-                  <div className="space-y-1">
-                    <span className="block text-[9px] font-extrabold uppercase text-slate-400">Berkas Wajib Disiapkan:</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {item.requiredDocs.map((docItem, idx) => (
-                        <span key={idx} className="bg-teal-50 text-teal-800 border border-teal-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                          ✓ {docItem}
-                        </span>
-                      ))}
+                    <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex justify-between items-center">
+                      <span>Target: <strong className="text-slate-600">{item.targetClassId === 'all' ? 'Seluruh Kelas' : item.targetClassId}</strong></span>
+                      <span>Petugas: <strong className="text-slate-600">{item.recordedBy}</strong></span>
                     </div>
                   </div>
-                )}
-
-                <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex justify-between items-center">
-                  <span>Target: <strong className="text-slate-600">{item.targetClassId === 'all' ? 'Seluruh Kelas' : item.targetClassId}</strong></span>
-                  <span>Petugas: <strong className="text-slate-600">{item.recordedBy}</strong></span>
-                </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </div>
 
-      {matchedBimbinganSchedules.length > 0 && (
-        <div className="bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 rounded-2xl p-5 shadow-sm space-y-3">
-          <h3 className="font-extrabold text-rose-800 text-sm tracking-wide uppercase flex items-center gap-2">
-            <HeartHandshake className="w-4 h-4 text-rose-600 animate-pulse" />
-            Agenda Layanan & Bimbingan BK Terdekat
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {matchedBimbinganSchedules.map((sched) => (
-              <div key={sched.id} className="bg-white p-4 rounded-xl border border-rose-100 space-y-1.5 shadow-sm">
-                <div className="flex justify-between items-center text-[10px] font-bold">
-                  <span className="bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full uppercase">{sched.targetType}</span>
-                  <span className="text-slate-500 flex items-center gap-1 font-mono">
-                    <Clock className="w-3 h-3" />
-                    {sched.date} &bull; {sched.time}
-                  </span>
-                </div>
-                <h4 className="font-bold text-sm text-slate-800">{sched.topic}</h4>
-                {sched.notes && <p className="text-xs text-slate-500 italic">"Catatan: {sched.notes}"</p>}
-                <p className="text-[10px] text-slate-400">Diagendakan oleh Guru BK: {sched.recordedBy}</p>
+          {matchedBimbinganSchedules.length > 0 && (
+            <div className="bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 rounded-2xl p-5 shadow-sm space-y-3">
+              <h3 className="font-extrabold text-rose-800 text-sm tracking-wide uppercase flex items-center gap-2">
+                <HeartHandshake className="w-4 h-4 text-rose-600 animate-pulse" />
+                Agenda Layanan & Bimbingan BK Terdekat
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {matchedBimbinganSchedules.map((sched) => (
+                  <div key={sched.id} className="bg-white p-4 rounded-xl border border-rose-100 space-y-1.5 shadow-sm">
+                    <div className="flex justify-between items-center text-[10px] font-bold">
+                      <span className="bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full uppercase">{sched.targetType}</span>
+                      <span className="text-slate-500 flex items-center gap-1 font-mono">
+                        <Clock className="w-3 h-3" />
+                        {sched.date} &bull; {sched.time}
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-800">{sched.topic}</h4>
+                    {sched.notes && <p className="text-xs text-slate-500 italic">"Catatan: {sched.notes}"</p>}
+                    <p className="text-[10px] text-slate-400">Diagendakan oleh Guru BK: {sched.recordedBy}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Main Flex Grid with Sidebar Navigation */}
@@ -1672,6 +1682,22 @@ export default function SiswaPanel({
               </div>
             </div>
           </div>
+        )}
+
+        {/* E-LEARNING INTERACTIVE TAB */}
+        {activeTab === 'elearning' && (
+          <ELearningPanel
+            currentUser={student}
+            isTeacher={false}
+            isStudent={true}
+            materials={elearningMaterials}
+            progressList={elearningProgress}
+            classes={classes}
+            students={[student]}
+            teachers={teachers}
+            onUpdateProgress={onUpdateProgress}
+            headmasterName={headmasterName}
+          />
         )}
       </div></div></div>
 

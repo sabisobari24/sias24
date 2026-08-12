@@ -521,5 +521,37 @@ export interface SchoolTimeConfig {
   isLatePenaltyEnabled: boolean; // default true
 }
 
+export interface ELearningMaterial {
+  id: string;
+  title: string;
+  subject: string; // Mata Pelajaran
+  classIds: string[]; // e.g. ['7-A', '7-B'] or ['ALL']
+  type: 'pdf' | 'ppt' | 'video' | 'doc' | 'link';
+  fileUrl?: string; // Direct link or Base64 Data URI for PDF/PPT/Doc
+  fileName?: string; // Original file name
+  fileSize?: string; // Human readable file size (e.g. 2.4 MB)
+  videoUrl?: string; // YouTube embed link or direct MP4 URL
+  description: string; // Deskripsi/Petunjuk Pembelajaran
+  teacherId: string;
+  teacherName: string;
+  createdAt: string; // YYYY-MM-DD HH:mm
+  updatedAt?: string;
+}
+
+export interface StudentLearningProgress {
+  id: string; // e.g. `${studentId}_${materialId}`
+  studentId: string;
+  studentName: string;
+  classId: string;
+  materialId: string;
+  materialTitle: string;
+  subject: string;
+  status: 'Selesai' | 'Proses';
+  notes?: string;
+  completedAt?: string;
+  lastAccessedAt: string;
+}
+
+
 
 

@@ -174,3 +174,144 @@ input:focus, select:focus, textarea:focus {
 .shadow-md {
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05) !important;
 }
+
+/* --- EYE-FRIENDLY & HIGH-CONTRAST DARK MODE STYLES --- */
+html.dark, html.dark body {
+  background-color: #0b0f19 !important; /* ultra eye-friendly dark slate */
+  color: #f8fafc !important; /* slate-50 */
+  color-scheme: dark;
+}
+
+/* Backgrounds */
+html.dark .bg-slate-50,
+html.dark .bg-slate-100 {
+  background-color: #0f172a !important; /* slate-900 */
+}
+
+html.dark .bg-white {
+  background-color: #1e293b !important; /* slate-800 */
+  color: #f1f5f9;
+}
+
+html.dark .bg-slate-200 {
+  background-color: #334155 !important; /* slate-700 */
+}
+
+/* Borders */
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-300 {
+  border-color: #334155 !important; /* slate-700 */
+}
+
+/* Text Colors */
+html.dark .text-slate-900,
+html.dark .text-slate-800 {
+  color: #f8fafc !important;
+}
+
+html.dark .text-slate-700,
+html.dark .text-slate-600 {
+  color: #e2e8f0 !important; /* slate-200 */
+}
+
+html.dark .text-slate-500,
+html.dark .text-slate-400 {
+  color: #94a3b8 !important; /* slate-400 */
+}
+
+/* Specific colored text on light backgrounds that need high contrast in dark mode */
+html.dark .text-indigo-900, html.dark .text-indigo-800, html.dark .text-indigo-700 {
+  color: #a5b4fc !important;
+}
+
+html.dark .text-blue-900, html.dark .text-blue-800, html.dark .text-blue-700 {
+  color: #93c5fd !important;
+}
+
+html.dark .text-emerald-900, html.dark .text-emerald-800, html.dark .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+
+html.dark .text-amber-900, html.dark .text-amber-800, html.dark .text-amber-700 {
+  color: #fcd34d !important;
+}
+
+html.dark .text-rose-900, html.dark .text-rose-800, html.dark .text-rose-700 {
+  color: #fca5a5 !important;
+}
+
+html.dark .text-purple-900, html.dark .text-purple-800, html.dark .text-purple-700 {
+  color: #d8b4fe !important;
+}
+
+/* Light background badges & alerts in dark mode */
+html.dark .bg-indigo-50, html.dark .bg-indigo-100 {
+  background-color: rgba(49, 46, 129, 0.4) !important;
+  color: #c7d2fe !important;
+}
+
+html.dark .bg-emerald-50, html.dark .bg-emerald-100 {
+  background-color: rgba(6, 78, 59, 0.4) !important;
+  color: #a7f3d0 !important;
+}
+
+html.dark .bg-blue-50, html.dark .bg-blue-100 {
+  background-color: rgba(30, 58, 138, 0.4) !important;
+  color: #bfdbfe !important;
+}
+
+html.dark .bg-amber-50, html.dark .bg-amber-100 {
+  background-color: rgba(120, 53, 15, 0.4) !important;
+  color: #fde68a !important;
+}
+
+html.dark .bg-rose-50, html.dark .bg-rose-100 {
+  background-color: rgba(136, 19, 55, 0.4) !important;
+  color: #fecdd3 !important;
+}
+
+html.dark .bg-purple-50, html.dark .bg-purple-100 {
+  background-color: rgba(88, 28, 135, 0.4) !important;
+  color: #e9d5ff !important;
+}
+
+html.dark .bg-sky-50, html.dark .bg-sky-100 {
+  background-color: rgba(12, 74, 110, 0.4) !important;
+  color: #bae6fd !important;
+}
+
+/* Form controls */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Navigation & Header */
+html.dark header,
+html.dark nav,
+html.dark aside {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+/* Hover States */
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-100:hover {
+  background-color: #334155 !important;
+}
+
+/* Scrollbars */
+html.dark .scrollbar-thin {
+  scrollbar-color: #6366f1 #1e293b !important;
+}
+

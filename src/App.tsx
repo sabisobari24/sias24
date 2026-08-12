@@ -46,7 +46,9 @@ import {
   CreditCard,
   Package,
   ClipboardList,
-  DollarSign
+  DollarSign,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 import { getDoc, getDocs, collection, doc, setDoc, writeBatch, deleteDoc } from 'firebase/firestore';
@@ -79,7 +81,9 @@ import {
   InventoryLoan,
   BosBopReport,
   StudentExamSubmission,
-  SchoolTimeConfig
+  SchoolTimeConfig,
+  ELearningMaterial,
+  StudentLearningProgress
 } from './types';
 
 import {
@@ -104,6 +108,11 @@ import {
   INITIAL_BOS_BOP_REPORTS,
   INITIAL_SCHOOL_TIME_CONFIG
 } from './data/initialData';
+
+import {
+  INITIAL_ELEARNING_MATERIALS,
+  INITIAL_ELEARNING_PROGRESS
+} from './data/initialELearning';
 
 // Component Imports
 import RoleBadge from './components/RoleBadge';
@@ -131,6 +140,29 @@ import { syncCollection, syncHeadmaster, syncCbtConfig, saveCbtBypassPin, syncCo
 import { INITIAL_WEB_CONTENT } from './data/initialWebContent';
 
 export default function App() {
+  // Dark Mode State
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('theme_mode');
+      if (saved) return saved === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (isDarkMode) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme_mode', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme_mode', 'light');
+      }
+    } catch { /* ignore */ }
+  }, [isDarkMode]);
+
   // Firebase connection monitor state
   const [dbStatus, setDbStatus] = useState<'online' | 'offline' | 'high_latency'>('online');
   const [dbLatency, setDbLatency] = useState<number>(0);
@@ -393,6 +425,73 @@ export default function App() {
       return saved ? JSON.parse(saved) : [];
     } catch { return []; }
   });
+
+  // E-Learning States
+  const [elearningMaterials, setElearningMaterials] = useState<ELearningMaterial[]>(() => {
+    try {
+      const saved = localStorage.getItem('siakad_elearning_materials');
+      return saved ? JSON.parse(saved) : INITIAL_ELEARNING_MATERIALS;
+    } catch { return INITIAL_ELEARNING_MATERIALS; }
+  });
+
+  const [elearningProgress, setElearningProgress] = useState<StudentLearningProgress[]>(() => {
+    try {
+      const saved = localStorage.getItem('siakad_elearning_progress');
+      return saved ? JSON.parse(saved) : INITIAL_ELEARNING_PROGRESS;
+    } catch { return INITIAL_ELEARNING_PROGRESS; }
+  });
+
+  const handleAddELearningMaterial = async (matData: Omit<ELearningMaterial, 'id'>) => {
+    const id = `mat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const newMaterial: ELearningMaterial = { ...matData, id };
+
+    setElearningMaterials((prev) => {
+      const updated = [newMaterial, ...prev];
+      safeLocalStorageSet('siakad_elearning_materials', JSON.stringify(updated));
+      return updated;
+    });
+
+    try {
+      await saveDocument('elearning_materials', id, newMaterial);
+    } catch (err) {
+      console.error('Error saving elearning material:', err);
+    }
+  };
+
+  const handleDeleteELearningMaterial = async (id: string) => {
+    setElearningMaterials((prev) => {
+      const updated = prev.filter((m) => m.id !== id);
+      safeLocalStorageSet('siakad_elearning_materials', JSON.stringify(updated));
+      return updated;
+    });
+
+    try {
+      await deleteDocument('elearning_materials', id);
+    } catch (err) {
+      console.error('Error deleting elearning material:', err);
+    }
+  };
+
+  const handleUpdateELearningProgress = async (progData: StudentLearningProgress) => {
+    setElearningProgress((prev) => {
+      const existingIdx = prev.findIndex((p) => p.id === progData.id);
+      let updated: StudentLearningProgress[];
+      if (existingIdx >= 0) {
+        updated = [...prev];
+        updated[existingIdx] = progData;
+      } else {
+        updated = [progData, ...prev];
+      }
+      safeLocalStorageSet('siakad_elearning_progress', JSON.stringify(updated));
+      return updated;
+    });
+
+    try {
+      await saveDocument('elearning_progress', progData.id, progData);
+    } catch (err) {
+      console.error('Error saving elearning progress:', err);
+    }
+  };
   const [webHomeContent, setWebHomeContent] = useState<any>(() => {
     try {
       const saved = localStorage.getItem('siakad_web_home_content');
@@ -749,6 +848,16 @@ export default function App() {
       safeLocalStorageSet('siakad_student_achievements', JSON.stringify(data));
     }, INITIAL_STUDENT_ACHIEVEMENTS);
 
+    const unsubELearningMaterials = syncCollection<ELearningMaterial>('elearning_materials', (data) => {
+      setElearningMaterials(data);
+      safeLocalStorageSet('siakad_elearning_materials', JSON.stringify(data));
+    }, INITIAL_ELEARNING_MATERIALS);
+
+    const unsubELearningProgress = syncCollection<StudentLearningProgress>('elearning_progress', (data) => {
+      setElearningProgress(data);
+      safeLocalStorageSet('siakad_elearning_progress', JSON.stringify(data));
+    }, INITIAL_ELEARNING_PROGRESS);
+
     const unsubStudentSubmissions = syncCollection<StudentExamSubmission>('student_submissions', (data) => {
       setStudentSubmissions(data);
       safeLocalStorageSet('siakad_student_submissions', JSON.stringify(data));
@@ -839,6 +948,8 @@ export default function App() {
       unsubBimbinganJournals();
       unsubBimbinganSchedules();
       unsubStudentAchievements();
+      unsubELearningMaterials();
+      unsubELearningProgress();
       unsubStudentSubmissions();
       unsubWebContent();
       clearTimeout(timer);
@@ -2175,11 +2286,21 @@ export default function App() {
                     className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-1 ${
                       publicTab === 'portal'
                         ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-md scale-102'
-                        : 'border-blue-900 text-blue-900 hover:bg-blue-900 hover:text-white'
+                        : 'border-blue-900 text-blue-900 hover:bg-blue-900 hover:text-white dark:border-blue-400 dark:text-blue-300'
                     }`}
                   >
                     <User className="w-3.5 h-3.5" />
                     <span>Masuk Portal SIAS</span>
+                  </button>
+
+                  {/* Dark Mode Toggle Button */}
+                  <button
+                    onClick={() => setIsDarkMode(!isDarkMode)}
+                    className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800 text-slate-600 dark:text-amber-400 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                    title={isDarkMode ? "Ganti ke Mode Terang (Light Mode)" : "Ganti ke Mode Gelap (Dark Mode)"}
+                    aria-label="Toggle Dark Mode"
+                  >
+                    {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
                   </button>
                 </nav>
 
@@ -2974,6 +3095,7 @@ export default function App() {
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
                         { id: 'profil', label: 'Profil Lengkap', icon: User },
+                        { id: 'elearning', label: 'E-Learning Materi', icon: BookOpen },
                         { id: 'absensi', label: 'Absen Hari Ini', icon: Calendar },
                         { id: 'cbt-ujian', label: 'CBT & Ujian', icon: FileCheck },
                         { id: 'pelanggaran', label: 'Pelanggaran', icon: AlertTriangle },
@@ -3030,6 +3152,7 @@ export default function App() {
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
                         { id: 'presensi', label: 'Presensi Kelas', icon: UserCheck },
+                        { id: 'elearning', label: 'E-Learning Interaktif', icon: BookOpen },
                         { id: 'pelanggaran', label: 'Input Pelanggaran', icon: AlertTriangle },
                         { id: 'riwayat', label: 'Riwayat Laporan', icon: Search },
                         { id: 'verifikasi-mandiri', label: 'Verifikasi Absensi', icon: Check },
@@ -3241,13 +3364,13 @@ export default function App() {
               </div>
 
               {/* Sidebar Footer Operations */}
-              <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-2">
+              <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-2">
                 <button
                   type="button"
                   onClick={() => setIsProfileModalOpen(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-xl text-xs font-bold text-indigo-700 transition-colors shadow-sm cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300 rounded-xl text-xs font-bold text-indigo-700 transition-colors shadow-sm cursor-pointer"
                 >
-                  <Settings className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <Settings className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span>Edit Profil & Sandi</span>
                 </button>
                 <button
@@ -3317,7 +3440,16 @@ export default function App() {
                   </div>
                 </div>
 
-                 <div className="flex items-center gap-3">
+                 <div className="flex items-center gap-2.5 md:gap-3">
+                  {/* Dark Mode Quick Toggle */}
+                  <button
+                    onClick={() => setIsDarkMode(!isDarkMode)}
+                    className="p-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-amber-400 transition-all cursor-pointer shadow-xs flex items-center justify-center shrink-0"
+                    title={isDarkMode ? "Ganti ke Mode Terang" : "Ganti ke Mode Gelap"}
+                  >
+                    {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+                  </button>
+
                   {/* Connection Monitor Widget */}
                   <div className="relative">
                     <button
@@ -3561,6 +3693,9 @@ export default function App() {
                             studentAchievements={studentAchievements}
                             cbtBypassPin={cbtBypassPin}
                             headmasterName={headmasterName}
+                            elearningMaterials={elearningMaterials}
+                            elearningProgress={elearningProgress}
+                            onUpdateProgress={handleUpdateELearningProgress}
                           />
                         )}
 
@@ -3615,6 +3750,11 @@ export default function App() {
                             onUpdateCbtBypassPin={handleUpdateCbtBypassPin}
                             onSwitchRole={setActiveRole}
                             headmasterName={headmasterName}
+                            elearningMaterials={elearningMaterials}
+                            elearningProgress={elearningProgress}
+                            onAddMaterial={handleAddELearningMaterial}
+                            onDeleteMaterial={handleDeleteELearningMaterial}
+                            onUpdateProgress={handleUpdateELearningProgress}
                           />
                         )}
 

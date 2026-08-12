@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teacher, TeachingJournal, ExamSchedule, CounselorNote, QuestionBank, StudentExamSubmission, ExamGrade } from '../types';
-import { Calendar, UserCheck, AlertTriangle, Search, Check, Save, Sparkles, Send, Info, Download, FileSpreadsheet, Plus, Trash, GraduationCap, Edit, FileText, Award, Trash2, Clock, Database, Shield, Key, Lock, Users, RefreshCw } from 'lucide-react';
+import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teacher, TeachingJournal, ExamSchedule, CounselorNote, QuestionBank, StudentExamSubmission, ExamGrade, ELearningMaterial, StudentLearningProgress } from '../types';
+import { Calendar, UserCheck, AlertTriangle, Search, Check, Save, Sparkles, Send, Info, Download, FileSpreadsheet, Plus, Trash, GraduationCap, Edit, FileText, Award, Trash2, Clock, Database, Shield, Key, Lock, Users, RefreshCw, BookOpen } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
 import { printHTML } from '../utils/printHelper';
@@ -10,6 +10,7 @@ import BankSoalManager from './BankSoalManager';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import { CbtScoreExporter } from './CbtScoreExporter';
 import { syncCollection } from '../lib/firebase';
+import ELearningPanel from './ELearningPanel';
 
 interface GuruPanelProps {
   teacher: Teacher;
@@ -34,10 +35,15 @@ interface GuruPanelProps {
   counselorNotes?: CounselorNote[];
   onAddCounselorNote?: (note: Omit<CounselorNote, 'id'>) => void;
   headmasterName: string;
-  activeTabOverride?: 'presensi' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal' | null;
-  onTabChange?: (tab: 'presensi' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal') => void;
+  activeTabOverride?: 'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal' | null;
+  onTabChange?: (tab: 'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal') => void;
   cbtBypassPin?: string;
   onUpdateCbtBypassPin?: (pin: string) => void;
+  elearningMaterials?: ELearningMaterial[];
+  elearningProgress?: StudentLearningProgress[];
+  onAddMaterial?: (m: Omit<ELearningMaterial, 'id'>) => void;
+  onDeleteMaterial?: (id: string) => void;
+  onUpdateProgress?: (p: StudentLearningProgress) => void;
 }
 
 export default function GuruPanel({
@@ -67,10 +73,15 @@ export default function GuruPanel({
   onTabChange,
   cbtBypassPin,
   onUpdateCbtBypassPin,
+  elearningMaterials = [],
+  elearningProgress = [],
+  onAddMaterial,
+  onDeleteMaterial,
+  onUpdateProgress,
 }: GuruPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'presensi' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal'>('presensi');
+  const [internalActiveTab, setInternalActiveTab] = useState<'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal'>('presensi');
   const activeTab = activeTabOverride ? activeTabOverride : internalActiveTab;
-  const setActiveTab = (tab: 'presensi' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal') => {
+  const setActiveTab = (tab: 'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal') => {
     setInternalActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
@@ -2378,6 +2389,24 @@ export default function GuruPanel({
           <BankSoalManager
             teacher={teacher}
             classes={classes}
+          />
+        )}
+
+        {/* E-LEARNING INTERACTIVE TAB */}
+        {activeTab === 'elearning' && (
+          <ELearningPanel
+            currentUser={teacher}
+            isTeacher={true}
+            isStudent={false}
+            materials={elearningMaterials}
+            progressList={elearningProgress}
+            classes={classes}
+            students={students}
+            teachers={teachers}
+            onAddMaterial={onAddMaterial}
+            onDeleteMaterial={onDeleteMaterial}
+            onUpdateProgress={onUpdateProgress}
+            headmasterName={headmasterName}
           />
         )}
       </div>

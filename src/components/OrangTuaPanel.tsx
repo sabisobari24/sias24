@@ -104,237 +104,242 @@ export default function OrangTuaPanel({
         </div>
       </div>
 
-      {/* Grid of widgets */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-xs text-slate-500 font-medium">KEHADIRAN ANAK</p>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-bold text-slate-800">{hadirPercentage}%</span>
-            <span className="text-xs text-emerald-600 font-semibold">{hadirCount} Hari Hadir</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1">Sakit: {sakitCount} | Izin: {izinCount} | Alpa: {alpaCount}</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-xs text-slate-500 font-medium">PELANGGARAN</p>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-bold text-slate-800">{studentViolations.length}</span>
-            <span className="text-xs text-slate-400">Kejadian</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1">Tertinggi: {studentViolations.length > 0 ? Math.max(...studentViolations.map(v => v.points)) + ' pts' : '-'}</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-xs text-slate-500 font-medium">CATATAN GURU</p>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-bold text-slate-800">
-              {studentHomeroomNotes.filter(n => !n.parentAcknowledge).length + studentCounselorNotes.filter(n => !n.parentAcknowledge).length}
-            </span>
-            <span className="text-xs text-rose-600 font-semibold">Perlu TTD</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1">Sudah disetujui: {studentHomeroomNotes.filter(n => n.parentAcknowledge).length + studentCounselorNotes.filter(n => n.parentAcknowledge).length}</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-          <p className="text-xs text-slate-500 font-medium">KOMUNIKASI AKTIF</p>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-bold text-slate-800">{studentMessages.length}</span>
-            <span className="text-xs text-slate-400">Pesan Terkirim</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1">Klik tab komunikasi untuk kirim pesan</p>
-        </div>
-      </div>
-
-      {/* Agenda Bimbingan BK Terjadwal */}
-      {(() => {
-        const myAchievements = studentAchievements.filter((a) => a.studentId === student.id || a.studentName.toLowerCase() === student.name.toLowerCase());
-        return (
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                <Award className="w-5 h-5 text-amber-500" />
-                <span>Raihan Prestasi Putra/Putri Anda (Akademik &amp; Non-Akademik)</span>
-              </h3>
-              <span className="bg-amber-50 text-amber-700 font-extrabold px-2.5 py-1 rounded-full text-xs border border-amber-200/60">
-                {myAchievements.length} Prestasi
-              </span>
+      {/* PROFIL TAB OVERVIEW WIDGETS */}
+      {activeTab === 'profil' && (
+        <>
+          {/* Grid of widgets */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
+              <p className="text-xs text-slate-500 font-medium">KEHADIRAN ANAK</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-bold text-slate-800">{hadirPercentage}%</span>
+                <span className="text-xs text-emerald-600 font-semibold">{hadirCount} Hari Hadir</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">Sakit: {sakitCount} | Izin: {izinCount} | Alpa: {alpaCount}</p>
             </div>
 
-            {myAchievements.length === 0 ? (
-              <p className="text-xs text-slate-400 italic text-center py-4">
-                Belum ada rekam catatan prestasi yang terdaftar.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {myAchievements.map((ach) => (
-                  <div 
-                    key={ach.id} 
-                    className="relative bg-gradient-to-br from-amber-50/80 via-yellow-50/30 to-white p-5 rounded-2xl border-2 border-amber-300/80 space-y-3 shadow-md hover:shadow-lg transition-all overflow-hidden group"
-                  >
-                    <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-amber-200/20 rounded-full blur-xl pointer-events-none" />
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-amber-200/40 to-transparent rounded-bl-full pointer-events-none" />
-
-                    <div className="flex justify-between items-start gap-3 relative z-10">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
-                            ach.category === 'Akademik' 
-                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          }`}>
-                            {ach.category}
-                          </span>
-                          <span className="bg-amber-100/80 text-amber-900 border border-amber-300/80 font-bold text-[10px] px-2 py-0.5 rounded-full">
-                            Tingkat {ach.level}
-                          </span>
-                        </div>
-                        <h4 className="font-extrabold text-slate-900 text-sm leading-snug pt-1">{ach.title}</h4>
-                      </div>
-                      
-                      <div className="bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-black text-xs px-2.5 py-1 rounded-xl shrink-0 shadow-xs border border-amber-300 flex items-center gap-1">
-                        <Award className="w-3.5 h-3.5 text-amber-950 shrink-0" />
-                        <span>{ach.rank || ach.level}</span>
-                      </div>
-                    </div>
-
-                    <div className="text-[11px] text-slate-600 space-y-1 bg-white/70 p-2.5 rounded-xl border border-amber-100 relative z-10">
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-400">Putra/Putri:</span>
-                        <strong className="text-slate-800 font-bold">{student.name} ({student.classId})</strong>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-400">Tanggal Raihan:</span>
-                        <strong className="text-slate-700">{ach.date}</strong>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-amber-200/60 flex items-center justify-between gap-2 relative z-10">
-                      <span className="text-[10px] text-amber-800 font-bold flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-amber-500" />
-                        Sertifikat Digital Resmi
-                      </span>
-
-                      <button
-                        onClick={() => printCertificate(ach, student, headmasterName)}
-                        className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm border border-amber-400 shrink-0"
-                      >
-                        <Download className="w-3.5 h-3.5 text-slate-950" />
-                        <span>Unduh / Cetak Sertifikat</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+            <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
+              <p className="text-xs text-slate-500 font-medium">PELANGGARAN</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-bold text-slate-800">{studentViolations.length}</span>
+                <span className="text-xs text-slate-400">Kejadian</span>
               </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* Jadwal Pemberkasan & Verifikasi Dokumen dari Tendik */}
-      {(() => {
-        const matchedPemberkasanSchedules = (pemberkasanSchedules || []).filter((sched) => {
-          if (sched.targetClassId === 'all') return true;
-          return sched.targetClassId === student.classId || sched.targetClassId === studentClass?.name;
-        });
-
-        return (
-          <div className="bg-gradient-to-r from-teal-50/80 via-cyan-50/50 to-white border border-teal-200/80 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-teal-200/60 pb-3">
-              <h3 className="font-extrabold text-slate-800 text-sm tracking-wide uppercase flex items-center gap-2">
-                <FileCheck className="w-5 h-5 text-teal-600" />
-                <span>Jadwal Pemberkasan &amp; Verifikasi Dokumen Resmi Sekolah (Real-time Tendik)</span>
-              </h3>
-              <span className="text-[10px] font-extrabold text-teal-800 bg-teal-100/90 border border-teal-300 px-2.5 py-1 rounded-full w-fit">
-                Tersinkron Otomatis
-              </span>
+              <p className="text-[10px] text-slate-400 mt-1">Tertinggi: {studentViolations.length > 0 ? Math.max(...studentViolations.map(v => v.points)) + ' pts' : '-'}</p>
             </div>
 
-            {matchedPemberkasanSchedules.length === 0 ? (
-              <p className="text-xs text-slate-400 italic text-center py-2">
-                Belum ada pengumuman pemberkasan dokumen/berkas aktif yang diterbitkan untuk kelas putra/putri Anda.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {matchedPemberkasanSchedules.map((item) => (
-                  <div key={item.id} className="bg-white p-4.5 rounded-xl border border-teal-200/90 shadow-xs space-y-2.5">
-                    <div className="flex justify-between items-start gap-2">
-                      <h4 className="font-extrabold text-sm text-slate-800 leading-snug">{item.title}</h4>
-                      <span className="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-extrabold px-2 py-0.5 rounded-md whitespace-nowrap flex items-center gap-1 shrink-0">
-                        <Clock className="w-3 h-3 text-rose-500" />
-                        <span>Batas: {item.endDate}</span>
-                      </span>
-                    </div>
-
-                    {item.description && (
-                      <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-2 rounded-lg border border-slate-100">
-                        {item.description}
-                      </p>
-                    )}
-
-                    {item.requiredDocs && item.requiredDocs.length > 0 && (
-                      <div className="space-y-1">
-                        <span className="block text-[9px] font-extrabold uppercase text-slate-400">Berkas yang Harus Disiapkan Orang Tua:</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {item.requiredDocs.map((docItem, idx) => (
-                            <span key={idx} className="bg-teal-50 text-teal-800 border border-teal-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                              ✓ {docItem}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex justify-between items-center">
-                      <span>Target: <strong className="text-slate-600">{item.targetClassId === 'all' ? 'Seluruh Kelas' : item.targetClassId}</strong></span>
-                      <span>Petugas TU: <strong className="text-slate-600">{item.recordedBy}</strong></span>
-                    </div>
-                  </div>
-                ))}
+            <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
+              <p className="text-xs text-slate-500 font-medium">CATATAN GURU</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-bold text-slate-800">
+                  {studentHomeroomNotes.filter(n => !n.parentAcknowledge).length + studentCounselorNotes.filter(n => !n.parentAcknowledge).length}
+                </span>
+                <span className="text-xs text-rose-600 font-semibold">Perlu TTD</span>
               </div>
-            )}
+              <p className="text-[10px] text-slate-400 mt-1">Sudah disetujui: {studentHomeroomNotes.filter(n => n.parentAcknowledge).length + studentCounselorNotes.filter(n => n.parentAcknowledge).length}</p>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
+              <p className="text-xs text-slate-500 font-medium">KOMUNIKASI AKTIF</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-bold text-slate-800">{studentMessages.length}</span>
+                <span className="text-xs text-slate-400">Pesan Terkirim</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">Klik tab komunikasi untuk kirim pesan</p>
+            </div>
           </div>
-        );
-      })()}
 
-      {/* Agenda Bimbingan BK Terjadwal */}
-      {(() => {
-        const matchedBimbinganSchedules = bimbinganSchedules ? bimbinganSchedules.filter((sched) => {
-          if (sched.targetType === 'Kelas') {
-            return sched.targetId === 'all' || sched.targetId === student.classId;
-          }
-          return sched.targetId === student.id;
-        }) : [];
-
-        if (matchedBimbinganSchedules.length === 0) return null;
-
-        return (
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200 rounded-2xl p-5 shadow-sm space-y-3">
-            <h3 className="font-extrabold text-orange-800 text-sm tracking-wide uppercase flex items-center gap-2">
-              <HeartHandshake className="w-4 h-4 text-orange-600 animate-pulse" />
-              Agenda Pertemuan & Bimbingan BK Siswa
-            </h3>
-            <p className="text-xs text-orange-700/80">
-              Berikut adalah jadwal layanan bimbingan konseling atau koordinasi wali murid yang telah disinkronkan oleh konselor/guru BK sekolah:
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {matchedBimbinganSchedules.map((sched) => (
-                <div key={sched.id} className="bg-white p-4 rounded-xl border border-orange-100 space-y-1.5 shadow-sm">
-                  <div className="flex justify-between items-center text-[10px] font-bold">
-                    <span className="bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full uppercase">{sched.targetType}</span>
-                    <span className="text-slate-500 flex items-center gap-1 font-mono">
-                      <Clock className="w-3 h-3" />
-                      {sched.date} &bull; {sched.time}
-                    </span>
-                  </div>
-                  <h4 className="font-bold text-sm text-slate-800">{sched.topic}</h4>
-                  {sched.notes && <p className="text-xs text-slate-500 italic">"Catatan/Lokasi: {sched.notes}"</p>}
-                  <p className="text-[10px] text-slate-400">Penyelenggara: {sched.recordedBy} (Guru BK)</p>
+          {/* Agenda Bimbingan BK Terjadwal */}
+          {(() => {
+            const myAchievements = studentAchievements.filter((a) => a.studentId === student.id || a.studentName.toLowerCase() === student.name.toLowerCase());
+            return (
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                    <Award className="w-5 h-5 text-amber-500" />
+                    <span>Raihan Prestasi Putra/Putri Anda (Akademik &amp; Non-Akademik)</span>
+                  </h3>
+                  <span className="bg-amber-50 text-amber-700 font-extrabold px-2.5 py-1 rounded-full text-xs border border-amber-200/60">
+                    {myAchievements.length} Prestasi
+                  </span>
                 </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
+
+                {myAchievements.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic text-center py-4">
+                    Belum ada rekam catatan prestasi yang terdaftar.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {myAchievements.map((ach) => (
+                      <div 
+                        key={ach.id} 
+                        className="relative bg-gradient-to-br from-amber-50/80 via-yellow-50/30 to-white p-5 rounded-2xl border-2 border-amber-300/80 space-y-3 shadow-md hover:shadow-lg transition-all overflow-hidden group"
+                      >
+                        <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-amber-200/20 rounded-full blur-xl pointer-events-none" />
+                        <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-amber-200/40 to-transparent rounded-bl-full pointer-events-none" />
+
+                        <div className="flex justify-between items-start gap-3 relative z-10">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
+                                ach.category === 'Akademik' 
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}>
+                                {ach.category}
+                              </span>
+                              <span className="bg-amber-100/80 text-amber-900 border border-amber-300/80 font-bold text-[10px] px-2 py-0.5 rounded-full">
+                                Tingkat {ach.level}
+                              </span>
+                            </div>
+                            <h4 className="font-extrabold text-slate-900 text-sm leading-snug pt-1">{ach.title}</h4>
+                          </div>
+                          
+                          <div className="bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-black text-xs px-2.5 py-1 rounded-xl shrink-0 shadow-xs border border-amber-300 flex items-center gap-1">
+                            <Award className="w-3.5 h-3.5 text-amber-950 shrink-0" />
+                            <span>{ach.rank || ach.level}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-slate-600 space-y-1 bg-white/70 p-2.5 rounded-xl border border-amber-100 relative z-10">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400">Putra/Putri:</span>
+                            <strong className="text-slate-800 font-bold">{student.name} ({student.classId})</strong>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-400">Tanggal Raihan:</span>
+                            <strong className="text-slate-700">{ach.date}</strong>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-amber-200/60 flex items-center justify-between gap-2 relative z-10">
+                          <span className="text-[10px] text-amber-800 font-bold flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-amber-500" />
+                            Sertifikat Digital Resmi
+                          </span>
+
+                          <button
+                            onClick={() => printCertificate(ach, student, headmasterName)}
+                            className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm border border-amber-400 shrink-0"
+                          >
+                            <Download className="w-3.5 h-3.5 text-slate-950" />
+                            <span>Unduh / Cetak Sertifikat</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Jadwal Pemberkasan & Verifikasi Dokumen dari Tendik */}
+          {(() => {
+            const matchedPemberkasanSchedules = (pemberkasanSchedules || []).filter((sched) => {
+              if (sched.targetClassId === 'all') return true;
+              return sched.targetClassId === student.classId || sched.targetClassId === studentClass?.name;
+            });
+
+            return (
+              <div className="bg-gradient-to-r from-teal-50/80 via-cyan-50/50 to-white border border-teal-200/80 rounded-2xl p-5 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-teal-200/60 pb-3">
+                  <h3 className="font-extrabold text-slate-800 text-sm tracking-wide uppercase flex items-center gap-2">
+                    <FileCheck className="w-5 h-5 text-teal-600" />
+                    <span>Jadwal Pemberkasan &amp; Verifikasi Dokumen Resmi Sekolah (Real-time Tendik)</span>
+                  </h3>
+                  <span className="text-[10px] font-extrabold text-teal-800 bg-teal-100/90 border border-teal-300 px-2.5 py-1 rounded-full w-fit">
+                    Tersinkron Otomatis
+                  </span>
+                </div>
+
+                {matchedPemberkasanSchedules.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic text-center py-2">
+                    Belum ada pengumuman pemberkasan dokumen/berkas aktif yang diterbitkan untuk kelas putra/putri Anda.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {matchedPemberkasanSchedules.map((item) => (
+                      <div key={item.id} className="bg-white p-4.5 rounded-xl border border-teal-200/90 shadow-xs space-y-2.5">
+                        <div className="flex justify-between items-start gap-2">
+                          <h4 className="font-extrabold text-sm text-slate-800 leading-snug">{item.title}</h4>
+                          <span className="bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-extrabold px-2 py-0.5 rounded-md whitespace-nowrap flex items-center gap-1 shrink-0">
+                            <Clock className="w-3 h-3 text-rose-500" />
+                            <span>Batas: {item.endDate}</span>
+                          </span>
+                        </div>
+
+                        {item.description && (
+                          <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            {item.description}
+                          </p>
+                        )}
+
+                        {item.requiredDocs && item.requiredDocs.length > 0 && (
+                          <div className="space-y-1">
+                            <span className="block text-[9px] font-extrabold uppercase text-slate-400">Berkas yang Harus Disiapkan Orang Tua:</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {item.requiredDocs.map((docItem, idx) => (
+                                <span key={idx} className="bg-teal-50 text-teal-800 border border-teal-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                  ✓ {docItem}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex justify-between items-center">
+                          <span>Target: <strong className="text-slate-600">{item.targetClassId === 'all' ? 'Seluruh Kelas' : item.targetClassId}</strong></span>
+                          <span>Petugas TU: <strong className="text-slate-600">{item.recordedBy}</strong></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Agenda Bimbingan BK Terjadwal */}
+          {(() => {
+            const matchedBimbinganSchedules = bimbinganSchedules ? bimbinganSchedules.filter((sched) => {
+              if (sched.targetType === 'Kelas') {
+                return sched.targetId === 'all' || sched.targetId === student.classId;
+              }
+              return sched.targetId === student.id;
+            }) : [];
+
+            if (matchedBimbinganSchedules.length === 0) return null;
+
+            return (
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-orange-200 rounded-2xl p-5 shadow-sm space-y-3">
+                <h3 className="font-extrabold text-orange-800 text-sm tracking-wide uppercase flex items-center gap-2">
+                  <HeartHandshake className="w-4 h-4 text-orange-600 animate-pulse" />
+                  Agenda Pertemuan & Bimbingan BK Siswa
+                </h3>
+                <p className="text-xs text-orange-700/80">
+                  Berikut adalah jadwal layanan bimbingan konseling atau koordinasi wali murid yang telah disinkronkan oleh konselor/guru BK sekolah:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {matchedBimbinganSchedules.map((sched) => (
+                    <div key={sched.id} className="bg-white p-4 rounded-xl border border-orange-100 space-y-1.5 shadow-sm">
+                      <div className="flex justify-between items-center text-[10px] font-bold">
+                        <span className="bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full uppercase">{sched.targetType}</span>
+                        <span className="text-slate-500 flex items-center gap-1 font-mono">
+                          <Clock className="w-3 h-3" />
+                          {sched.date} &bull; {sched.time}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-800">{sched.topic}</h4>
+                      {sched.notes && <p className="text-xs text-slate-500 italic">"Catatan/Lokasi: {sched.notes}"</p>}
+                      <p className="text-[10px] text-slate-400">Penyelenggara: {sched.recordedBy} (Guru BK)</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+        </>
+      )}
 
       {/* Main Flex Grid with Sidebar Navigation */}
       <div className="flex flex-col lg:flex-row gap-6 items-start">
