@@ -25,7 +25,11 @@ import {
   DollarSign,
   BarChart2,
   PieChart as PieChartIcon,
-  CheckCircle2
+  CheckCircle2,
+  Compass,
+  Sparkles,
+  Leaf,
+  Target
 } from 'lucide-react';
 import { syncCollection } from '../../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../../data/initialWebContent';
@@ -361,25 +365,132 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
         
         {/* LEFT COLUMN: VISI & MISI (7/12) */}
         <div className="lg:col-span-7 space-y-8 text-left">
-          {/* Visi */}
+          {/* Visi Section */}
           <div className="space-y-4">
-            <h2 className="text-xl font-black text-slate-800 flex items-center gap-2 border-b-2 border-slate-100 pb-2">
-              <Eye className="w-5.5 h-5.5 text-blue-700" />
-              <span>Visi SMPN 50 Jakarta</span>
-            </h2>
-            <div className="bg-blue-50/50 border-l-6 border-blue-700 rounded-2xl p-6 shadow-xs">
-              <p className="text-lg md:text-xl font-extrabold text-blue-800 leading-relaxed italic">
-                “{webContent.vision || 'Terwujudnya SMP Negeri 50 Jakarta yang berkarakter, berprestasi, dan berwawasan lingkungan.'}”
-              </p>
+            <div className="flex items-center justify-between border-b-2 border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100/90 text-blue-700 flex items-center justify-center shadow-xs">
+                  <Compass className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-600 block">
+                    Arah &amp; Fondasi Utama
+                  </span>
+                  <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                    Visi SMPN 50 Jakarta
+                  </h2>
+                </div>
+              </div>
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200/60 rounded-full text-amber-800 text-[11px] font-bold">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Masa Depan Unggul</span>
+              </div>
+            </div>
+
+            {/* Fresh Vision Showcase Card */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-900 text-white p-6 md:p-8 shadow-xl shadow-indigo-950/20 border border-indigo-700/30">
+              {/* Subtle Ambient Decorative Glows */}
+              <div className="absolute top-0 right-0 -mt-10 -mr-10 w-44 h-44 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-44 h-44 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_25%,rgba(255,255,255,0.06),transparent_40%)] pointer-events-none" />
+
+              <div className="relative z-10 space-y-6">
+                {/* Header row inside card */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-indigo-200/90 font-mono">
+                      Visi Terpadu Sekolah
+                    </span>
+                  </div>
+                  <Quote className="w-7 h-7 text-amber-300/40" />
+                </div>
+
+                {/* The Core Vision Text */}
+                <div className="py-1">
+                  <p className="text-xl sm:text-2xl md:text-2xl font-black tracking-tight leading-snug md:leading-normal text-white">
+                    “{webContent.vision || 'Terwujudnya SMP Negeri 50 Jakarta yang berkarakter, berprestasi, dan berwawasan lingkungan.'}”
+                  </p>
+                </div>
+
+                {/* 3 Core Interactive Pillars */}
+                <div className="pt-2 border-t border-white/10">
+                  <div className="text-[11px] font-bold text-indigo-200/80 mb-3 uppercase tracking-wider flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-amber-400" />
+                    <span>3 Pilar Inti Penopang Visi:</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Pilar 1: Karakter */}
+                    <div className="group rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 p-3.5 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-7 h-7 rounded-lg bg-amber-400/20 text-amber-300 flex items-center justify-center shrink-0 border border-amber-400/30">
+                          <Heart className="w-4 h-4" />
+                        </div>
+                        <h4 className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors">
+                          Berkarakter
+                        </h4>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        Akhlak mulia, religius, disiplin, santun, gotong royong, dan berintegritas.
+                      </p>
+                    </div>
+
+                    {/* Pilar 2: Prestasi */}
+                    <div className="group rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 p-3.5 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-7 h-7 rounded-lg bg-blue-400/20 text-blue-300 flex items-center justify-center shrink-0 border border-blue-400/30">
+                          <Award className="w-4 h-4" />
+                        </div>
+                        <h4 className="text-xs font-bold text-white group-hover:text-blue-300 transition-colors">
+                          Berprestasi
+                        </h4>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        Keunggulan akademik, sains, seni, literasi digital, &amp; kompetisi nasional.
+                      </p>
+                    </div>
+
+                    {/* Pilar 3: Lingkungan */}
+                    <div className="group rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 p-3.5 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-400/20 text-emerald-300 flex items-center justify-center shrink-0 border border-emerald-400/30">
+                          <Leaf className="w-4 h-4" />
+                        </div>
+                        <h4 className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
+                          Berwawasan
+                        </h4>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        Sekolah Adiwiyata, ramah anak, hijau, asri, sehat, &amp; peduli lingkungan hidup.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Misi */}
+          {/* Misi Section */}
           <div className="space-y-4">
-            <h2 className="text-xl font-black text-slate-800 flex items-center gap-2 border-b-2 border-slate-100 pb-2">
-              <ListTodo className="w-5.5 h-5.5 text-blue-700" />
-              <span>Misi SMPN 50 Jakarta</span>
-            </h2>
+            <div className="flex items-center justify-between border-b-2 border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-100/90 text-amber-700 flex items-center justify-center shadow-xs">
+                  <ListTodo className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-600 block">
+                    Langkah Konkret Sekolah
+                  </span>
+                  <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                    Misi SMPN 50 Jakarta
+                  </h2>
+                </div>
+              </div>
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200/60">
+                {webContent.missions?.length || 8} Misi Strategis
+              </span>
+            </div>
             <div className="grid grid-cols-1 gap-3">
               {(webContent.missions && webContent.missions.length > 0 ? webContent.missions : [
                 "Membiasakan murid untuk beriman, bertakwa, dan berakhlak mulia.",
