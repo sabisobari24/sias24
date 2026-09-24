@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig } from '../types';
-import { Settings, Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck } from 'lucide-react';
+import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown } from 'lucide-react';
 import { downloadExcel, parseExcel } from '../utils/excelExport';
 import { printHTML, printTablePDF } from '../utils/printHelper';
 import { getSchoolClassName } from '../utils/classUtils';
 import ConfirmModal from './ConfirmModal';
 import WebContentEditor from './WebContentEditor';
 import { CbtScoreExporter } from './CbtScoreExporter';
+import StudentIdCardModal from './common/StudentIdCardModal';
+import BatchStudentCardsModal from './common/BatchStudentCardsModal';
+import AttendanceQrScannerModal from './common/AttendanceQrScannerModal';
+import SettingKartuPelajar from './common/SettingKartuPelajar';
+import { printBatchStudentCards } from '../utils/qrHelper';
 import { syncCollection, saveDocument } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 
@@ -17,6 +22,7 @@ interface AdminPanelProps {
   violationTypes: ViolationType[];
   violations: StudentViolation[];
   attendance: Attendance[];
+  onQuickAttendance?: (rec: Omit<Attendance, 'id'>) => void;
   examSchedules: ExamSchedule[];
   examGrades: ExamGrade[];
   studentSubmissions?: StudentExamSubmission[];
@@ -41,9 +47,10 @@ interface AdminPanelProps {
   onAddStudentsBatch: (sList: Student[]) => void;
   onAddTeachersBatch: (tList: Teacher[]) => void;
   headmasterName: string;
+  headmasterLogoRight?: string;
   onUpdateHeadmasterName: (name: string, logoLeft?: string, logoRight?: string, extraFields?: any) => void;
-  activeTabOverride?: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | null;
-  onTabChange?: (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat') => void;
+  activeTabOverride?: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | null;
+  onTabChange?: (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar') => void;
   onSwitchRole?: (role: 'admin' | 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'guru_wali' | 'tendik', userObj?: Teacher) => void;
   studentAchievements?: StudentAchievement[];
   onAddStudentAchievement?: (ach: Omit<StudentAchievement, 'id'>) => void;
@@ -92,6 +99,7 @@ export default function AdminPanel({
   onAddStudentsBatch,
   onAddTeachersBatch,
   headmasterName,
+  headmasterLogoRight,
   onUpdateHeadmasterName,
   activeTabOverride,
   onTabChange,
@@ -114,14 +122,23 @@ export default function AdminPanel({
   onUpdateSocialLinks,
   schoolTimeConfig = { schoolStartTime: '07:00', latePenaltyPoints: 5, isLatePenaltyEnabled: true },
   onUpdateSchoolTimeConfig,
+  onQuickAttendance,
 }: AdminPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat'>('ringkasan');
+  const [internalActiveTab, setInternalActiveTab] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar'>('ringkasan');
   const activeTab = activeTabOverride ? activeTabOverride : internalActiveTab;
-  const setActiveTab = (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat') => {
+  const setActiveTab = (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar') => {
     setInternalActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
   const [globalSearch, setGlobalSearch] = useState('');
+  const [studentClassFilter, setStudentClassFilter] = useState<string>('all');
+
+  // Student Card & QR Attendance Scanner states
+  const [selectedCardStudent, setSelectedCardStudent] = useState<Student | null>(null);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [isBatchCardModalOpen, setIsBatchCardModalOpen] = useState(false);
+  const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
+  const [isBatchPrintingCards, setIsBatchPrintingCards] = useState(false);
 
   // School Time & Late Penalty States
   const [localSchoolStartTime, setLocalSchoolStartTime] = useState(schoolTimeConfig.schoolStartTime || '07:00');
@@ -335,7 +352,16 @@ export default function AdminPanel({
   }, [propsCbtBypassPin]);
 
   // Kop Surat Detail Text States
+  const [logoRightInput, setLogoRightInput] = useState<string>(() => headmasterLogoRight || localStorage.getItem('siakad_logo_right') || '');
   const [headmasterNipInput, setHeadmasterNipInput] = useState(() => localStorage.getItem('siakad_headmaster_nip') || '196711261991032004');
+
+  React.useEffect(() => {
+    if (headmasterLogoRight !== undefined) {
+      setLogoRightInput(headmasterLogoRight);
+    } else {
+      setLogoRightInput(localStorage.getItem('siakad_logo_right') || '');
+    }
+  }, [headmasterLogoRight]);
   const [govTitleInput, setGovTitleInput] = useState(() => localStorage.getItem('siakad_kop_gov_title') || 'PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA');
   const [deptTitleInput, setDeptTitleInput] = useState(() => localStorage.getItem('siakad_kop_dept_title') || 'DINAS PENDIDIKAN PROVINSI DKI JAKARTA');
   const [sudinTitleInput, setSudinTitleInput] = useState(() => localStorage.getItem('siakad_kop_sudin_title') || 'SUDIN PENDIDIKAN WILAYAH II KOTA ADMINISTRASI JAKARTA TIMUR');
@@ -933,20 +959,56 @@ export default function AdminPanel({
   const avgAttendance = totalRecordedAttendance > 0 ? Math.round((totalHadir / totalRecordedAttendance) * 100) : 100;
   const totalViolationsCount = violations.length;
 
-  // Instant search logic for students and teachers
+  // Helper for student filters
+  const getClassStudentCount = (c: SchoolClass) => {
+    return students.filter(s => {
+      if (!s.classId) return false;
+      return (
+        s.classId === c.id ||
+        s.classId.toLowerCase() === c.name.toLowerCase() ||
+        s.classId.toLowerCase() === c.id.toLowerCase()
+      );
+    }).length;
+  };
+
+  const isStudentFilterActive = studentClassFilter !== 'all' || globalSearch.trim() !== '';
+
+  const resetStudentFilters = () => {
+    setStudentClassFilter('all');
+    setGlobalSearch('');
+  };
+
+  // Instant search & filter logic for students (Filter berdasarkan Kelas)
   const filteredStudents = students.filter(s => {
-    if (!globalSearch) return true;
-    const query = globalSearch.toLowerCase().trim();
-    const className = classes.find(c => c.id === s.classId)?.name || '';
-    const waliName = teachers.find(t => t.id === s.guruWaliTeacherId)?.name || '';
-    return (
-      s.name.toLowerCase().includes(query) ||
-      s.nisn.toLowerCase().includes(query) ||
-      className.toLowerCase().includes(query) ||
-      waliName.toLowerCase().includes(query) ||
-      (s.parentName && s.parentName.toLowerCase().includes(query)) ||
-      (s.parentNik && s.parentNik.toLowerCase().includes(query))
-    );
+    // 1. Filter by Class
+    if (studentClassFilter && studentClassFilter !== 'all') {
+      const targetClass = classes.find(c => c.id === studentClassFilter);
+      const matchesClass = s.classId === studentClassFilter ||
+        (targetClass && (
+          s.classId.toLowerCase() === targetClass.name.toLowerCase() ||
+          s.classId.toLowerCase() === targetClass.id.toLowerCase()
+        ));
+      if (!matchesClass) return false;
+    }
+
+    // 2. Keyword search (NISN, siswa, orang tua, telepon, guru wali)
+    if (globalSearch.trim()) {
+      const query = globalSearch.toLowerCase().trim();
+      const className = classes.find(c => c.id === s.classId)?.name || '';
+      const waliName = teachers.find(t => t.id === s.guruWaliTeacherId)?.name || '';
+      const matchesGlobal = (
+        s.name.toLowerCase().includes(query) ||
+        s.nisn.toLowerCase().includes(query) ||
+        className.toLowerCase().includes(query) ||
+        waliName.toLowerCase().includes(query) ||
+        (s.parentName && s.parentName.toLowerCase().includes(query)) ||
+        (s.parentNik && s.parentNik.toLowerCase().includes(query)) ||
+        (s.phone && s.phone.toLowerCase().includes(query))
+      );
+      if (!matchesGlobal) return false;
+    }
+
+    return true;
   });
 
   const filteredTeachers = teachers.filter(t => {
@@ -964,9 +1026,12 @@ export default function AdminPanel({
   });
 
   // Export handlers
-  const handleExportSiswa = (format: 'excel' | 'pdf') => {
+  const handleExportSiswa = (format: 'excel' | 'pdf', exportFilteredOnly: boolean = false) => {
+    const listToExport = exportFilteredOnly ? filteredStudents : students;
+    const selectedClass = classes.find(c => c.id === studentClassFilter);
+    const filterDesc = exportFilteredOnly && studentClassFilter !== 'all' && selectedClass ? ` Kelas ${selectedClass.name}` : '';
     const headers = ["ID Siswa", "Nama Lengkap", "NISN", "ID Kelas", "Kelas", "Jenis Kelamin", "Alamat", "No. HP", "Nama Orang Tua", "No. HP Orang Tua"];
-    const rows = students.map(s => [
+    const rows = listToExport.map(s => [
       s.id,
       s.name,
       s.nisn,
@@ -978,12 +1043,13 @@ export default function AdminPanel({
       s.parentName,
       s.parentPhone
     ]);
+    const fileSuffix = filterDesc ? `_${selectedClass!.name.replace(/\s+/g, '_')}` : '';
     if (format === 'excel') {
-      downloadExcel('rekap_database_siswa.xlsx', headers, rows, 'Data Siswa');
-      setSuccessMsg('Berhasil mengunduh Database Siswa (Excel)!');
+      downloadExcel(`rekap_database_siswa${fileSuffix}.xlsx`, headers, rows, `Data Siswa${filterDesc}`);
+      setSuccessMsg(`Berhasil mengunduh Database Siswa${filterDesc} (${listToExport.length} siswa) ke Excel!`);
     } else {
-      printTablePDF('Daftar Database Siswa Terdaftar', headers, rows);
-      setSuccessMsg('Dokumen Database Siswa berhasil dicetak / disimpan ke PDF!');
+      printTablePDF(`Daftar Database Siswa Terdaftar${filterDesc}`, headers, rows);
+      setSuccessMsg(`Dokumen Database Siswa${filterDesc} (${listToExport.length} siswa) berhasil dicetak / disimpan ke PDF!`);
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
@@ -1268,14 +1334,122 @@ export default function AdminPanel({
 
       {/* Main Content Area */}
       <div className="w-full space-y-6">
-          {/* Global Search Bar */}
-          {(activeTab === 'siswa' || activeTab === 'guru') && (
+          {/* Global Search & Filter Bar */}
+          {activeTab === 'siswa' && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                {/* Filter Kelas */}
+                <div className="relative flex-1 sm:max-w-xs w-full shrink-0">
+                  <GraduationCap className="w-4 h-4 text-purple-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <select
+                    value={studentClassFilter}
+                    onChange={(e) => setStudentClassFilter(e.target.value)}
+                    className="w-full bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl pl-10 pr-8 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-600/25 focus:border-purple-600 focus:bg-white transition-all cursor-pointer appearance-none"
+                  >
+                    <option value="all">Semua Kelas ({students.length} Siswa)</option>
+                    {classes.map((c) => {
+                      const count = getClassStudentCount(c);
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({count} Siswa)
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs">▼</div>
+                </div>
+
+                {/* Pencarian NISN / Kata Kunci Tambahan */}
+                <div className="relative flex-1 w-full">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Cari NISN, Orang Tua, No. HP..."
+                    value={globalSearch}
+                    onChange={(e) => setGlobalSearch(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-9 py-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-purple-600/25 focus:border-purple-600 focus:bg-white transition-all text-slate-800 placeholder:text-slate-400"
+                  />
+                  {globalSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setGlobalSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full"
+                      title="Hapus pencarian NISN/kata kunci"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Reset Button */}
+                {isStudentFilterActive && (
+                  <button
+                    type="button"
+                    onClick={resetStudentFilters}
+                    className="w-full sm:w-auto shrink-0 text-xs text-rose-600 font-bold hover:bg-rose-100/80 cursor-pointer px-4 py-2.5 bg-rose-50 rounded-xl transition-all border border-rose-200 flex items-center justify-center gap-1.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Reset Filter</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Status and Active Filter Chips */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-100 text-xs text-slate-500">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-slate-700">
+                    Menampilkan <span className="text-purple-700 font-black">{filteredStudents.length}</span> dari {students.length} siswa
+                  </span>
+                  {studentClassFilter !== 'all' && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                      Kelas: {classes.find(c => c.id === studentClassFilter)?.name || studentClassFilter}
+                      <button type="button" onClick={() => setStudentClassFilter('all')} className="hover:text-purple-950 ml-0.5 cursor-pointer">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                  {globalSearch.trim() && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                      Kata Kunci: "{globalSearch.trim()}"
+                      <button type="button" onClick={() => setGlobalSearch('')} className="hover:text-amber-950 ml-0.5 cursor-pointer">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                </div>
+
+                {/* Quick export of filtered students */}
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleExportSiswa('excel', isStudentFilterActive)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer"
+                    title="Unduh data siswa saat ini ke Excel"
+                  >
+                    <FileSpreadsheet className="w-3 h-3 text-emerald-600" />
+                    <span>Excel {isStudentFilterActive ? `(${filteredStudents.length})` : ''}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExportSiswa('pdf', isStudentFilterActive)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all cursor-pointer"
+                    title="Cetak PDF data siswa saat ini"
+                  >
+                    <FileText className="w-3 h-3 text-rose-600" />
+                    <span>PDF {isStudentFilterActive ? `(${filteredStudents.length})` : ''}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'guru' && (
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-center gap-3">
               <div className="relative flex-1 w-full">
                 <Search className="w-4 h-4 text-purple-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder={activeTab === 'siswa' ? "Cari siswa instan berdasarkan Nama, NISN, Kelas, Guru Wali, Nama Ortu..." : "Cari pendidik instan berdasarkan Nama, NIP, Email, Jabatan (BK/Piket/Wali Kelas)..."}
+                  placeholder="Cari pendidik instan berdasarkan Nama, NIP, Email, Jabatan (BK/Piket/Wali Kelas)..."
                   value={globalSearch}
                   onChange={(e) => setGlobalSearch(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600/25 focus:border-purple-600 focus:bg-white transition-all text-slate-800"
@@ -1283,6 +1457,7 @@ export default function AdminPanel({
               </div>
               {globalSearch && (
                 <button
+                  type="button"
                   onClick={() => setGlobalSearch('')}
                   className="w-full sm:w-auto text-xs text-rose-600 font-bold hover:underline cursor-pointer px-4 py-2.5 bg-rose-50 hover:bg-rose-100 rounded-xl transition-all border border-rose-200/40 text-center"
                 >
@@ -1301,7 +1476,7 @@ export default function AdminPanel({
               <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-4 text-white shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="space-y-0.5">
                   <h4 className="font-bold text-sm flex items-center gap-2">
-                    <Settings className="w-4 h-4 text-purple-200 animate-spin-slow" />
+                    <ShieldCheck className="w-4 h-4 text-purple-200" />
                     <span>Pindah Akses Cepat (Quick Access Switcher)</span>
                   </h4>
                   <p className="text-[11px] text-purple-100">Beralih peran dan akun simulasi secara instan tanpa log out untuk menguji alur kerja pendidik.</p>
@@ -1589,7 +1764,7 @@ export default function AdminPanel({
               <div className="bg-slate-50 rounded-xl p-5 border border-slate-200/80 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2.5">
                   <div className="flex items-center gap-2">
-                    <Settings className="w-4.5 h-4.5 text-purple-600" />
+                    <Filter className="w-4.5 h-4.5 text-purple-600" />
                     <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">2. Opsi Rekap Kustom (Sesuaikan Kriteria)</h4>
                   </div>
                   <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full">
@@ -1732,27 +1907,68 @@ export default function AdminPanel({
         {activeTab === 'siswa' && (
           <div className="bg-white rounded-xl p-6 border shadow-sm space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <h3 className="font-bold text-slate-800 text-lg">
-                Manajemen Database Siswa {globalSearch && <span className="text-purple-600 text-xs">({filteredStudents.length} cocok)</span>}
-              </h3>
-              <div className="flex flex-wrap gap-2">
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                  <span>Manajemen Database Siswa</span>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                    {filteredStudents.length} / {students.length} Siswa
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">Filter dan kelola data induk siswa per kelas, NISN, serta kredensial akun.</p>
+              </div>
+              {/* Unified Action Toolbar: Registrasi Siswa Baru bersatu dengan 3 Icon Menu */}
+              <div className="inline-flex items-center bg-slate-50/90 p-1 rounded-xl border border-slate-200/90 shadow-2xs gap-1 shrink-0">
                 <button
-                  onClick={() => setShowStudentBatch(!showStudentBatch)}
-                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
-                >
-                  <Upload className="w-4 h-4" />
-                  Upload Batch Excel/CSV
-                </button>
-                <button
+                  type="button"
                   onClick={() => {
                     setIsAddingStudent(!isAddingStudent);
                     setEditingStudentId(null);
                     resetStudentForm();
                   }}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer shadow-sm transition-all"
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
-                  Registrasi Siswa Baru
+                  <span>Registrasi Siswa Baru</span>
+                </button>
+
+                <div className="w-[1px] h-4 bg-slate-200 mx-0.5" />
+
+                <button
+                  type="button"
+                  onClick={() => setIsScannerModalOpen(true)}
+                  className="p-1.5 text-slate-600 hover:text-purple-700 hover:bg-white rounded-lg transition-all cursor-pointer flex items-center justify-center hover:shadow-2xs active:scale-95"
+                  title="Scanner QR & Barcode Absensi Siswa"
+                  aria-label="Scanner QR Absen"
+                >
+                  <Zap className="w-4 h-4 text-amber-500" />
+                </button>
+
+                <div className="w-[1px] h-4 bg-slate-200 mx-0.5" />
+
+                <button
+                  type="button"
+                  onClick={() => setIsBatchCardModalOpen(true)}
+                  className="p-1.5 text-slate-600 hover:text-purple-700 hover:bg-white rounded-lg transition-all cursor-pointer flex items-center justify-center hover:shadow-2xs active:scale-95"
+                  title={`Cetak Massal Kartu Pelajar ${studentClassFilter !== 'all' ? `(Kelas ${classes.find(c => c.id === studentClassFilter)?.name || studentClassFilter})` : `(${students.length} Siswa)`}`}
+                  aria-label="Cetak Kartu Pelajar"
+                >
+                  <CreditCard className="w-4 h-4 text-purple-600" />
+                </button>
+
+                <div className="w-[1px] h-4 bg-slate-200 mx-0.5" />
+
+                <button
+                  type="button"
+                  onClick={() => setShowStudentBatch(!showStudentBatch)}
+                  className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center active:scale-95 ${
+                    showStudentBatch
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-indigo-700 hover:bg-white hover:shadow-2xs'
+                  }`}
+                  title="Registrasi Massal Siswa (Upload Excel/CSV)"
+                  aria-label="Upload Batch Excel"
+                >
+                  <Upload className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -1949,10 +2165,76 @@ export default function AdminPanel({
               </form>
             )}
 
+            {/* Filter Kelas: Hanya tampilkan kelas yang dipilih */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 py-1">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-xs font-bold text-slate-600 shrink-0 flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Filter Kelas:</span>
+                </span>
+
+                {/* Dropdown pemilihan kelas */}
+                <div className="relative inline-flex items-center">
+                  <select
+                    value={studentClassFilter}
+                    onChange={(e) => setStudentClassFilter(e.target.value)}
+                    className="appearance-none bg-slate-50 hover:bg-slate-100/90 text-slate-800 border border-slate-200 font-bold text-xs py-1.5 pl-3 pr-8 rounded-xl shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500/25 focus:border-purple-600 transition-all"
+                  >
+                    <option value="all">Semua Kelas ({students.length} Siswa)</option>
+                    {classes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({getClassStudentCount(c)} Siswa)
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 pointer-events-none" />
+                </div>
+
+                {/* Hanya tampilkan kelas yang sedang dipilih */}
+                {studentClassFilter !== 'all' ? (
+                  <div className="inline-flex items-center gap-1.5 bg-purple-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-2xs">
+                    <span>{classes.find((c) => c.id === studentClassFilter)?.name || studentClassFilter}</span>
+                    <span className="text-[10px] bg-purple-800 text-purple-100 px-1.5 py-0.2 rounded-full font-extrabold">
+                      {filteredStudents.length} Siswa
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setStudentClassFilter('all')}
+                      className="hover:text-purple-200 cursor-pointer p-0.5 ml-0.5"
+                      title="Kembali ke Semua Kelas"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 bg-purple-50 text-purple-800 border border-purple-200 text-xs font-bold px-2.5 py-1 rounded-xl">
+                    <span>Semua Kelas</span>
+                    <span className="text-[10px] bg-purple-200 text-purple-900 px-1.5 py-0.2 rounded-full font-extrabold">
+                      {students.length} Siswa
+                    </span>
+                  </span>
+                )}
+              </div>
+
+              {isStudentFilterActive && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={resetStudentFilters}
+                    className="shrink-0 text-xs text-rose-600 font-bold hover:bg-rose-50 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer border border-rose-200 flex items-center gap-1 shadow-2xs"
+                    title="Hapus semua filter pencarian"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>Reset Filter</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Students Table */}
-            <div className="border rounded-xl overflow-x-auto">
+            <div className="border rounded-xl overflow-x-auto shadow-xs">
               <table className="w-full text-left text-sm min-w-[1000px]">
-                <thead className="bg-slate-100 text-slate-700">
+                <thead className="bg-slate-100 text-slate-700 font-semibold">
                   <tr>
                     <th className="p-3">Nama Siswa</th>
                     <th className="p-3">NISN</th>
@@ -1967,8 +2249,38 @@ export default function AdminPanel({
                 <tbody className="divide-y">
                   {filteredStudents.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-400 font-semibold italic bg-slate-50/20">
-                        Tidak ada data siswa yang cocok dengan pencarian "{globalSearch}"
+                      <td colSpan={8} className="p-10 text-center bg-slate-50/50">
+                        <div className="max-w-md mx-auto space-y-3">
+                          <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mx-auto shadow-xs">
+                            <Search className="w-6 h-6" />
+                          </div>
+                          <p className="font-bold text-slate-800 text-sm">Tidak ada data siswa yang cocok</p>
+                          <div className="text-xs text-slate-500 space-y-1 bg-white p-3 rounded-lg border border-slate-200/80 text-left">
+                            <p className="font-semibold text-slate-700">Kriteria Filter yang Aktif:</p>
+                            {studentClassFilter !== 'all' && (
+                              <p className="flex items-center gap-1.5 text-purple-700 font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                                Kelas: <strong>{classes.find(c => c.id === studentClassFilter)?.name || studentClassFilter}</strong>
+                              </p>
+                            )}
+                            {globalSearch.trim() && (
+                              <p className="flex items-center gap-1.5 text-amber-700 font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                                Kata Kunci Tambahan: <strong>"{globalSearch.trim()}"</strong>
+                              </p>
+                            )}
+                          </div>
+                          {isStudentFilterActive && (
+                            <button
+                              type="button"
+                              onClick={resetStudentFilters}
+                              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm active:scale-95"
+                            >
+                              <X className="w-4 h-4" />
+                              <span>Reset Filter & Tampilkan Semua Siswa</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ) : (
@@ -2003,6 +2315,17 @@ export default function AdminPanel({
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCardStudent(s);
+                              setIsCardModalOpen(true);
+                            }}
+                            className="text-purple-600 hover:text-purple-800 p-1 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                            title="Lihat & Cetak Kartu Pelajar (QR Code NISN)"
+                          >
+                            <CreditCard className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => {
                               setEditingStudentId(s.id);
@@ -2711,7 +3034,7 @@ export default function AdminPanel({
                   <div className="flex items-center gap-3">
                     <div className="w-16 h-16 rounded-xl border bg-white flex items-center justify-center p-1.5 shrink-0 shadow-xs">
                       <img
-                        src={localStorage.getItem('siakad_logo_right') || '/logo.png'}
+                        src={logoRightInput || localStorage.getItem('siakad_logo_right') || '/logo.png'}
                         alt="Logo Kanan Preview"
                         className="max-w-full max-h-full object-contain"
                         onError={(e) => { e.currentTarget.src = '/logo.png'; }}
@@ -2730,7 +3053,14 @@ export default function AdminPanel({
                             if (file) {
                               const reader = new FileReader();
                               reader.onloadend = () => {
-                                onUpdateHeadmasterName(headmasterName, undefined, reader.result as string, {
+                                const dataUrl = reader.result as string;
+                                setLogoRightInput(dataUrl);
+                                try {
+                                  localStorage.setItem('siakad_logo_right', dataUrl);
+                                } catch (err) {
+                                  console.warn('Storage error:', err);
+                                }
+                                onUpdateHeadmasterName(headmasterName, undefined, dataUrl, {
                                   nip: headmasterNipInput,
                                   govTitle: govTitleInput,
                                   deptTitle: deptTitleInput,
@@ -2745,10 +3075,12 @@ export default function AdminPanel({
                           }}
                         />
                       </label>
-                      {localStorage.getItem('siakad_logo_right') && (
+                      {(logoRightInput || localStorage.getItem('siakad_logo_right')) && (
                         <button
                           type="button"
                           onClick={() => {
+                            setLogoRightInput('');
+                            localStorage.removeItem('siakad_logo_right');
                             onUpdateHeadmasterName(headmasterName, undefined, '', {
                               nip: headmasterNipInput,
                               govTitle: govTitleInput,
@@ -2761,7 +3093,7 @@ export default function AdminPanel({
                           }}
                           className="block text-[9px] font-bold text-rose-600 hover:underline cursor-pointer"
                         >
-                          Reset ke Default Logo Sekolah
+                          Hapus Logo Kanan
                         </button>
                       )}
                       <p className="text-[9px] text-slate-400">Rekomendasi rasio 1:1 format PNG transparan.</p>
@@ -2925,7 +3257,7 @@ export default function AdminPanel({
                     {/* Logo Kanan */}
                     <div className="w-14 h-14 shrink-0 flex items-center justify-center">
                       <img
-                        src={localStorage.getItem('siakad_logo_right') || '/logo.png'}
+                        src={logoRightInput || localStorage.getItem('siakad_logo_right') || '/logo.png'}
                         alt="Logo Kanan"
                         className="max-w-full max-h-full object-contain"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -4384,8 +4716,55 @@ export default function AdminPanel({
           </div>
         )}
 
+        {/* Tab Setting Kartu Pelajar */}
+        {activeTab === 'setting-kartu-pelajar' && (
+          <SettingKartuPelajar />
+        )}
+
         </div>
       </div>
+
+      {/* Student ID Card Modal with NISN QR */}
+      <StudentIdCardModal
+        isOpen={isCardModalOpen}
+        onClose={() => {
+          setIsCardModalOpen(false);
+          setSelectedCardStudent(null);
+        }}
+        student={selectedCardStudent}
+        classes={classes}
+        headmasterName={headmasterName}
+        schoolName={schoolTitleInput}
+        schoolLogo={logoRightInput || localStorage.getItem('siakad_logo_right') || ''}
+      />
+
+      {/* Batch Student Cards Printing Modal with Class Filter & Left School Logo */}
+      <BatchStudentCardsModal
+        isOpen={isBatchCardModalOpen}
+        onClose={() => setIsBatchCardModalOpen(false)}
+        students={students}
+        classes={classes}
+        initialClassId={studentClassFilter}
+        headmasterName={headmasterName}
+        schoolName={schoolTitleInput}
+        schoolLogo={logoRightInput || localStorage.getItem('siakad_logo_right') || ''}
+      />
+
+      {/* Universal Attendance QR & Barcode Scanner Modal */}
+      <AttendanceQrScannerModal
+        isOpen={isScannerModalOpen}
+        onClose={() => setIsScannerModalOpen(false)}
+        students={students}
+        classes={classes}
+        attendance={attendance}
+        onRecordAttendance={(rec) => {
+          if (onQuickAttendance) {
+            onQuickAttendance(rec);
+          }
+        }}
+        operatorName="Admin Sekolah"
+        schoolStartTime={schoolTimeConfig?.schoolStartTime || '07:00'}
+      />
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}

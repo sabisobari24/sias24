@@ -2,54 +2,190 @@
   "entities": {
     "UserStaticProfile": {
       "title": "User Static Profile",
-      "description": "Profil statis pengguna (nama, kelas, peran) yang jarang berubah",
+      "description": "Profil statis pengguna untuk fetch 1x getDoc saat login",
       "type": "object",
       "properties": {
-        "uid": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "role": {
-          "type": "string",
-          "enum": ["admin", "guru", "siswa", "orangtua"]
-        },
-        "userClass": {
-          "type": "string"
-        },
-        "nip": {
-          "type": "string"
-        },
-        "nisn": {
-          "type": "string"
-        },
-        "email": {
-          "type": "string"
-        },
-        "createdAt": {
-          "type": "string"
-        },
-        "updatedAt": {
-          "type": "string"
-        }
+        "uid": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["admin", "guru", "siswa", "orangtua", "pelatih", "tendik"] },
+        "userClass": { "type": "string", "maxLength": 50 },
+        "nip": { "type": "string", "maxLength": 30 },
+        "nisn": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
       },
       "required": ["uid", "name", "role"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Data induk siswa",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "nisn": { "type": "string", "maxLength": 20 },
+        "classId": { "type": "string", "maxLength": 50 },
+        "gender": { "type": "string", "enum": ["Laki-laki", "Perempuan"] },
+        "address": { "type": "string", "maxLength": 300 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "parentName": { "type": "string", "maxLength": 150 },
+        "parentNik": { "type": "string", "maxLength": 30 },
+        "parentPhone": { "type": "string", "maxLength": 30 },
+        "parentEmail": { "type": "string", "maxLength": 100 },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "password": { "type": "string", "maxLength": 150 },
+        "parentPassword": { "type": "string", "maxLength": 150 }
+      },
+      "required": ["id", "name", "nisn", "classId"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Data pendidik dan staf sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "nip": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "maxLength": 30 },
+        "roles": { "type": "array" },
+        "password": { "type": "string", "maxLength": 150 },
+        "ekskulId": { "type": "string", "maxLength": 50 },
+        "phone": { "type": "string", "maxLength": 30 }
+      },
+      "required": ["id", "name", "nip", "role"]
+    },
+    "SchoolClass": {
+      "title": "School Class",
+      "description": "Data rombongan belajar / kelas",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 50 },
+        "level": { "type": "string", "maxLength": 20 },
+        "academicYear": { "type": "string", "maxLength": 30 },
+        "homeroomTeacherId": { "type": "string", "maxLength": 128 },
+        "totalStudents": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "Attendance": {
+      "title": "Attendance Record",
+      "description": "Presensi harian siswa",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "enum": ["Hadir", "Sakit", "Izin", "Alpa", "Terlambat"] },
+        "time": { "type": "string", "maxLength": 30 },
+        "notes": { "type": "string", "maxLength": 300 },
+        "recordedBy": { "type": "string", "maxLength": 150 },
+        "verified": { "type": "boolean" }
+      },
+      "required": ["id", "studentId", "date", "status"]
+    },
+    "StudentViolation": {
+      "title": "Student Violation",
+      "description": "Catatan pelanggaran kedisiplinan siswa",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "violationTypeId": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 30 },
+        "reporterId": { "type": "string", "maxLength": 128 },
+        "reporterRole": { "type": "string", "maxLength": 50 },
+        "points": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "maxLength": 50 },
+        "penalty": { "type": "string", "maxLength": 300 }
+      },
+      "required": ["id", "studentId", "violationTypeId", "points"]
+    },
+    "ViolationType": {
+      "title": "Violation Type",
+      "description": "Kategori dan bobot poin pelanggaran",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 200 },
+        "points": { "type": "number" },
+        "category": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "name", "points"]
+    },
+    "PendingRegistration": {
+      "title": "Pending Registration",
+      "description": "Pengajuan akun mandiri dari calon pengguna",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "role": { "type": "string", "enum": ["guru", "siswa", "orang_tua", "pelatih"] },
+        "name": { "type": "string", "maxLength": 150 },
+        "nipOrNisnOrNik": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "gender": { "type": "string", "maxLength": 20 },
+        "classId": { "type": "string", "maxLength": 50 },
+        "studentNisnOrName": { "type": "string", "maxLength": 150 },
+        "address": { "type": "string", "maxLength": 300 },
+        "password": { "type": "string", "maxLength": 150 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "maxLength": 30 }
+      },
+      "required": ["id", "role", "name"]
+    },
+    "WebContent": {
+      "title": "Website Content",
+      "description": "Konten halaman publik website sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "schoolLogo": { "type": "string", "maxLength": 10000 },
+        "akreditasi": { "type": "string", "maxLength": 100 },
+        "slides": { "type": "array" },
+        "sambutan": { "type": "string", "maxLength": 5000 },
+        "visi": { "type": "string", "maxLength": 2000 },
+        "misi": { "type": "array" },
+        "instagram": { "type": "string", "maxLength": 200 },
+        "whatsapp": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id"]
+    },
+    "SchoolSettings": {
+      "title": "School Settings",
+      "description": "Konfigurasi instansi, kop surat, kartu pelajar, dsb.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 150 },
+        "nip": { "type": "string", "maxLength": 50 },
+        "logoLeft": { "type": "string", "maxLength": 50000 },
+        "logoRight": { "type": "string", "maxLength": 50000 },
+        "govTitle": { "type": "string", "maxLength": 200 },
+        "deptTitle": { "type": "string", "maxLength": 200 },
+        "sudinTitle": { "type": "string", "maxLength": 200 },
+        "schoolTitle": { "type": "string", "maxLength": 200 },
+        "addressText": { "type": "string", "maxLength": 300 },
+        "contactText": { "type": "string", "maxLength": 300 },
+        "docNumber": { "type": "string", "maxLength": 100 },
+        "cardTitle": { "type": "string", "maxLength": 200 },
+        "presetId": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id"]
     },
     "AggregatedRealtimeContainer": {
       "title": "Aggregated Realtime Data Container",
       "description": "Dokumen agregat berisi array item real-time untuk hemat kuota read/write",
       "type": "object",
       "properties": {
-        "items": {
-          "type": "array"
-        },
-        "createdAt": {
-          "type": "string"
-        },
-        "lastUpdated": {
-          "type": "string"
-        }
+        "items": { "type": "array" },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "lastUpdated": { "type": "string", "maxLength": 50 }
       },
       "required": ["items"]
     }
@@ -57,19 +193,55 @@
   "firestore": {
     "/users/{userId}": {
       "schema": "UserStaticProfile",
-      "description": "Data profil statis per pengguna untuk 1x fetch getDoc saat login"
+      "description": "Data profil statis per pengguna"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Data profil dan akun siswa"
+    },
+    "/teachers/{teacherId}": {
+      "schema": "Teacher",
+      "description": "Data profil dan akun guru/staf"
+    },
+    "/classes/{classId}": {
+      "schema": "SchoolClass",
+      "description": "Daftar rombongan belajar kelas"
+    },
+    "/attendance/{attendanceId}": {
+      "schema": "Attendance",
+      "description": "Catatan presensi harian siswa"
+    },
+    "/violations/{violationId}": {
+      "schema": "StudentViolation",
+      "description": "Catatan pelanggaran siswa"
+    },
+    "/violation_types/{typeId}": {
+      "schema": "ViolationType",
+      "description": "Bobot dan kategori aturan kedisiplinan"
+    },
+    "/pending_registrations/{regId}": {
+      "schema": "PendingRegistration",
+      "description": "Pendaftaran mandiri akun baru yang menunggu verifikasi admin"
+    },
+    "/web_content/{contentId}": {
+      "schema": "WebContent",
+      "description": "Konten halaman publik situs web sekolah"
+    },
+    "/settings/{settingId}": {
+      "schema": "SchoolSettings",
+      "description": "Pengaturan sekolah, kop surat, dan kartu pelajar"
     },
     "/aggregated_announcements/{groupId}": {
       "schema": "AggregatedRealtimeContainer",
-      "description": "Pengumuman real-time teragregasi dalam 1 dokumen tunggal"
+      "description": "Pengumuman real-time teragregasi"
     },
     "/aggregated_activities/{classId}": {
       "schema": "AggregatedRealtimeContainer",
-      "description": "Aktivitas kelas real-time teragregasi dalam 1 dokumen tunggal per kelas"
+      "description": "Aktivitas kelas teragregasi"
     },
     "/aggregated_messages/{chatId}": {
       "schema": "AggregatedRealtimeContainer",
-      "description": "Pesan teragregasi dalam 1 dokumen tunggal per percakapan"
+      "description": "Pesan teragregasi"
     }
   }
 }

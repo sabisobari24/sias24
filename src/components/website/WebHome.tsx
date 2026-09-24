@@ -110,7 +110,17 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
       (data) => {
         const found = data.find(c => c.id === 'home');
         if (found) {
-          setWebContent(found);
+          const cleanHome = { ...found };
+          if (
+            typeof cleanHome.headMotto === 'string' &&
+            (cleanHome.headMotto.includes('dhimas') ||
+              cleanHome.headMotto.includes('deface') ||
+              /<script/i.test(cleanHome.headMotto) ||
+              /onerror/i.test(cleanHome.headMotto))
+          ) {
+            cleanHome.headMotto = 'Mari kita bersama-sama membangun generasi cerdas, berkarakter, dan peduli lingkungan.';
+          }
+          setWebContent(cleanHome);
         }
       },
       INITIAL_WEB_CONTENT

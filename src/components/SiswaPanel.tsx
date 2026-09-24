@@ -42,10 +42,18 @@ import {
   FileCheck,
   Eye,
   X,
-  BookOpen
+  BookOpen,
+  CreditCard,
+  QrCode,
+  ScanLine,
+  FileDown,
+  Loader2
 } from 'lucide-react';
 import ExamBrowser from './ExamBrowser';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
+import StudentIdCardModal from './common/StudentIdCardModal';
+import { generateNISNQRCode } from '../utils/qrHelper';
+import { downloadSingleStudentCardPDF } from '../utils/cardPdfHelper';
 import ELearningPanel from './ELearningPanel';
 import { fileToBase64, convertGoogleDriveLink } from '../utils/imageHelper';
 import { printCertificate, printTablePDF } from '../utils/printHelper';
@@ -87,6 +95,9 @@ interface SiswaPanelProps {
   onTabChange?: (tab: 'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan') => void;
   cbtBypassPin?: string;
   headmasterName?: string;
+  schoolName?: string;
+  schoolLogo?: string;
+  onUpdateStudent?: (s: Student) => void;
   elearningMaterials?: ELearningMaterial[];
   elearningProgress?: StudentLearningProgress[];
   onUpdateProgress?: (p: StudentLearningProgress) => void;
@@ -111,6 +122,9 @@ export default function SiswaPanel({
   onTabChange,
   cbtBypassPin,
   headmasterName = 'Dra. Hj. Endah Purwani M.M',
+  schoolName,
+  schoolLogo,
+  onUpdateStudent,
   elearningMaterials = [],
   elearningProgress = [],
   onUpdateProgress,
@@ -128,6 +142,43 @@ export default function SiswaPanel({
   const [selfNotes, setSelfNotes] = useState('');
   const [liveTime, setLiveTime] = useState('');
   const [isResubmitting, setIsResubmitting] = useState(false);
+
+  // QR Code Kartu Pelajar & Attendance Method Choice
+  const [attendanceMethod, setAttendanceMethod] = useState<'qr_card' | 'camera_timestamp'>('qr_card');
+  const [studentQrUrl, setStudentQrUrl] = useState<string>('');
+  const [isCardModalOpen, setIsCardModalOpen] = useState<boolean>(false);
+  const [isDownloadingCardPdf, setIsDownloadingCardPdf] = useState(false);
+
+  const handleQuickDownloadCardPdf = async () => {
+    if (!student) return;
+    setIsDownloadingCardPdf(true);
+    try {
+      const currentClass = classes.find(c => c.id === student.classId);
+      const cName = currentClass?.name || student.classId || '-';
+      const effectiveSchool = schoolName || localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA';
+      await downloadSingleStudentCardPDF(
+        student,
+        cName,
+        headmasterName,
+        effectiveSchool,
+        schoolLogo,
+        { format: 'card' }
+      );
+    } catch (err) {
+      console.error('Failed to download student card PDF:', err);
+      alert('Gagal mengunduh PDF kartu pelajar. Silakan coba buka modal kartu untuk mengunduh.');
+    } finally {
+      setIsDownloadingCardPdf(false);
+    }
+  };
+
+  useEffect(() => {
+    if (student?.nisn || student?.id) {
+      generateNISNQRCode(student.nisn || student.id, 280)
+        .then((url) => setStudentQrUrl(url))
+        .catch((err) => console.warn('QR generation error:', err));
+    }
+  }, [student?.nisn, student?.id]);
   
   // Real Device Camera States & Refs
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -934,6 +985,118 @@ export default function SiswaPanel({
                 <span className="text-slate-800 font-mono text-xs col-span-2">: {waliKelas?.nip || '-'}</span>
               </div>
             </div>
+
+            {/* KARTU TANDA PELAJAR DIGITAL RESMI (SINKRON DENGAN AKUN SISWA) */}
+            <div className="md:col-span-2 bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 rounded-2xl p-6 text-white shadow-md border border-indigo-900/60 relative overflow-hidden">
+              <div className="absolute -right-10 -top-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative z-10 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-6">
+                <div className="space-y-3 max-w-xl">
+                  <div className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-bold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Status Kartu: AKTIF & TERSINKRONISASI</span>
+                  </div>
+                  <h3 className="text-xl font-bold flex items-center gap-2.5 text-white">
+                    <CreditCard className="w-6 h-6 text-indigo-400" />
+                    <span>Kartu Tanda Pelajar Digital Siswa</span>
+                  </h3>
+                  <p className="text-xs text-indigo-200/90 leading-relaxed">
+                    Identitas resmi siswa ini terhubung dan tersinkronisasi secara langsung dengan akun Anda. Data NISN, kelas, foto, serta desain kartu selalu mengikuti konfigurasi sekolah terbaru.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleQuickDownloadCardPdf}
+                      disabled={isDownloadingCardPdf}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-60"
+                      title="Download Kartu Pelajar dalam bentuk file PDF"
+                    >
+                      {isDownloadingCardPdf ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <FileDown className="w-4 h-4" />
+                      )}
+                      <span>{isDownloadingCardPdf ? 'Mengunduh PDF...' : 'Unduh PDF Kartu Pelajar'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsCardModalOpen(true)}
+                      className="bg-white text-indigo-950 hover:bg-indigo-50 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer active:scale-95"
+                    >
+                      <CreditCard className="w-4 h-4 text-indigo-600" />
+                      <span>Lihat / Cetak Kartu Pelajar</span>
+                    </button>
+                    <label className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-3.5 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer">
+                      <Camera className="w-4 h-4 text-indigo-300" />
+                      <span>Perbarui Foto Profil</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file && onUpdateStudent) {
+                            try {
+                              const b64 = await fileToBase64(file);
+                              onUpdateStudent({ ...student, avatarUrl: b64 });
+                            } catch (err) {
+                              console.warn('Error updating student photo:', err);
+                            }
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Mini Preview Kartu Pelajar */}
+                <div
+                  onClick={() => setIsCardModalOpen(true)}
+                  className="bg-white text-slate-900 rounded-xl p-3.5 shadow-xl border border-indigo-400/30 w-full sm:w-80 cursor-pointer hover:scale-[1.02] transition-all group shrink-0 relative"
+                  title="Klik untuk membuka dan mencetak Kartu Pelajar"
+                >
+                  <div className="flex items-center justify-between border-b pb-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={schoolLogo || localStorage.getItem('siakad_card_custom_logo') || localStorage.getItem('siakad_logo_right') || '/logo.png'}
+                        alt="Logo"
+                        className="w-7 h-7 object-contain bg-transparent border-0 outline-none shadow-none"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.png'; }}
+                      />
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-indigo-950 tracking-tight leading-none">
+                          {schoolName || localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA'}
+                        </p>
+                        <p className="text-[8px] font-bold text-slate-500 uppercase tracking-wide">KARTU TANDA PELAJAR</p>
+                      </div>
+                    </div>
+                    <span className="text-[8px] font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">AKTIF</span>
+                  </div>
+
+                  <div className="flex gap-2.5 items-center">
+                    <img
+                      src={student.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=4f46e5&color=fff&size=120&bold=true`}
+                      alt={student.name}
+                      className="w-14 h-16 rounded-md object-cover border border-slate-200 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1 text-[11px] leading-tight space-y-0.5">
+                      <p className="font-bold text-slate-900 truncate">{student.name}</p>
+                      <p className="text-[10px] text-slate-600 font-mono">NISN: {student.nisn}</p>
+                      <p className="text-[10px] text-slate-600">Kelas: <span className="font-semibold text-indigo-900">{studentClass?.name || student.classId}</span></p>
+                      {student.isKjpRecipient && (
+                        <span className="inline-block text-[8px] font-extrabold bg-emerald-100 text-emerald-800 px-1 rounded">KJP PLUS</span>
+                      )}
+                    </div>
+                    {studentQrUrl && (
+                      <img src={studentQrUrl} alt="QR" className="w-12 h-12 shrink-0 border p-0.5 rounded bg-white" />
+                    )}
+                  </div>
+                  <div className="mt-2 pt-1.5 border-t text-center text-[9px] text-indigo-600 font-bold group-hover:text-indigo-800 flex items-center justify-center gap-1">
+                    <Eye className="w-3 h-3" />
+                    <span>Klik untuk memperbesar & cetak resmi</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1024,8 +1187,18 @@ export default function SiswaPanel({
                         )}
                       </div>
                     </div>
-                    <div className="text-xs text-slate-400 font-mono bg-white border border-slate-200 px-3 py-1 rounded-full shrink-0">
-                      {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    <div className="flex flex-col gap-2 shrink-0 w-full md:w-auto items-end">
+                      <button
+                        type="button"
+                        onClick={() => setIsCardModalOpen(true)}
+                        className="w-full md:w-auto px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        <span>Buka Kartu Pelajar (QR NISN)</span>
+                      </button>
+                      <div className="text-xs text-slate-400 font-mono bg-white border border-slate-200 px-3 py-1 rounded-full shrink-0">
+                        {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                      </div>
                     </div>
                   </div>
                 )
@@ -1035,9 +1208,9 @@ export default function SiswaPanel({
                     <div>
                       <h4 className="font-bold text-slate-800 text-sm uppercase tracking-wide flex items-center gap-2">
                         <Clock className="w-4 h-4 text-indigo-500" />
-                        <span>Absensi Mandiri Berbukti Foto Secure Time Stamp</span>
+                        <span>Presensi & Absensi Siswa Harian</span>
                       </h4>
-                      <p className="text-xs text-slate-500 mt-0.5">Lakukan konfirmasi kehadiran harian Anda lengkap dengan koordinat satelit GPS dan tanda waktu.</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Pilih metode absensi: Tampilkan QR Kartu Pelajar untuk discan di sekolah atau gunakan Kamera Selfie Timestamp GPS.</p>
                     </div>
                     <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 border rounded-full text-slate-600 font-mono text-xs shadow-sm self-start sm:self-auto shrink-0">
                       <span className="w-2 h-2 bg-indigo-500 rounded-full animate-ping" />
@@ -1045,7 +1218,144 @@ export default function SiswaPanel({
                     </div>
                   </div>
 
-                  {/* Status selection */}
+                  {/* Pilihan Metode Absen Siswa */}
+                  <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1.5 border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setAttendanceMethod('qr_card')}
+                      className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        attendanceMethod === 'qr_card'
+                          ? 'bg-white text-purple-700 shadow-sm border border-purple-200 ring-2 ring-purple-100'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      <QrCode className="w-4 h-4 text-purple-600" />
+                      <span>QR Code Kartu Pelajar (Scan di Sekolah)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAttendanceMethod('camera_timestamp')}
+                      className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        attendanceMethod === 'camera_timestamp'
+                          ? 'bg-white text-indigo-700 shadow-sm border border-indigo-200 ring-2 ring-indigo-100'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      <Camera className="w-4 h-4 text-indigo-600" />
+                      <span>Kamera Selfie & Timestamp GPS</span>
+                    </button>
+                  </div>
+
+                  {attendanceMethod === 'qr_card' ? (
+                    /* VIEW 1: QR CODE KARTU PELAJAR */
+                    <div className="bg-gradient-to-br from-purple-50/70 via-white to-indigo-50/40 rounded-2xl p-6 border border-purple-200 shadow-sm space-y-6">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div>
+                          <h4 className="font-extrabold text-slate-900 text-sm uppercase tracking-wide flex items-center gap-2">
+                            <QrCode className="w-4 h-4 text-purple-600" />
+                            <span>QR Code Absensi Siswa (NISN)</span>
+                          </h4>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Tunjukkan QR Code ini ke petugas piket di gerbang sekolah atau hadapkan ke kamera/scanner barcode.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsCardModalOpen(true)}
+                          className="px-4 py-2 bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                        >
+                          <CreditCard className="w-4 h-4 text-purple-600" />
+                          <span>Cetak / Lihat Kartu Pelajar Resmi</span>
+                        </button>
+                      </div>
+
+                      {/* Big Central QR Code Presentation */}
+                      <div className="flex flex-col items-center justify-center py-2 space-y-4">
+                        <div className="bg-white p-5 sm:p-6 rounded-3xl border-2 border-purple-200 shadow-lg flex flex-col items-center relative group">
+                          {studentQrUrl ? (
+                            <img
+                              src={studentQrUrl}
+                              alt={`QR Code NISN ${student.nisn}`}
+                              className="w-60 h-60 sm:w-64 sm:h-64 object-contain rounded-xl p-1 bg-white"
+                            />
+                          ) : (
+                            <div className="w-60 h-60 sm:w-64 sm:h-64 bg-slate-100 animate-pulse rounded-xl flex items-center justify-center text-slate-400 text-xs">
+                              Membuat QR Code...
+                            </div>
+                          )}
+                          <div className="mt-3 text-center">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">NOMOR INDUK SISWA NASIONAL</span>
+                            <span className="text-base font-mono font-black text-purple-950 tracking-wider">
+                              {student.nisn || student.id}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Quick helper tip for students */}
+                        <div className="text-[11px] text-slate-500 bg-purple-50/80 border border-purple-100 px-3.5 py-1.5 rounded-full flex items-center gap-1.5 text-center">
+                          <Sparkles className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                          <span>Pastikan kecerahan layar HP cukup terang saat discan di pos absensi</span>
+                        </div>
+
+                        {/* Student Badge Info */}
+                        <div className="flex flex-col items-center text-center max-w-sm">
+                          <h3 className="text-base font-extrabold text-slate-900 uppercase tracking-tight">
+                            {student.name}
+                          </h3>
+                          <p className="text-xs text-slate-500 mt-0.5 font-semibold">
+                            {classes.find(c => c.id === student.classId)?.name || student.classId} &bull; SMP NEGERI 50 JAKARTA
+                          </p>
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                              <span>QR Code Siap Dipindai</span>
+                            </span>
+                            {student.isKjpRecipient && (
+                              <span className="px-2.5 py-1 rounded-full text-xs font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
+                                Penerima KJP Plus
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Information & Instructions Cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs">
+                        <div className="bg-white/80 p-3 rounded-xl border border-purple-100 flex items-start gap-2.5">
+                          <div className="p-1.5 bg-purple-100 text-purple-700 rounded-lg shrink-0">
+                            <ScanLine className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-800 block">Kamera HP / Laptop</span>
+                            <span className="text-slate-500 text-[11px]">Dapat discan oleh kamera smartphone guru piket atau webcam pos.</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white/80 p-3 rounded-xl border border-purple-100 flex items-start gap-2.5">
+                          <div className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg shrink-0">
+                            <Sparkles className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-800 block">Scanner Barcode Fisik</span>
+                            <span className="text-slate-500 text-[11px]">Kompatibel langsung dengan alat scanner tembak laser di gerbang.</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white/80 p-3 rounded-xl border border-purple-100 flex items-start gap-2.5">
+                          <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg shrink-0">
+                            <Clock className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-800 block">Langsung Terverifikasi</span>
+                            <span className="text-slate-500 text-[11px]">Kehadiran dan jam tiba otomatis tercatat secara real-time.</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* VIEW 2: KAMERA SELFIE & TIMESTAMP GPS (FITUR ASLI TETAP UTUH) */
+                    <div className="space-y-5">
+                      {/* Status selection */}
                   <div className="grid grid-cols-3 gap-3">
                     {(['Hadir', 'Sakit', 'Izin'] as const).map((status) => (
                       <button
@@ -1332,6 +1642,8 @@ export default function SiswaPanel({
                     <CheckCircle className="w-4 h-4" />
                     <span>Kirim Absen Kehadiran ({liveTime})</span>
                   </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1844,6 +2156,17 @@ export default function SiswaPanel({
           canVerify={false}
         />
       )}
+
+      {/* Student ID Card Modal with NISN QR */}
+      <StudentIdCardModal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+        student={student}
+        classes={classes}
+        headmasterName={headmasterName || localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.'}
+        schoolName={schoolName || localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA'}
+        schoolLogo={schoolLogo || localStorage.getItem('siakad_card_custom_logo') || localStorage.getItem('siakad_logo_right') || ''}
+      />
     </div>
   );
 }

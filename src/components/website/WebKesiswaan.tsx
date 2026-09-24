@@ -49,6 +49,8 @@ export default function WebKesiswaan() {
   const [activeEkskulId, setActiveEkskulId] = useState<string | null>(null);
   const [activeStaff, setActiveStaff] = useState<any>(null);
   const [activeJournals, setActiveJournals] = useState<any[]>([]);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [currentPopupSlide, setCurrentPopupSlide] = useState(0);
 
   useEffect(() => {
     setCurrentPopupSlide(0);
@@ -109,9 +111,6 @@ export default function WebKesiswaan() {
  
     return combined;
   }, [activeEkskul, activeJournals, webContent.popupImages]);
-
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [currentPopupSlide, setCurrentPopupSlide] = useState(0);
 
   const prevSlide = () => {
     setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);

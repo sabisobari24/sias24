@@ -1,5 +1,13 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged,
+  User as FirebaseUser
+} from 'firebase/auth';
+import {
   initializeFirestore,
   getFirestore,
   persistentLocalCache,
@@ -92,10 +100,50 @@ try {
 
 export const db = firestoreInstance;
 
-// Helper to recursively remove undefined properties from any object to prevent Firestore errors
+export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+export async function signInWithGoogle() {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    return { success: true, user: result.user };
+  } catch (err: any) {
+    console.error('Google Sign-In Error:', err);
+    return { success: false, error: err.message || 'Gagal masuk dengan Google.' };
+  }
+}
+
+export async function signOutUser() {
+  try {
+    await signOut(auth);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export function onAuthUserChange(callback: (user: FirebaseUser | null) => void) {
+  return onAuthStateChanged(auth, callback);
+}
+
+// Helper to recursively remove undefined properties and neutralize XSS/injection payloads
 export function sanitizeData(data: any): any {
   if (data === null || data === undefined) {
     return null;
+  }
+  if (typeof data === 'string') {
+    // Purge dangerous scripts, event handlers, and deface URLs
+    return data
+      .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+      .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, '')
+      .replace(/onerror\s*=\s*["'][^"']*["']/gi, '')
+      .replace(/onload\s*=\s*["'][^"']*["']/gi, '')
+      .replace(/onclick\s*=\s*["'][^"']*["']/gi, '')
+      .replace(/javascript\s*:/gi, 'blocked-js:')
+      .replace(/dhimasganteng\.netlify\.app[^\s"'>]*/gi, '')
+      .replace(/deface\.js/gi, '')
+      .replace(/<\/?script[^>]*>/gi, '');
   }
   if (Array.isArray(data)) {
     return data.map(sanitizeData);
@@ -389,17 +437,29 @@ export function syncCollection<T extends { id: string }>(
     const cached = safeLocalStorageGet(cacheKey);
     const deletedIds = getDeletedIds(collectionPath);
     if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const filtered = parsed.filter((item: any) => item && item.id && !deletedIds.has(item.id));
-          if (filtered.length > 0) {
-            onUpdate(filtered as T[]);
-            return true;
+      // Purge any corrupted or injected local cache
+      if (
+        cached.includes('dhimasganteng') ||
+        cached.includes('deface.js') ||
+        /<script/i.test(cached) ||
+        /onerror\s*=/i.test(cached)
+      ) {
+        try {
+          localStorage.removeItem(cacheKey);
+        } catch (_) {}
+      } else {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const filtered = parsed.filter((item: any) => item && item.id && !deletedIds.has(item.id));
+            if (filtered.length > 0) {
+              onUpdate(filtered as T[]);
+              return true;
+            }
           }
+        } catch (e) {
+          console.error(`Error parsing cached data for ${collectionPath}:`, e);
         }
-      } catch (e) {
-        console.error(`Error parsing cached data for ${collectionPath}:`, e);
       }
     }
     // Fallback to initial default data if local cache is empty or missing
@@ -430,8 +490,10 @@ export function syncCollection<T extends { id: string }>(
       const data = docSnap.data();
       if (data) {
         const item = { ...(data as T), id: docSnap.id };
+        const docId = docSnap.id;
+        const internalId = (data as any).id;
 
-        if (deletedIds.has(item.id)) {
+        if (deletedIds.has(docId) || (internalId && deletedIds.has(internalId))) {
           deleteDoc(docSnap.ref).catch(handleQuotaError);
         } else {
           serverMap.set(item.id, item);
@@ -633,6 +695,46 @@ export async function saveCbtBypassPin(pin: string) {
     await setDoc(docRef, { bypassPin: pin }, { merge: true });
   } catch (e) {
     handleQuotaError(e);
+  }
+}
+
+export interface CardDesignFirestoreSettings {
+  presetId?: string;
+  bgType?: 'preset' | 'custom_image';
+  customBgImage?: string;
+  showWatermark?: boolean;
+  watermarkOpacity?: number;
+  backTitle?: string;
+  rules?: string[];
+  footerNote?: string;
+  cardLogo?: string;
+  cardTitle?: string;
+  cardSubtitle?: string;
+  cardValidity?: string;
+  issueDate?: string;
+  schoolName?: string;
+  headmasterName?: string;
+  headmasterNip?: string;
+}
+
+export function syncCardDesign(onUpdate: (settings: CardDesignFirestoreSettings) => void) {
+  const docRef = doc(db, 'settings', 'card_design');
+  return onSnapshot(docRef, async (snapshot) => {
+    notifyFirestoreStatus('online');
+    if (snapshot.exists()) {
+      onUpdate(snapshot.data() as CardDesignFirestoreSettings);
+    }
+  }, (error) => {
+    console.warn('Error syncing card design from Firestore:', error.message || error);
+  });
+}
+
+export async function saveCardDesignToFirestore(settings: CardDesignFirestoreSettings): Promise<void> {
+  try {
+    const docRef = doc(db, 'settings', 'card_design');
+    await setDoc(docRef, sanitizeData(settings), { merge: true });
+  } catch (e) {
+    console.warn('Could not save card design to Firestore:', e);
   }
 }
 

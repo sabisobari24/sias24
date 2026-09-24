@@ -23,13 +23,15 @@ import {
   Calendar,
   AlertCircle,
   FileSpreadsheet,
-  Download
+  Download,
+  Zap
 } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF, printHTML } from '../utils/printHelper';
 import ConfirmModal from './ConfirmModal';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import ExportDateFilterModal from './ExportDateFilterModal';
+import AttendanceQrScannerModal from './common/AttendanceQrScannerModal';
 
 interface PiketPanelProps {
   teacher: Teacher;
@@ -87,6 +89,7 @@ export default function PiketPanel({
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isDownloadDropdownOpen, setIsDownloadDropdownOpen] = useState(false);
+  const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
 
   // Retrieve dynamic logos from Admin Settings (with default fallbacks)
   const dynamicLogoLeft = localStorage.getItem('siakad_logo_left') || '/logo-dki.png';
@@ -561,6 +564,16 @@ export default function PiketPanel({
           <p className="text-emerald-100 text-sm">Bertugas mengawal ketertiban, presensi harian, ketidakhadiran guru, & log kejadian penting harian.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full md:w-auto relative">
+          <button
+            type="button"
+            onClick={() => setIsScannerModalOpen(true)}
+            className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer"
+            title="Buka Pos Scanner QR / Barcode Absensi Siswa"
+          >
+            <Zap className="w-4 h-4 text-slate-950" />
+            <span>Pos Scanner QR Absen</span>
+          </button>
+
           <button
             onClick={() => setIsPrintModalOpen(true)}
             className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 bg-white text-emerald-700 hover:bg-emerald-50 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-all cursor-pointer"
@@ -1854,6 +1867,19 @@ export default function PiketPanel({
           </div>
         );
       })()}
+
+      {/* Universal Attendance QR & Barcode Scanner Modal */}
+      <AttendanceQrScannerModal
+        isOpen={isScannerModalOpen}
+        onClose={() => setIsScannerModalOpen(false)}
+        students={students}
+        classes={classes}
+        attendance={attendance}
+        onRecordAttendance={(rec) => {
+          onQuickAttendance(rec);
+        }}
+        operatorName={`Guru Piket: ${teacher.name}`}
+      />
 
       <ExportDateFilterModal
         isOpen={exportModal.isOpen}

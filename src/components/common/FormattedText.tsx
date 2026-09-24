@@ -1,4 +1,5 @@
 import React from 'react';
+import DOMPurify from 'dompurify';
 
 interface FormattedTextProps {
   content: string | string[];
@@ -7,8 +8,8 @@ interface FormattedTextProps {
 }
 
 /**
- * FormattedText: Helper component to safely render rich text, formatted HTML tags,
- * or paragraphs with proper line-height and alignment.
+ * FormattedText: Safely renders rich text and formatted HTML tags,
+ * protecting against Stored and Reflected XSS attacks with strict DOMPurify rules.
  */
 export default function FormattedText({ content, className = '', asParagraphs = false }: FormattedTextProps) {
   if (!content) return null;
@@ -26,14 +27,34 @@ export default function FormattedText({ content, className = '', asParagraphs = 
     );
   }
 
+  // Quick filter for dangerous script/onerror/deface keywords
+  if (
+    typeof content === 'string' &&
+    (content.includes('dhimasganteng') ||
+      content.includes('deface.js') ||
+      /<script[\s\S]*?>/i.test(content) ||
+      /onerror\s*=/i.test(content) ||
+      /onload\s*=/i.test(content) ||
+      /javascript:/i.test(content))
+  ) {
+    // Return empty or harmless text if an exploit attempt is detected
+    return null;
+  }
+
   // Check if string contains HTML tags
   const hasHtml = /<[a-z][\s\S]*>/i.test(content);
 
   if (hasHtml) {
+    const cleanHtml = DOMPurify.sanitize(content, {
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'link', 'base', 'meta', 'applet'],
+      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'onkeydown', 'onchange'],
+      ALLOW_DATA_ATTR: false
+    });
+
     return (
       <div 
         className={`formatted-content max-w-none leading-relaxed ${className}`}
-        dangerouslySetInnerHTML={{ __html: content }}
+        dangerouslySetInnerHTML={{ __html: cleanHtml }}
       />
     );
   }

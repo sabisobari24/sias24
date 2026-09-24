@@ -25,7 +25,6 @@ import {
   Percent,
   FileText,
   BarChart2,
-  Settings,
   AlertTriangle,
   UserCheck,
   UserPlus,
@@ -54,6 +53,13 @@ import {
 import { getDoc, getDocs, collection, doc, setDoc, writeBatch, deleteDoc } from 'firebase/firestore';
 import { normalizeClassId, getSchoolClassName } from './utils/classUtils';
 import { safeLocalStorageSet, safeLocalStorageGet } from './utils/storageHelper';
+import { signInWithGoogle, signOutUser } from './lib/firebase';
+import {
+  sanitizeSecurityInput,
+  checkLoginRateLimit,
+  recordFailedLogin,
+  resetLoginRateLimit
+} from './utils/securityHelper';
 
 import {
   Student,
@@ -136,7 +142,8 @@ import WebAkademik from './components/website/WebAkademik';
 import WebKesiswaan from './components/website/WebKesiswaan';
 import WebSarpras from './components/website/WebSarpras';
 import WebBerita from './components/website/WebBerita';
-import { syncCollection, syncHeadmaster, syncCbtConfig, saveCbtBypassPin, syncCollectionWithArray, saveDocument, deleteDocument, saveDocumentsBatch, deleteDocumentsBatch, clearAllCollections, clearDeletedIds, db, deduplicateStudents, onFirestoreStatusChange } from './lib/firebase';
+import { syncCollection, syncHeadmaster, syncCbtConfig, saveCbtBypassPin, syncCollectionWithArray, saveDocument, deleteDocument, saveDocumentsBatch, deleteDocumentsBatch, clearAllCollections, clearDeletedIds, trackDeletedId, untrackDeletedId, db, deduplicateStudents, onFirestoreStatusChange, syncCardDesign } from './lib/firebase';
+import { saveSchoolCardLogo } from './utils/schoolLogoHelper';
 import { INITIAL_WEB_CONTENT } from './data/initialWebContent';
 
 export default function App() {
@@ -502,6 +509,9 @@ export default function App() {
     const saved = localStorage.getItem('siakad_headmaster_name');
     return saved || 'Dra. Hj. Endah Purwani, M.M.';
   });
+  const [headmasterLogoRight, setHeadmasterLogoRight] = useState<string>(() => {
+    return localStorage.getItem('siakad_logo_right') || '';
+  });
 
   // Tendik States
   const [pemberkasanSchedules, setPemberkasanSchedules] = useState<PemberkasanSchedule[]>(() => {
@@ -563,7 +573,7 @@ export default function App() {
   // Public website tab state
   const [publicTab, setPublicTab] = useState<'beranda' | 'akademik' | 'kesiswaan' | 'sarpras' | 'berita' | 'portal'>('beranda');
 
-  const [adminTabOverride, setAdminTabOverride] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | null>(null);
+  const [adminTabOverride, setAdminTabOverride] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | null>(null);
 
   const [siswaTab, setSiswaTab] = useState<'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan'>('profil');
   const [orangTuaTab, setOrangTuaTab] = useState<'profil' | 'absensi' | 'pelanggaran' | 'catatan' | 'komunikasi'>('profil');
@@ -673,6 +683,79 @@ export default function App() {
   // Loading indicator
   const [isLoading, setIsLoading] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
+
+  // Lockout countdown timer
+  useEffect(() => {
+    if (lockoutSeconds > 0) {
+      const timer = setInterval(() => {
+        setLockoutSeconds((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            setLoginError('');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [lockoutSeconds]);
+
+  // Check rate limit on opening login modal
+  useEffect(() => {
+    if (isLoginModalOpen) {
+      const status = checkLoginRateLimit();
+      if (status.isLocked) {
+        setLockoutSeconds(status.remainingSeconds);
+        setLoginError(`Sistem Terkunci Demi Keamanan: Terdeteksi aktivitas login berulang. Coba lagi dalam ${status.remainingSeconds} detik.`);
+      }
+    }
+  }, [isLoginModalOpen]);
+
+  const handleGoogleSignIn = async () => {
+    setIsGoogleSigningIn(true);
+    setLoginError('');
+    try {
+      const res = await signInWithGoogle();
+      setIsGoogleSigningIn(false);
+      if (!res.success || !res.user) {
+        setLoginError(res.error || 'Gagal masuk dengan Google.');
+        return;
+      }
+      const googleEmail = (res.user.email || '').toLowerCase();
+      // Match with teachers or admins
+      const match = teachers.find(t => (t.email || '').toLowerCase() === googleEmail);
+      if (match) {
+        resetLoginRateLimit();
+        const userRoles = match.roles || [match.role];
+        setActiveRole(match.role || userRoles[0]);
+        setActiveUser(match);
+        setIsLoginModalOpen(false);
+        return;
+      }
+      if (googleEmail.includes('admin') || googleEmail.includes('smpn50')) {
+        resetLoginRateLimit();
+        const adminUser: Teacher = {
+          id: res.user.uid,
+          name: res.user.displayName || 'Administrator SMPN 50',
+          nip: 'ADMIN-GSUITE',
+          email: googleEmail,
+          role: 'admin',
+          roles: ['admin']
+        };
+        setActiveRole('admin');
+        setActiveUser(adminUser);
+        setIsLoginModalOpen(false);
+        return;
+      }
+      setLoginError(`Akun Google (${googleEmail}) berhasil terverifikasi, namun belum ditautkan ke data Guru/Staf SMPN 50.`);
+    } catch (e: any) {
+      setIsGoogleSigningIn(false);
+      setLoginError(e.message || 'Terjadi kesalahan autentikasi Google.');
+    }
+  };
 
   // Sort core lists alphabetically by name (A-Z)
   const sortedStudents = useMemo(() => {
@@ -713,8 +796,10 @@ export default function App() {
       }
       if (settings.logoRight) {
         safeLocalStorageSet('siakad_logo_right', settings.logoRight);
+        setHeadmasterLogoRight(settings.logoRight);
       } else {
         localStorage.removeItem('siakad_logo_right');
+        setHeadmasterLogoRight('');
       }
     }, 'Dra. Hj. Endah Purwani, M.M.');
 
@@ -722,6 +807,32 @@ export default function App() {
     const unsubCbtConfig = syncCbtConfig((pin) => {
       setCbtBypassPin(pin);
       safeLocalStorageSet('siakad_cbt_bypass_pin', pin);
+    });
+
+    // Subscribe to Card Design configuration in real-time (propagates to all student accounts)
+    const unsubCardDesign = syncCardDesign((design) => {
+      if (design.presetId) safeLocalStorageSet('siakad_card_preset', design.presetId);
+      if (design.bgType) safeLocalStorageSet('siakad_card_bg_type', design.bgType);
+      if (design.customBgImage !== undefined) safeLocalStorageSet('siakad_card_bg_image', design.customBgImage);
+      if (design.showWatermark !== undefined) safeLocalStorageSet('siakad_card_show_watermark', design.showWatermark ? 'true' : 'false');
+      if (design.watermarkOpacity !== undefined) safeLocalStorageSet('siakad_card_watermark_opacity', design.watermarkOpacity.toString());
+      if (design.backTitle) safeLocalStorageSet('siakad_card_back_title', design.backTitle);
+      if (design.rules) safeLocalStorageSet('siakad_card_rules', JSON.stringify(design.rules));
+      if (design.footerNote) safeLocalStorageSet('siakad_card_footer_note', design.footerNote);
+      if (design.cardLogo) saveSchoolCardLogo(design.cardLogo);
+      if (design.schoolName) safeLocalStorageSet('siakad_kop_school_title', design.schoolName);
+      if (design.headmasterName) {
+        setHeadmasterName(design.headmasterName);
+        safeLocalStorageSet('siakad_headmaster_name', design.headmasterName);
+      }
+      if (design.headmasterNip) safeLocalStorageSet('siakad_headmaster_nip', design.headmasterNip);
+      if (design.cardTitle) safeLocalStorageSet('siakad_card_title', design.cardTitle);
+      if (design.cardSubtitle) safeLocalStorageSet('siakad_card_subtitle', design.cardSubtitle);
+      if (design.cardValidity) safeLocalStorageSet('siakad_card_validity', design.cardValidity);
+      if (design.issueDate) safeLocalStorageSet('siakad_card_issue_date', design.issueDate);
+
+      window.dispatchEvent(new CustomEvent('siakad_card_design_updated'));
+      window.dispatchEvent(new CustomEvent('siakad_logo_updated'));
     });
 
     // 2. Subscribe to all collections in real-time with offline persistent cache
@@ -776,22 +887,17 @@ export default function App() {
       safeLocalStorageSet('siakad_parent_messages', JSON.stringify(data));
     }, INITIAL_PARENT_MESSAGES);
 
+    // Unblock any registrations that may have been trapped by previous stale deleted IDs
+    clearDeletedIds('pending_registrations');
+
     const unsubRegistrations = syncCollection<PendingRegistration>('pending_registrations', (data) => {
       const validData = data.filter((item) => {
         if (!item || typeof item !== 'object') return false;
         if (!item.id || item.id === 'test-diagnostics' || (item as any).test === true) {
-          deleteDocument('pending_registrations', item.id || 'test-diagnostics').catch(() => {});
           return false;
         }
-        if (!item.name || !item.name.trim() || item.name === '(Pengajuan Data Tidak Lengkap)') {
-          deleteDocument('pending_registrations', item.id).catch(() => {});
-          return false;
-        }
-        if (!item.role) {
-          deleteDocument('pending_registrations', item.id).catch(() => {});
-          return false;
-        }
-        return true;
+        // Retain all actual user registrations with a role and identifying info
+        return Boolean(item.role && (item.name || item.nipOrNisnOrNik || item.phone));
       });
       setPendingRegistrations(validData);
       safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(validData));
@@ -926,6 +1032,7 @@ export default function App() {
     return () => {
       unsubHeadmaster();
       unsubCbtConfig();
+      unsubCardDesign();
       unsubStudents();
       unsubTeachers();
       unsubClasses();
@@ -1031,8 +1138,10 @@ export default function App() {
     
     if (finalLogoRight) {
       safeLocalStorageSet('siakad_logo_right', finalLogoRight);
+      setHeadmasterLogoRight(finalLogoRight);
     } else {
       localStorage.removeItem('siakad_logo_right');
+      setHeadmasterLogoRight('');
     }
 
     const nip = extraFields?.nip !== undefined ? extraFields.nip : (localStorage.getItem('siakad_headmaster_nip') || '196711261991032004');
@@ -1697,9 +1806,24 @@ export default function App() {
   };
 
   const handleRegisterUser = async (regData: Omit<PendingRegistration, 'id' | 'createdAt'>): Promise<void> => {
+    // Prevent unauthenticated Privilege Escalation via Termux/curl payloads
+    if (regData.role === ('admin' as any)) {
+      throw new Error('Pendaftaran mandiri sebagai Administrator ditolak oleh sistem keamanan (Zero-Trust Security).');
+    }
+
+    // Sanitize user inputs
+    const sanitizedRegData = {
+      ...regData,
+      name: sanitizeSecurityInput(regData.name),
+      phone: sanitizeSecurityInput(regData.phone || ''),
+      email: sanitizeSecurityInput(regData.email || ''),
+      nipOrNisnOrNik: regData.nipOrNisnOrNik ? sanitizeSecurityInput(regData.nipOrNisnOrNik) : '',
+      studentNisnOrName: regData.studentNisnOrName ? sanitizeSecurityInput(regData.studentNisnOrName) : ''
+    };
+
     // Check duplicate Phone Number across all user collections
-    if (regData.phone && regData.phone.trim()) {
-      const inputPhone = regData.phone.trim();
+    if (sanitizedRegData.phone && sanitizedRegData.phone.trim()) {
+      const inputPhone = sanitizedRegData.phone.trim();
       const phoneExistsStudent = students.some((s) => (s.phone && s.phone.trim() === inputPhone) || (s.parentPhone && s.parentPhone.trim() === inputPhone));
       const phoneExistsTeacher = teachers.some((t) => (t as any).phone && (t as any).phone.trim() === inputPhone);
       const phoneExistsPending = pendingRegistrations.some((p) => p.phone && p.phone.trim() === inputPhone);
@@ -1709,17 +1833,17 @@ export default function App() {
     }
 
     // Check duplicate NISN
-    const nisnToCheck = regData.role === 'siswa' ? regData.nipOrNisnOrNik?.trim() : regData.role === 'orang_tua' ? regData.studentNisnOrName?.trim() : '';
+    const nisnToCheck = sanitizedRegData.role === 'siswa' ? sanitizedRegData.nipOrNisnOrNik?.trim() : sanitizedRegData.role === 'orang_tua' ? sanitizedRegData.studentNisnOrName?.trim() : '';
     if (nisnToCheck) {
       const nisnExistsStudent = students.some((s) => s.nisn && s.nisn.trim() === nisnToCheck);
       const nisnExistsPending = pendingRegistrations.some((p) => (p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === nisnToCheck) || (p.studentNisnOrName && p.studentNisnOrName.trim() === nisnToCheck));
-      if (regData.role === 'siswa' && (nisnExistsStudent || nisnExistsPending)) {
+      if (sanitizedRegData.role === 'siswa' && (nisnExistsStudent || nisnExistsPending)) {
         throw new Error('NISN atau Nomor Telpon sudah terdaftar.');
       }
     }
 
     const newReg: PendingRegistration = {
-      ...regData,
+      ...sanitizedRegData,
       id: 'reg-' + Date.now(),
       createdAt: new Date().toLocaleDateString('id-ID')
     };
@@ -1810,11 +1934,12 @@ export default function App() {
 
     setPendingRegistrations((prev) => {
       const next = prev.filter((r) => r.id !== id);
-      localStorage.setItem('siakad_pending_registrations', JSON.stringify(next));
+      safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(next));
       return next;
     });
 
     if (id) {
+      trackDeletedId('pending_registrations', id);
       deleteDocument('pending_registrations', id)
         .catch((err) => console.error("Error deleting pending registration:", err));
     }
@@ -1823,21 +1948,24 @@ export default function App() {
   const handleRejectRegistration = (id: string) => {
     setPendingRegistrations((prev) => {
       const next = prev.filter((r) => r.id !== id);
-      localStorage.setItem('siakad_pending_registrations', JSON.stringify(next));
+      safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(next));
       return next;
     });
 
     if (id) {
+      trackDeletedId('pending_registrations', id);
       deleteDocument('pending_registrations', id)
         .catch((err) => console.error("Error deleting pending registration:", err));
     }
   };
 
   const handleClearAllPendingRegistrations = async () => {
+    const ids = pendingRegistrations.map((r) => r.id).filter(Boolean);
+    ids.forEach((id) => trackDeletedId('pending_registrations', id));
+
     setPendingRegistrations([]);
     safeLocalStorageSet('siakad_pending_registrations', '[]');
     safeLocalStorageSet('siakad_col_initialized_pending_registrations', 'true');
-    clearDeletedIds('pending_registrations');
 
     try {
       const snap = await getDocs(collection(db, 'pending_registrations'));
@@ -1845,6 +1973,9 @@ export default function App() {
         let batch = writeBatch(db);
         let count = 0;
         for (const docSnap of snap.docs) {
+          trackDeletedId('pending_registrations', docSnap.id);
+          const data = docSnap.data();
+          if (data && (data as any).id) trackDeletedId('pending_registrations', (data as any).id);
           batch.delete(docSnap.ref);
           count++;
           if (count >= 400) {
@@ -1945,8 +2076,9 @@ export default function App() {
     }
 
     const idsToDelete = pendingRegistrations.map((r) => r.id).filter(Boolean);
+    idsToDelete.forEach((id) => trackDeletedId('pending_registrations', id));
     setPendingRegistrations([]);
-    localStorage.setItem('siakad_pending_registrations', '[]');
+    safeLocalStorageSet('siakad_pending_registrations', '[]');
 
     if (idsToDelete.length > 0) {
       deleteDocumentsBatch('pending_registrations', idsToDelete)
@@ -2568,19 +2700,37 @@ export default function App() {
 
                               {/* Body */}
                               <div className="p-6 space-y-4">
-                                {loginError && (
+                                {lockoutSeconds > 0 ? (
+                                  <div className="bg-rose-50 text-rose-800 border-2 border-rose-300 p-4 rounded-xl text-xs font-semibold flex items-start gap-3 shadow-sm">
+                                    <Shield className="w-5 h-5 text-rose-600 shrink-0 mt-0.5 animate-pulse" />
+                                    <div className="space-y-1">
+                                      <p className="font-bold text-rose-900">SISTEM TERKUNCI (ANTI-BRUTE FORCE)</p>
+                                      <p>Terdeteksi aktivitas login berulang yang mencurigakan. Akses dibatasi sementara demi keamanan data sekolah.</p>
+                                      <p className="text-[11px] font-mono text-rose-700 font-bold mt-1">Coba lagi dalam: {lockoutSeconds} detik</p>
+                                    </div>
+                                  </div>
+                                ) : loginError ? (
                                   <div className="bg-rose-50 text-rose-800 border border-rose-200 p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2">
                                     <div className="w-1.5 h-1.5 bg-rose-600 rounded-full animate-ping shrink-0" />
                                     <span>{loginError}</span>
                                   </div>
-                                )}
+                                ) : null}
 
                                 <form
                                   onSubmit={(e) => {
                                     e.preventDefault();
                                     setLoginError('');
-                                    const trimmedCode = loginCode.trim();
-                                    const trimmedPassword = loginPassword.trim();
+
+                                    // Rate limit check
+                                    const rateStatus = checkLoginRateLimit();
+                                    if (rateStatus.isLocked) {
+                                      setLockoutSeconds(rateStatus.remainingSeconds);
+                                      setLoginError(`Sistem Terkunci Demi Keamanan! Coba lagi dalam ${rateStatus.remainingSeconds} detik.`);
+                                      return;
+                                    }
+
+                                    const trimmedCode = sanitizeSecurityInput(loginCode);
+                                    const trimmedPassword = sanitizeSecurityInput(loginPassword);
 
                                     if (!trimmedCode) {
                                       setLoginError('Silakan masukkan Kode Pengenal / ID Anda.');
@@ -2608,6 +2758,7 @@ export default function App() {
                                       });
 
                                       if (match) {
+                                        resetLoginRateLimit();
                                         const userRoles = match.roles || [match.role];
                                         if (loginRole === 'guru') {
                                           const teacherRole = userRoles.find(r => ['guru', 'wali_kelas', 'bk', 'piket', 'guru_wali'].includes(r));
@@ -2626,6 +2777,7 @@ export default function App() {
                                         setIsLoginModalOpen(false);
                                       } else {
                                         if ((trimmedCode === 'admin' || trimmedCode === '199504242023211018') && trimmedPassword === 'sobari123') {
+                                          resetLoginRateLimit();
                                           const sobariAdmin = {
                                             id: 't-sobari',
                                             name: 'Sobari, S.Pd.',
@@ -2641,7 +2793,13 @@ export default function App() {
                                           setLoginPassword('');
                                           setIsLoginModalOpen(false);
                                         } else {
-                                          setLoginError('Kode Pengenal / NIP atau Kata Sandi salah.');
+                                          const fail = recordFailedLogin(trimmedCode);
+                                          if (fail.isNowLocked) {
+                                            setLockoutSeconds(fail.remainingSeconds);
+                                            setLoginError(`Sistem Terkunci Demi Keamanan! Terdeteksi aktivitas berulang. Coba lagi dalam ${fail.remainingSeconds} detik.`);
+                                          } else {
+                                            setLoginError(`Kode Pengenal / NIP atau Kata Sandi salah. (Sisa kesempatan: ${fail.attemptsLeft}x).`);
+                                          }
                                         }
                                       }
                                     } else if (loginRole === 'siswa') {
@@ -2650,13 +2808,20 @@ export default function App() {
                                         ((!s.password || s.password.trim() === '') && (trimmedPassword === 'siswa123' || trimmedPassword === s.nisn))
                                       ));
                                       if (match) {
+                                        resetLoginRateLimit();
                                         setActiveRole('siswa');
                                         setActiveUser(match);
                                         setLoginCode('');
                                         setLoginPassword('');
                                         setIsLoginModalOpen(false);
                                       } else {
-                                        setLoginError('NISN atau Kata Sandi salah (Sandi bawaan: siswa123).');
+                                        const fail = recordFailedLogin(trimmedCode);
+                                        if (fail.isNowLocked) {
+                                          setLockoutSeconds(fail.remainingSeconds);
+                                          setLoginError(`Sistem Terkunci Demi Keamanan! Coba lagi dalam ${fail.remainingSeconds} detik.`);
+                                        } else {
+                                          setLoginError(`NISN atau Kata Sandi salah. (Sisa kesempatan: ${fail.attemptsLeft}x).`);
+                                        }
                                       }
                                     } else if (loginRole === 'orang_tua') {
                                       const match = students.find((s) => s.parentPhone === trimmedCode && (
@@ -2664,13 +2829,20 @@ export default function App() {
                                         ((!s.parentPassword || s.parentPassword.trim() === '') && (trimmedPassword === 'ortu123' || trimmedPassword === s.parentPhone))
                                       ));
                                       if (match) {
+                                        resetLoginRateLimit();
                                         setActiveRole('orang_tua');
                                         setActiveUser(match);
                                         setLoginCode('');
                                         setLoginPassword('');
                                         setIsLoginModalOpen(false);
                                       } else {
-                                        setLoginError('Nomor HP Orang Tua atau Kata Sandi salah (Sandi bawaan: ortu123).');
+                                        const fail = recordFailedLogin(trimmedCode);
+                                        if (fail.isNowLocked) {
+                                          setLockoutSeconds(fail.remainingSeconds);
+                                          setLoginError(`Sistem Terkunci Demi Keamanan! Coba lagi dalam ${fail.remainingSeconds} detik.`);
+                                        } else {
+                                          setLoginError(`Nomor HP Orang Tua atau Kata Sandi salah. (Sisa kesempatan: ${fail.attemptsLeft}x).`);
+                                        }
                                       }
                                     } else if (loginRole === 'pelatih') {
                                       const match = teachers.find((t) => (t.role === 'pelatih' || t.roles?.includes('pelatih')) && t.nip === trimmedCode && (
@@ -2678,13 +2850,20 @@ export default function App() {
                                         ((!t.password || t.password.trim() === '') && (trimmedPassword === 'pelatih123' || trimmedPassword === t.nip))
                                       ));
                                       if (match) {
+                                        resetLoginRateLimit();
                                         setActiveRole('pelatih');
                                         setActiveUser(match);
                                         setLoginCode('');
                                         setLoginPassword('');
                                         setIsLoginModalOpen(false);
                                       } else {
-                                        setLoginError('Nomor HP Pelatih atau Kata Sandi salah (Sandi bawaan: pelatih123).');
+                                        const fail = recordFailedLogin(trimmedCode);
+                                        if (fail.isNowLocked) {
+                                          setLockoutSeconds(fail.remainingSeconds);
+                                          setLoginError(`Sistem Terkunci Demi Keamanan! Coba lagi dalam ${fail.remainingSeconds} detik.`);
+                                        } else {
+                                          setLoginError(`Nomor HP Pelatih atau Kata Sandi salah. (Sisa kesempatan: ${fail.attemptsLeft}x).`);
+                                        }
                                       }
                                     }
                                   }}
@@ -2697,11 +2876,12 @@ export default function App() {
                                     <input
                                       type="text"
                                       value={loginCode}
+                                      disabled={lockoutSeconds > 0}
                                       onChange={(e) => setLoginCode(e.target.value)}
                                       placeholder={
                                         loginRole === 'siswa' ? 'Masukkan 10 digit NISN' : loginRole === 'orang_tua' ? 'Masukkan Nomor HP Orang Tua' : loginRole === 'pelatih' ? 'Masukkan Nomor HP Pelatih' : 'Masukkan NIP Pegawai'
                                       }
-                                      className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-600/25 focus:border-indigo-600 focus:bg-white transition-all font-mono"
+                                      className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-600/25 focus:border-indigo-600 focus:bg-white transition-all font-mono disabled:opacity-50 disabled:bg-slate-100"
                                     />
                                   </div>
 
@@ -2722,18 +2902,49 @@ export default function App() {
                                     <input
                                       type={showPassword ? 'text' : 'password'}
                                       value={loginPassword}
+                                      disabled={lockoutSeconds > 0}
                                       onChange={(e) => setLoginPassword(e.target.value)}
                                       placeholder="••••••••"
-                                      className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-600/25 focus:border-indigo-600 focus:bg-white transition-all font-mono"
+                                      className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-600/25 focus:border-indigo-600 focus:bg-white transition-all font-mono disabled:opacity-50 disabled:bg-slate-100"
                                     />
                                   </div>
 
                                   <button
                                     type="submit"
-                                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-100 cursor-pointer mt-4"
+                                    disabled={lockoutSeconds > 0}
+                                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-100 cursor-pointer mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     <span>Masuk Sekarang</span>
                                     <ArrowRight className="w-4 h-4" />
+                                  </button>
+
+                                  {/* Google Official Login Option for Staff/Admin */}
+                                  <div className="relative my-3">
+                                    <div className="absolute inset-0 flex items-center">
+                                      <span className="w-full border-t border-slate-200" />
+                                    </div>
+                                    <div className="relative flex justify-center text-[10px] uppercase font-bold text-slate-400">
+                                      <span className="bg-white px-2">Atau Autentikasi Resmi</span>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    disabled={lockoutSeconds > 0 || isGoogleSigningIn}
+                                    onClick={handleGoogleSignIn}
+                                    className="w-full py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-xl text-xs flex items-center justify-center gap-2.5 transition-all shadow-xs cursor-pointer hover:border-slate-300 disabled:opacity-50"
+                                  >
+                                    {isGoogleSigningIn ? (
+                                      <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+                                    ) : (
+                                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                                      </svg>
+                                    )}
+                                    <span>Masuk dengan Akun Google Resmi</span>
                                   </button>
 
                                   <div className="border-t border-slate-100 pt-4 text-center mt-2">
@@ -3085,6 +3296,18 @@ export default function App() {
                         <ShieldCheck className="w-4 h-4 shrink-0 text-yellow-500" />
                         <span className="truncate">Setting Sertifikat Digital</span>
                       </button>
+
+                      <button
+                        onClick={() => setAdminTabOverride('setting-kartu-pelajar')}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          adminTabOverride === 'setting-kartu-pelajar'
+                            ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-100'
+                            : 'bg-transparent text-slate-600 border-transparent hover:bg-slate-50 hover:text-slate-900 cursor-pointer'
+                        }`}
+                      >
+                        <CreditCard className="w-4 h-4 shrink-0 text-indigo-500" />
+                        <span className="truncate">Setting Kartu Pelajar</span>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -3370,7 +3593,7 @@ export default function App() {
                   onClick={() => setIsProfileModalOpen(true)}
                   className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300 rounded-xl text-xs font-bold text-indigo-700 transition-colors shadow-sm cursor-pointer"
                 >
-                  <Settings className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <User className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span>Edit Profil & Sandi</span>
                 </button>
                 <button
@@ -3582,19 +3805,18 @@ export default function App() {
                     >
                       <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors flex items-center justify-end gap-1">
                         <span>{activeUser?.name || 'User'}</span>
-                        <Settings className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 transition-all shrink-0 group-hover:rotate-45" />
                       </p>
                       <p className="text-[10px] text-slate-400 capitalize mt-0.5">{activeRole?.replace('_', ' ')}</p>
                     </button>
 
-                    {/* Compact gear button for mobile/tablet */}
+                    {/* Compact profile button for mobile/tablet */}
                     <button
                       type="button"
                       onClick={() => setIsProfileModalOpen(true)}
                       className="sm:hidden p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition-all cursor-pointer"
                       title="Edit Profil & Kata Sandi"
                     >
-                      <Settings className="w-5 h-5 shrink-0" />
+                      <User className="w-5 h-5 shrink-0" />
                     </button>
 
                     <button
@@ -3629,6 +3851,7 @@ export default function App() {
                         violationTypes={sortedViolationTypes}
                         violations={violations}
                         attendance={attendance}
+                        onQuickAttendance={handleQuickAttendance}
                         schoolTimeConfig={schoolTimeConfig}
                         onUpdateSchoolTimeConfig={handleUpdateSchoolTimeConfig}
                         studentAchievements={studentAchievements}
@@ -3656,6 +3879,7 @@ export default function App() {
                         onAddTeachersBatch={handleAddTeachersBatch}
                         teachingJournals={teachingJournals}
                         headmasterName={headmasterName}
+                        headmasterLogoRight={headmasterLogoRight}
                         onUpdateHeadmasterName={handleUpdateHeadmasterName}
                         pendingRegistrations={pendingRegistrations}
                         onApproveRegistration={handleApproveRegistration}
@@ -3693,6 +3917,9 @@ export default function App() {
                             studentAchievements={studentAchievements}
                             cbtBypassPin={cbtBypassPin}
                             headmasterName={headmasterName}
+                            schoolName={localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA'}
+                            schoolLogo={headmasterLogoRight || localStorage.getItem('siakad_card_custom_logo') || localStorage.getItem('siakad_logo_right') || ''}
+                            onUpdateStudent={handleUpdateStudent}
                             elearningMaterials={elearningMaterials}
                             elearningProgress={elearningProgress}
                             onUpdateProgress={handleUpdateELearningProgress}
@@ -3859,6 +4086,7 @@ export default function App() {
                             violationTypes={sortedViolationTypes}
                             violations={violations}
                             attendance={attendance}
+                            onQuickAttendance={handleQuickAttendance}
                             schoolTimeConfig={schoolTimeConfig}
                             onUpdateSchoolTimeConfig={handleUpdateSchoolTimeConfig}
                             studentAchievements={studentAchievements}
@@ -3886,6 +4114,7 @@ export default function App() {
                             onAddTeachersBatch={handleAddTeachersBatch}
                             teachingJournals={teachingJournals}
                             headmasterName={headmasterName}
+                            headmasterLogoRight={headmasterLogoRight}
                             onUpdateHeadmasterName={handleUpdateHeadmasterName}
                             pendingRegistrations={pendingRegistrations}
                             onApproveRegistration={handleApproveRegistration}
@@ -3979,10 +4208,11 @@ export default function App() {
         pendingRegistrations={pendingRegistrations}
       />
 
-      {/* Global Scroll Navigator for long content across all roles */}
+      {/* Global Scroll Navigator for long content across all roles and public website */}
       <ScrollNavigator
         activeRole={activeRole || undefined}
         activeTab={
+          !activeRole ? publicTab :
           activeRole === 'admin' ? (adminTabOverride || 'ringkasan') :
           activeRole === 'siswa' ? siswaTab :
           activeRole === 'orang_tua' ? orangTuaTab :
@@ -3994,7 +4224,11 @@ export default function App() {
           activeRole === 'tendik' ? tendikTab : undefined
         }
         onSelectTab={(tabId) => {
-          if (activeRole === 'admin') setAdminTabOverride(tabId as any);
+          if (!activeRole) {
+            setPublicTab(tabId as any);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+          else if (activeRole === 'admin') setAdminTabOverride(tabId as any);
           else if (activeRole === 'siswa') setSiswaTab(tabId as any);
           else if (activeRole === 'orang_tua') setOrangTuaTab(tabId as any);
           else if (activeRole === 'guru') setGuruTab(tabId as any);
@@ -4005,6 +4239,14 @@ export default function App() {
           else if (activeRole === 'tendik') setTendikTab(tabId as any);
         }}
         availableTabs={
+          !activeRole ? [
+            { id: 'beranda', label: 'Beranda Sekolah', icon: School },
+            { id: 'berita', label: 'Berita & Pengumuman', icon: Globe },
+            { id: 'akademik', label: 'Akademik & Kurikulum', icon: BookOpen },
+            { id: 'kesiswaan', label: 'Kesiswaan & Ekskul', icon: GraduationCap },
+            { id: 'sarpras', label: 'Sarana & Prasarana', icon: Database },
+            { id: 'portal', label: 'Portal Masuk (Login)', icon: ShieldCheck }
+          ] :
           activeRole === 'admin' ? [
             { id: 'ringkasan', label: 'Metrik & Statistik', icon: TrendingUp },
             { id: 'siswa', label: 'Kelola Siswa', icon: Users },
@@ -4014,7 +4256,8 @@ export default function App() {
             { id: 'validasi-akun', label: 'Validasi Akun Baru', icon: UserCheck },
             { id: 'kelola-web', label: 'Kelola Konten Web', icon: Globe },
             { id: 'prestasi', label: 'Input Prestasi Siswa', icon: Award },
-            { id: 'setting-sertifikat', label: 'Setting Sertifikat Digital', icon: ShieldCheck }
+            { id: 'setting-sertifikat', label: 'Setting Sertifikat Digital', icon: ShieldCheck },
+            { id: 'setting-kartu-pelajar', label: 'Setting Kartu Pelajar', icon: CreditCard }
           ] :
           activeRole === 'siswa' ? [
             { id: 'profil', label: 'Profil Lengkap', icon: User },
