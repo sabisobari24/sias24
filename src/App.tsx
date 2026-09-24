@@ -146,7 +146,11 @@ import { syncCollection, syncHeadmaster, syncCbtConfig, saveCbtBypassPin, syncCo
 import { saveSchoolCardLogo } from './utils/schoolLogoHelper';
 import { INITIAL_WEB_CONTENT } from './data/initialWebContent';
 
-export default function App() {
+export interface AppProps {
+  initialMode?: 'landing' | 'portal';
+}
+
+export default function App({ initialMode }: AppProps = {}) {
   // Dark Mode State
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
@@ -572,6 +576,7 @@ export default function App() {
 
   // Page mode: 'landing' (index.html) or 'portal' (login.html)
   const [pageMode, setPageMode] = useState<'landing' | 'portal'>(() => {
+    if (initialMode) return initialMode;
     if (typeof window !== 'undefined') {
       const pathname = window.location.pathname.toLowerCase();
       const search = window.location.search.toLowerCase();
