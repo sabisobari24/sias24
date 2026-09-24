@@ -570,6 +570,88 @@ export default function App() {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
+  // Page mode: 'landing' (index.html) or 'portal' (login.html)
+  const [pageMode, setPageMode] = useState<'landing' | 'portal'>(() => {
+    if (typeof window !== 'undefined') {
+      const pathname = window.location.pathname.toLowerCase();
+      const search = window.location.search.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (
+        pathname.includes('login') ||
+        pathname.endsWith('login.html') ||
+        search.includes('login') ||
+        hash.includes('login')
+      ) {
+        return 'portal';
+      }
+    }
+    return 'landing';
+  });
+
+  // Sync pageMode when URL changes
+  useEffect(() => {
+    const handleLocationChange = () => {
+      if (typeof window === 'undefined') return;
+      const pathname = window.location.pathname.toLowerCase();
+      const search = window.location.search.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (
+        pathname.includes('login') ||
+        pathname.endsWith('login.html') ||
+        search.includes('login') ||
+        hash.includes('login')
+      ) {
+        setPageMode('portal');
+      } else {
+        setPageMode('landing');
+      }
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
+
+  const navigateToLoginPortal = (e?: React.MouseEvent) => {
+    if (e) {
+      if (e.metaKey || e.ctrlKey) return;
+      e.preventDefault();
+    }
+    if (typeof window !== 'undefined') {
+      if (!window.location.pathname.includes('login')) {
+        try {
+          window.location.href = '/login.html';
+          return;
+        } catch {
+          // fallback
+        }
+      }
+    }
+    setPageMode('portal');
+    setPublicTab('portal');
+  };
+
+  const navigateToLandingPage = (e?: React.MouseEvent, tab: 'beranda' | 'akademik' | 'kesiswaan' | 'sarpras' | 'berita' = 'beranda') => {
+    if (e) {
+      if (e.metaKey || e.ctrlKey) return;
+      e.preventDefault();
+    }
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname.includes('login')) {
+        try {
+          window.location.href = '/index.html';
+          return;
+        } catch {
+          // fallback
+        }
+      }
+    }
+    setPageMode('landing');
+    setPublicTab(tab);
+  };
+
   // Public website tab state
   const [publicTab, setPublicTab] = useState<'beranda' | 'akademik' | 'kesiswaan' | 'sarpras' | 'berita' | 'portal'>('beranda');
 
@@ -2361,8 +2443,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50/80 text-slate-800 font-sans antialiased">
       <AnimatePresence mode="wait">
-        {!activeRole ? (
-          /* PUBLIC SCHOOL WEBSITE LAYOUT */
+        {pageMode === 'landing' ? (
+          /* PUBLIC SCHOOL WEBSITE LAYOUT (index.html) */
           <div key="public-site" className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
             {/* Header / Navigation Bar */}
             <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs px-4 md:px-8 py-3.5">
@@ -2412,18 +2494,16 @@ export default function App() {
                     </button>
                   ))}
                   
-                  {/* Distinct button for Portal Login */}
-                  <button
-                    onClick={() => setPublicTab('portal')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-1 ${
-                      publicTab === 'portal'
-                        ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-md scale-102'
-                        : 'border-blue-900 text-blue-900 hover:bg-blue-900 hover:text-white dark:border-blue-400 dark:text-blue-300'
-                    }`}
+                  {/* Distinct button for Portal Login -> Navigates directly to login.html */}
+                  <a
+                    href="/login.html"
+                    onClick={navigateToLoginPortal}
+                    className="px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-400 shadow-sm hover:scale-102 active:scale-98"
+                    title="Masuk ke Portal Sistem Integrasi Administrasi Siswa"
                   >
                     <User className="w-3.5 h-3.5" />
                     <span>Masuk Portal SIAS</span>
-                  </button>
+                  </a>
 
                   {/* Dark Mode Toggle Button */}
                   <button
@@ -2451,7 +2531,13 @@ export default function App() {
                 >
                   {publicTab === 'beranda' && (
                     <WebHome 
-                      onNavigateToTab={(tab) => setPublicTab(tab as any)} 
+                      onNavigateToTab={(tab) => {
+                        if (tab === 'portal') {
+                          navigateToLoginPortal();
+                        } else {
+                          setPublicTab(tab as any);
+                        }
+                      }} 
                       totalStudents={students.length} 
                       totalTeachers={teachers.length} 
                       teachers={teachers}
@@ -2462,9 +2548,117 @@ export default function App() {
                   {publicTab === 'sarpras' && <WebSarpras />}
                   {publicTab === 'berita' && <WebBerita />}
                   
-                  {/* Portal Login & Role cards (The original login screen layout!) */}
                   {publicTab === 'portal' && (
-                    <div className="space-y-8">
+                    <div className="text-center py-16 space-y-4 bg-white rounded-3xl border border-slate-100 shadow-sm p-8 max-w-xl mx-auto">
+                      <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+                        <School className="w-7 h-7" />
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-800">Menuju ke Portal Masuk SIAS</h3>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto">
+                        Halaman login dan portal sistem administrasi terpadu SMPN 50 Jakarta berada di halaman login.html.
+                      </p>
+                      <a
+                        href="/login.html"
+                        onClick={navigateToLoginPortal}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                      >
+                        <User className="w-4 h-4" />
+                        <span>Masuk Portal SIAS Sekarang &rarr;</span>
+                      </a>
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </main>
+
+            {/* Public Footer */}
+            <footer className="border-t border-slate-200/80 bg-white py-8 px-4 mt-12 text-xs font-semibold text-slate-400 leading-normal">
+              <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="text-center md:text-left space-y-1">
+                  <p className="text-slate-700 font-bold text-sm">SMP Negeri 50 Jakarta</p>
+                  <p>© 2026. Hak Cipta Dilindungi Undang-Undang.</p>
+                </div>
+
+                {/* Social Media Links */}
+                <div className="flex items-center justify-center gap-3.5">
+                  <a
+                    href={webHomeContent?.instagram || "https://instagram.com/smpn50jakarta"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-9 h-9 rounded-full bg-pink-50 text-pink-600 hover:bg-pink-100/80 flex items-center justify-center transition-all duration-200 border border-pink-100 hover:scale-110"
+                    title="Instagram Resmi"
+                  >
+                    <Instagram className="w-4 h-4" />
+                  </a>
+                  <a
+                    href={webHomeContent?.whatsapp?.startsWith('http') ? webHomeContent.whatsapp : `https://wa.me/${webHomeContent?.whatsapp?.replace(/[^0-9]/g, '') || '6281234567890'}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100/80 flex items-center justify-center transition-all duration-200 border border-emerald-100 hover:scale-110"
+                    title="WhatsApp Kontak"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                  </a>
+                  <a
+                    href={`mailto:${webHomeContent?.email || "smpn50jakarta@gmail.com"}`}
+                    className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100/80 flex items-center justify-center transition-all duration-200 border border-blue-100 hover:scale-110"
+                    title="Email Resmi"
+                  >
+                    <Mail className="w-4 h-4" />
+                  </a>
+                </div>
+
+                <div className="flex flex-col md:items-end text-center md:text-right gap-1 font-bold text-slate-500">
+                  <div className="flex items-center justify-center md:justify-end gap-2">
+                    <span>NPSN: 20103599</span>
+                    <span>&bull;</span>
+                    <span>Jakarta Timur, Indonesia</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-medium">Basis Data Terintegrasi Terpadu SIAS</p>
+                </div>
+              </div>
+            </footer>
+          </div>
+        ) : !activeRole ? (
+          /* PORTAL LOGIN SCREEN (login.html) */
+          <div key="portal-login-site" className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
+            {/* Dedicated Top Navigation for Login Portal */}
+            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs px-4 md:px-8 py-3.5">
+              <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+                <a
+                  href="/index.html"
+                  onClick={(e) => navigateToLandingPage(e, 'beranda')}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-900 text-xs font-bold rounded-xl border border-slate-200 transition-all cursor-pointer shadow-2xs"
+                  title="Kembali ke Halaman Beranda Utama Sekolah"
+                >
+                  <ChevronLeft className="w-4 h-4 text-blue-900" />
+                  <span>Kembali ke Beranda Sekolah</span>
+                </a>
+
+                <div className="flex items-center gap-3">
+                  <div className="hidden sm:flex items-center gap-2 text-right">
+                    <span className="text-[10px] bg-blue-100 text-blue-800 font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      PORTAL MASUK SIAS
+                    </span>
+                    <span className="text-xs font-black text-slate-800 uppercase">SMPN 50 JAKARTA</span>
+                  </div>
+
+                  {/* Dark Mode Toggle Button */}
+                  <button
+                    onClick={() => setIsDarkMode(!isDarkMode)}
+                    className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800 text-slate-600 dark:text-amber-400 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                    title={isDarkMode ? "Ganti ke Mode Terang (Light Mode)" : "Ganti ke Mode Gelap (Dark Mode)"}
+                    aria-label="Toggle Dark Mode"
+                  >
+                    {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            {/* Main Content Area for Login Portal */}
+            <main className="max-w-6xl mx-auto w-full px-4 py-8 flex-grow">
+              <div className="space-y-8">
                       {/* School Hero Brand Header styled for SMPN 50 Jakarta */}
                       <div className="bg-gradient-to-r from-blue-700 via-indigo-800 to-indigo-900 rounded-3xl p-6 md:p-8 text-white shadow-xl shadow-indigo-100 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.08),transparent_50%)]" />
@@ -2967,10 +3161,7 @@ export default function App() {
                         )}
                       </AnimatePresence>
                     </div>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </main>
+                  </main>
 
             {/* Public Footer */}
             <footer className="border-t border-slate-200/80 bg-white py-8 px-4 mt-12 text-xs font-semibold text-slate-400 leading-normal">
@@ -3809,6 +4000,17 @@ export default function App() {
                       <p className="text-[10px] text-slate-400 capitalize mt-0.5">{activeRole?.replace('_', ' ')}</p>
                     </button>
 
+                    <a
+                      href="/index.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all"
+                      title="Buka Website Beranda Sekolah SMPN 50 Jakarta"
+                    >
+                      <Globe className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Web Sekolah</span>
+                    </a>
+
                     {/* Compact profile button for mobile/tablet */}
                     <button
                       type="button"
@@ -4212,7 +4414,8 @@ export default function App() {
       <ScrollNavigator
         activeRole={activeRole || undefined}
         activeTab={
-          !activeRole ? publicTab :
+          pageMode === 'landing' ? publicTab :
+          !activeRole ? 'portal' :
           activeRole === 'admin' ? (adminTabOverride || 'ringkasan') :
           activeRole === 'siswa' ? siswaTab :
           activeRole === 'orang_tua' ? orangTuaTab :
@@ -4224,9 +4427,18 @@ export default function App() {
           activeRole === 'tendik' ? tendikTab : undefined
         }
         onSelectTab={(tabId) => {
-          if (!activeRole) {
-            setPublicTab(tabId as any);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+          if (pageMode === 'landing') {
+            if (tabId === 'portal') {
+              navigateToLoginPortal();
+            } else {
+              setPublicTab(tabId as any);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+          }
+          else if (!activeRole) {
+            if (tabId === 'beranda') {
+              navigateToLandingPage(undefined, 'beranda');
+            }
           }
           else if (activeRole === 'admin') setAdminTabOverride(tabId as any);
           else if (activeRole === 'siswa') setSiswaTab(tabId as any);
@@ -4239,13 +4451,17 @@ export default function App() {
           else if (activeRole === 'tendik') setTendikTab(tabId as any);
         }}
         availableTabs={
-          !activeRole ? [
+          pageMode === 'landing' ? [
             { id: 'beranda', label: 'Beranda Sekolah', icon: School },
             { id: 'berita', label: 'Berita & Pengumuman', icon: Globe },
             { id: 'akademik', label: 'Akademik & Kurikulum', icon: BookOpen },
             { id: 'kesiswaan', label: 'Kesiswaan & Ekskul', icon: GraduationCap },
             { id: 'sarpras', label: 'Sarana & Prasarana', icon: Database },
-            { id: 'portal', label: 'Portal Masuk (Login)', icon: ShieldCheck }
+            { id: 'portal', label: 'Portal Masuk SIAS', icon: ShieldCheck }
+          ] :
+          !activeRole ? [
+            { id: 'portal', label: 'Portal Masuk SIAS', icon: ShieldCheck },
+            { id: 'beranda', label: 'Kembali ke Web', icon: School }
           ] :
           activeRole === 'admin' ? [
             { id: 'ringkasan', label: 'Metrik & Statistik', icon: TrendingUp },

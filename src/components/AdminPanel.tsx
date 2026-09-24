@@ -11,6 +11,7 @@ import StudentIdCardModal from './common/StudentIdCardModal';
 import BatchStudentCardsModal from './common/BatchStudentCardsModal';
 import AttendanceQrScannerModal from './common/AttendanceQrScannerModal';
 import SettingKartuPelajar from './common/SettingKartuPelajar';
+import SupabaseMigrationCard from './SupabaseMigrationCard';
 import { printBatchStudentCards } from '../utils/qrHelper';
 import { syncCollection, saveDocument } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
@@ -2637,6 +2638,16 @@ export default function AdminPanel({
         {/* DATABASE SETTINGS */}
         {activeTab === 'database-settings' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Supabase & Vercel Migration Section */}
+            <SupabaseMigrationCard
+              classes={classes}
+              students={students}
+              teachers={teachers}
+              violationTypes={violationTypes}
+              violations={violations}
+              webHomeContent={webHomeContent}
+            />
+
             <div className="bg-white rounded-xl p-5 border space-y-4">
               <div className="flex justify-between items-center">
                 <h4 className="font-bold text-slate-800">Daftar Kelas Aktif</h4>
