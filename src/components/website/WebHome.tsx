@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   School, 
@@ -41,14 +41,21 @@ interface WebHomeProps {
   totalStudents: number;
   totalTeachers: number;
   teachers?: any[];
+  syncedWebContent?: any;
 }
 
-function AnimatedCounter({ value, duration = 2000 }: { value: number; duration?: number }) {
-  const [count, setCount] = useState(0);
+function AnimatedCounter({ value, duration = 800 }: { value: number; duration?: number }) {
+  const [count, setCount] = useState(value || 0);
+  const hasAnimatedRef = useRef(false);
 
   useEffect(() => {
+    if (hasAnimatedRef.current) {
+      setCount(value);
+      return;
+    }
+    hasAnimatedRef.current = true;
     let startTimestamp: number | null = null;
-    const startValue = 0;
+    const startValue = Math.max(0, Math.floor(value * 0.7)); // Subtle count-up from 70% to prevent layout jumping
     const endValue = value;
     if (endValue === 0) {
       setCount(0);
@@ -58,10 +65,7 @@ function AnimatedCounter({ value, duration = 2000 }: { value: number; duration?:
     const step = (timestamp: number) => {
       if (!startTimestamp) startTimestamp = timestamp;
       const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-      
-      // Easing out-cubic or out-quart:
-      const easedProgress = 1 - Math.pow(1 - progress, 4); // easeOutQuart
-      
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
       const currentCount = Math.floor(easedProgress * (endValue - startValue) + startValue);
       setCount(currentCount);
 
@@ -79,9 +83,9 @@ function AnimatedCounter({ value, duration = 2000 }: { value: number; duration?:
   return <>{count.toLocaleString('id-ID')}</>;
 }
 
-export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers, teachers }: WebHomeProps) {
+export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers, teachers, syncedWebContent }: WebHomeProps) {
   const [webContent, setWebContent] = useState<any>(() => {
-    return INITIAL_WEB_CONTENT.find(c => c.id === 'home') || {
+    return syncedWebContent || INITIAL_WEB_CONTENT.find(c => c.id === 'home') || {
       id: 'home',
       akreditasi: 'Akreditasi A (Unggul)',
       headName: 'Dra. Hj. Endah Purwani M.M',
@@ -107,6 +111,13 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
       ]
     };
   });
+
+  // Keep synced if parent passes live synced webContent
+  useEffect(() => {
+    if (syncedWebContent && syncedWebContent.id === 'home') {
+      setWebContent(syncedWebContent);
+    }
+  }, [syncedWebContent]);
 
   useEffect(() => {
     const unsubscribe = syncCollection<any>(
@@ -523,15 +534,30 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
           
           {/* Kepala Sekolah Card */}
           <div className="space-y-4">
-            <h2 className="text-xl font-black text-slate-800 flex items-center gap-2 border-b-2 border-slate-100 pb-2">
-              <UserCheck className="w-5.5 h-5.5 text-blue-700" />
-              <span>Manajemen Sekolah</span>
-            </h2>
+            <div className="flex items-center justify-between border-b-2 border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-100/90 text-indigo-700 flex items-center justify-center shadow-xs">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 block">
+                    Kepemimpinan Sekolah
+                  </span>
+                  <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                    Manajemen Sekolah
+                  </h2>
+                </div>
+              </div>
+              <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-200/60">
+                Pimpinan &amp; Staf
+              </span>
+            </div>
             
-            <div className="bg-white border border-slate-200/80 rounded-3xl p-6 text-center shadow-md relative group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-full rounded-tr-3xl -z-10 group-hover:scale-110 transition-transform" />
+            <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 text-center shadow-md relative group overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-100/60 to-transparent rounded-bl-full pointer-events-none group-hover:scale-110 transition-transform duration-500" />
+              <div className="absolute bottom-0 left-0 w-28 h-28 bg-gradient-to-tr from-amber-100/40 to-transparent rounded-tr-full pointer-events-none" />
               
-              {/* Photo Frame */}
+              {/* Photo Frame - Enlarged & Harmonized */}
               <div 
                 onClick={() => setActiveStaff({
                   name: headName,
@@ -542,16 +568,16 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
                   hobby: headHobby,
                   motto: headMotto || 'Dedikasi tinggi untuk pendidikan.'
                 })}
-                className="relative w-36 h-44 mx-auto mb-5 p-1.5 bg-gradient-to-tr from-amber-400 via-amber-500 to-blue-700 rounded-2xl shadow-lg group-hover:scale-[1.03] transition-transform group/photo cursor-pointer"
+                className="relative w-48 h-60 sm:w-52 sm:h-64 md:w-56 md:h-70 mx-auto mb-5 p-1.5 bg-gradient-to-tr from-amber-400 via-amber-500 to-blue-700 rounded-3xl shadow-xl group-hover:scale-[1.02] transition-all duration-300 group/photo cursor-pointer ring-4 ring-amber-400/20"
               >
-                <div className="w-full h-full rounded-xl bg-white overflow-hidden">
+                <div className="w-full h-full rounded-2xl bg-white overflow-hidden shadow-inner">
                   <img 
                     src={headImage} 
                     alt={headName}
-                    className="w-full h-full object-cover object-top"
+                    className="w-full h-full object-cover object-top transition-transform duration-500 group-hover/photo:scale-105"
                   />
                 </div>
-                <div className="absolute -top-2 -right-2 bg-blue-800 text-amber-300 w-8 h-8 rounded-lg flex items-center justify-center border-2 border-white shadow-md text-xs">
+                <div className="absolute -top-2.5 -right-2.5 bg-blue-900 text-amber-300 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-white shadow-lg text-sm font-bold">
                   👑
                 </div>
 
@@ -584,12 +610,12 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
               </div>
 
               <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block mb-1">Kepala Sekolah</span>
-              <div className="inline-block bg-blue-900 text-white font-extrabold text-sm px-5 py-1.5 rounded-lg shadow-sm mb-1.5">
+              <div className="inline-block bg-blue-900 text-white font-extrabold text-sm sm:text-base px-6 py-1.5 rounded-xl shadow-sm mb-1.5">
                 {headName}
               </div>
               <span className="text-xs text-slate-500 font-semibold block mb-4">NIP. 196711261991032004</span>
 
-              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-justify text-xs text-slate-700 leading-relaxed relative">
+              <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 text-justify text-xs text-slate-700 leading-relaxed relative">
                 <span className="absolute -top-3 left-4 text-3xl text-slate-200 font-serif leading-none">“</span>
                 <div className="relative z-10 font-medium">
                   <span className="font-extrabold text-blue-900 block mb-1">Sambutan Kepala Sekolah:</span>
@@ -630,26 +656,26 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
                 <button
                   key={waka.name}
                   onClick={() => onNavigateToTab(waka.tab)}
-                  className="w-full flex items-center justify-between p-3.5 bg-slate-50 hover:bg-blue-50/50 border border-slate-200/60 rounded-2xl transition-all cursor-pointer hover:translate-x-1.5 hover:border-blue-500/30 text-left group"
+                  className="w-full flex items-center justify-between p-3.5 sm:p-4 bg-slate-50 hover:bg-blue-50/50 border border-slate-200/60 rounded-2xl transition-all cursor-pointer hover:translate-x-1.5 hover:border-blue-500/30 text-left group shadow-xs"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl border-2 border-blue-800 overflow-hidden shrink-0 bg-slate-200">
+                  <div className="flex items-center gap-3.5 sm:gap-4">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border-2 border-blue-800 overflow-hidden shrink-0 bg-slate-200 shadow-sm">
                       <img 
                         src={waka.image} 
                         alt={waka.name}
-                        className="w-full h-full object-cover object-top"
+                        className="w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
                       />
                     </div>
                     <div>
-                      <h4 className="text-xs font-black text-slate-800 group-hover:text-blue-800 transition-colors leading-tight">
+                      <h4 className="text-xs sm:text-sm font-black text-slate-800 group-hover:text-blue-800 transition-colors leading-snug">
                         {waka.name}
                       </h4>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">
+                      <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wide mt-0.5">
                         {waka.role}
                       </p>
                     </div>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-800 transition-colors shrink-0" />
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-800 group-hover:translate-x-1 transition-all shrink-0" />
                 </button>
               ))}
             </div>

@@ -101,12 +101,23 @@ export const ScrollNavigator: React.FC<ScrollNavigatorProps> = ({
     return null;
   }, []);
 
+  const stateRef = useRef({
+    hasV: false,
+    hasH: false,
+    canUp: false,
+    canDown: false,
+    canLeft: false,
+    canRight: false
+  });
+
   // 3. CHECK SCROLLABILITY & POSITION
   const evaluateScrollNeeds = useCallback(() => {
     // Check vertical scroll necessity
     const vEl = getPrimaryVerticalElement();
     const needsV = vEl !== null;
-    setHasVerticalScroll(needsV);
+
+    let canUp = false;
+    let canDown = false;
 
     if (vEl) {
       let vTop = 0;
@@ -123,27 +134,31 @@ export const ScrollNavigator: React.FC<ScrollNavigatorProps> = ({
         vClient = vEl.clientHeight;
       }
 
-      setCanScrollUp(vTop > 25);
-      setCanScrollDown(vTop < vH - vClient - 25);
-    } else {
-      setCanScrollUp(false);
-      setCanScrollDown(false);
+      canUp = vTop > 25;
+      canDown = vTop < vH - vClient - 25;
     }
 
     // Check horizontal scroll necessity
     const hEl = getPrimaryHorizontalElement();
     const needsH = hEl !== null;
-    setHasHorizontalScroll(needsH);
+    let canLeft = false;
+    let canRight = false;
 
     if (hEl) {
       const sLeft = hEl.scrollLeft;
       const maxLeft = hEl.scrollWidth - hEl.clientWidth;
-      setCanScrollLeft(sLeft > 15);
-      setCanScrollRight(sLeft < maxLeft - 15);
-    } else {
-      setCanScrollLeft(false);
-      setCanScrollRight(false);
+      canLeft = sLeft > 15;
+      canRight = sLeft < maxLeft - 15;
     }
+
+    // Guard against redundant state updates to prevent re-render loops & layout flickering
+    const s = stateRef.current;
+    if (s.hasV !== needsV) { s.hasV = needsV; setHasVerticalScroll(needsV); }
+    if (s.hasH !== needsH) { s.hasH = needsH; setHasHorizontalScroll(needsH); }
+    if (s.canUp !== canUp) { s.canUp = canUp; setCanScrollUp(canUp); }
+    if (s.canDown !== canDown) { s.canDown = canDown; setCanScrollDown(canDown); }
+    if (s.canLeft !== canLeft) { s.canLeft = canLeft; setCanScrollLeft(canLeft); }
+    if (s.canRight !== canRight) { s.canRight = canRight; setCanScrollRight(canRight); }
   }, [getPrimaryVerticalElement, getPrimaryHorizontalElement]);
 
   // 4. AUTO-HIDE SCHEDULER (Only triggered by actual scrolling/wheel, NEVER by mousemove!)
@@ -152,12 +167,12 @@ export const ScrollNavigator: React.FC<ScrollNavigatorProps> = ({
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
     }
-    // Auto hide after 1.8 seconds if not pinned and not hovered
+    // Auto hide after 2 seconds if not pinned and not hovered
     if (!isPinned) {
       hideTimerRef.current = setTimeout(() => {
         setIsVisible(false);
         setIsMenuOpen(false);
-      }, 1800);
+      }, 2000);
     }
   }, [isPinned]);
 
@@ -179,6 +194,7 @@ export const ScrollNavigator: React.FC<ScrollNavigatorProps> = ({
   // 5. EVENT LISTENERS
   useEffect(() => {
     let ticking = false;
+    let mutationDebounceTimer: NodeJS.Timeout | null = null;
 
     const handleScrollEvent = () => {
       triggerShowOnScroll();
@@ -191,23 +207,34 @@ export const ScrollNavigator: React.FC<ScrollNavigatorProps> = ({
       }
     };
 
-    // Notice: We intentionally do NOT listen to 'mousemove'!
-    // Responsiveness to mouse is confined strictly to direct interactions.
     window.addEventListener('scroll', handleScrollEvent, { capture: true, passive: true });
     window.addEventListener('wheel', handleScrollEvent, { passive: true });
     window.addEventListener('touchmove', handleScrollEvent, { passive: true });
     window.addEventListener('resize', evaluateScrollNeeds, { passive: true });
 
-    // Initial check
-    evaluateScrollNeeds();
+    // Initial check after paint
+    const initTimer = setTimeout(evaluateScrollNeeds, 100);
 
-    // Observe DOM mutations so when tab content or table data updates, scroll needs are re-evaluated
-    const observer = new MutationObserver(() => {
-      evaluateScrollNeeds();
+    // Observe DOM mutations with debouncing and filter out ScrollNavigator's own elements
+    const observer = new MutationObserver((mutations) => {
+      // Check if all mutations are internal to this navigator
+      const isSelfMutation = mutations.every((m) => {
+        const target = m.target as HTMLElement | null;
+        return target && (target.closest?.('#scroll-navigator-dock') || target.closest?.('#scroll-navigator-menu'));
+      });
+      if (isSelfMutation) return;
+
+      if (mutationDebounceTimer) clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = setTimeout(() => {
+        evaluateScrollNeeds();
+      }, 250);
     });
+
     observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
+      clearTimeout(initTimer);
+      if (mutationDebounceTimer) clearTimeout(mutationDebounceTimer);
       window.removeEventListener('scroll', handleScrollEvent, { capture: true });
       window.removeEventListener('wheel', handleScrollEvent);
       window.removeEventListener('touchmove', handleScrollEvent);
@@ -219,58 +246,54 @@ export const ScrollNavigator: React.FC<ScrollNavigatorProps> = ({
 
   // Re-check when active role or tab changes
   useEffect(() => {
-    const timer = setTimeout(evaluateScrollNeeds, 150);
+    const timer = setTimeout(evaluateScrollNeeds, 200);
     return () => clearTimeout(timer);
   }, [activeRole, activeTab, evaluateScrollNeeds]);
 
-  // 6. SCROLL HANDLERS
+  // 6. SCROLL HANDLERS - Single-target smooth scrolling prevents layout shaking
   const handleScrollUp = () => {
     const vEl = getPrimaryVerticalElement();
     if (vEl && vEl !== document.documentElement) {
       vEl.scrollBy({ top: -400, behavior: 'smooth' });
+    } else {
+      window.scrollBy({ top: -400, behavior: 'smooth' });
     }
-    window.scrollBy({ top: -400, behavior: 'smooth' });
-    document.documentElement.scrollBy({ top: -400, behavior: 'smooth' });
-    document.body.scrollBy({ top: -400, behavior: 'smooth' });
     triggerShowOnScroll();
-    setTimeout(evaluateScrollNeeds, 160);
+    setTimeout(evaluateScrollNeeds, 250);
   };
 
   const handleScrollTop = () => {
     const vEl = getPrimaryVerticalElement();
     if (vEl && vEl !== document.documentElement) {
       vEl.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    document.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
-    document.body.scrollTo({ top: 0, behavior: 'smooth' });
     triggerShowOnScroll();
-    setTimeout(evaluateScrollNeeds, 160);
+    setTimeout(evaluateScrollNeeds, 250);
   };
 
   const handleScrollDown = () => {
     const vEl = getPrimaryVerticalElement();
     if (vEl && vEl !== document.documentElement) {
       vEl.scrollBy({ top: 400, behavior: 'smooth' });
+    } else {
+      window.scrollBy({ top: 400, behavior: 'smooth' });
     }
-    window.scrollBy({ top: 400, behavior: 'smooth' });
-    document.documentElement.scrollBy({ top: 400, behavior: 'smooth' });
-    document.body.scrollBy({ top: 400, behavior: 'smooth' });
     triggerShowOnScroll();
-    setTimeout(evaluateScrollNeeds, 160);
+    setTimeout(evaluateScrollNeeds, 250);
   };
 
   const handleScrollBottom = () => {
     const vEl = getPrimaryVerticalElement();
     if (vEl && vEl !== document.documentElement) {
       vEl.scrollTo({ top: vEl.scrollHeight, behavior: 'smooth' });
+    } else {
+      const maxH = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+      window.scrollTo({ top: maxH, behavior: 'smooth' });
     }
-    const maxH = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-    window.scrollTo({ top: maxH, behavior: 'smooth' });
-    document.documentElement.scrollTo({ top: maxH, behavior: 'smooth' });
-    document.body.scrollTo({ top: maxH, behavior: 'smooth' });
     triggerShowOnScroll();
-    setTimeout(evaluateScrollNeeds, 160);
+    setTimeout(evaluateScrollNeeds, 250);
   };
 
   const handleScrollLeft = () => {

@@ -302,10 +302,10 @@ export default function App({ initialMode }: AppProps = {}) {
     // Initial check
     checkFirebaseConnection();
 
-    // Regular interval ping every 7 seconds
+    // Regular interval ping every 60 seconds (avoids constant re-render jitter)
     const interval = setInterval(() => {
       checkFirebaseConnection();
-    }, 7000);
+    }, 60000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -767,8 +767,16 @@ export default function App({ initialMode }: AppProps = {}) {
   const [loginError, setLoginError] = useState('');
   const [showDemoGuide, setShowDemoGuide] = useState(true);
 
-  // Loading indicator
-  const [isLoading, setIsLoading] = useState(true);
+  // Loading indicator - Never block the initial landing page or when local cache is present
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const pathname = window.location.pathname.toLowerCase();
+      if (!pathname.includes('login')) {
+        return false;
+      }
+    }
+    return false;
+  });
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
@@ -1150,10 +1158,15 @@ export default function App({ initialMode }: AppProps = {}) {
     };
   }, []);
 
-  // Auto-reconcile student class IDs with classes collection
+  const hasReconciledClassIdsRef = useRef(false);
+
+  // Auto-reconcile student class IDs with classes collection (Only once, and only when logged in as admin)
   useEffect(() => {
+    if (hasReconciledClassIdsRef.current) return;
+    if (activeRole !== 'admin') return;
     if (students.length === 0 || classes.length === 0) return;
 
+    hasReconciledClassIdsRef.current = true;
     let classesUpdated = false;
     let studentsUpdated = false;
     const currentClasses = [...classes];
@@ -1187,7 +1200,7 @@ export default function App({ initialMode }: AppProps = {}) {
       setStudents(updatedStudents);
       safeLocalStorageSet('siakad_students', JSON.stringify(updatedStudents));
     }
-  }, [students, classes]);
+  }, [students.length, classes.length, activeRole]);
 
   // Update helper that syncs specific table to localStorage and Firebase Firestore
   const syncTable = (key: string, data: any) => {
@@ -2526,13 +2539,13 @@ export default function App({ initialMode }: AppProps = {}) {
 
             {/* Main Content Area */}
             <main className="max-w-6xl mx-auto w-full px-4 py-8 flex-grow">
-              <AnimatePresence mode="wait">
+              <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={publicTab}
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.3 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
                 >
                   {publicTab === 'beranda' && (
                     <WebHome 
@@ -2546,6 +2559,7 @@ export default function App({ initialMode }: AppProps = {}) {
                       totalStudents={students.length} 
                       totalTeachers={teachers.length} 
                       teachers={teachers}
+                      syncedWebContent={webHomeContent}
                     />
                   )}
                   {publicTab === 'akademik' && <WebAkademik />}

@@ -521,10 +521,12 @@ export function syncCollection<T extends { id: string }>(
       }
 
       if (!mergedMap.has(localItem.id)) {
-        // Local offline creation/edit not yet on server -> preserve & push to Firestore
-        mergedMap.set(localItem.id, localItem);
-        const docRef = doc(db, collectionPath, localItem.id);
-        setDoc(docRef, sanitizeData(localItem), { merge: true }).catch(handleQuotaError);
+        // Local offline creation/edit not yet on server -> preserve & push to Firestore if it has an actual local edit timestamp
+        if ((localItem as any).updatedAt) {
+          mergedMap.set(localItem.id, localItem);
+          const docRef = doc(db, collectionPath, localItem.id);
+          setDoc(docRef, sanitizeData(localItem), { merge: true }).catch(handleQuotaError);
+        }
       } else {
         // Doc exists both on server and in local cache. Compare timestamps!
         const serverItem = mergedMap.get(localItem.id) as any;
