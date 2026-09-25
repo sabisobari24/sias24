@@ -11,7 +11,6 @@ import StudentIdCardModal from './common/StudentIdCardModal';
 import BatchStudentCardsModal from './common/BatchStudentCardsModal';
 import AttendanceQrScannerModal from './common/AttendanceQrScannerModal';
 import SettingKartuPelajar from './common/SettingKartuPelajar';
-import SupabaseMigrationCard from './SupabaseMigrationCard';
 import { printBatchStudentCards } from '../utils/qrHelper';
 import { syncCollection, saveDocument } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
@@ -2635,18 +2634,63 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* DATABASE SETTINGS */}
+        {/* DATABASE SETTINGS - KELAS & SINKRONISASI */}
         {activeTab === 'database-settings' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Supabase & Vercel Migration Section */}
-            <SupabaseMigrationCard
-              classes={classes}
-              students={students}
-              teachers={teachers}
-              violationTypes={violationTypes}
-              violations={violations}
-              webHomeContent={webHomeContent}
-            />
+            {/* Status Sinkronisasi Realtime Database */}
+            <div className="md:col-span-2 bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className={`p-3 rounded-2xl shrink-0 ${
+                  dbStatus === 'online' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : dbStatus === 'high_latency' ? 'bg-amber-50 text-amber-600 border border-amber-200 animate-pulse' : 'bg-rose-50 text-rose-600 border border-rose-200'
+                }`}>
+                  {dbStatus === 'online' ? <Wifi className="w-6 h-6" /> : dbStatus === 'high_latency' ? <RefreshCw className="w-6 h-6 animate-spin-slow" /> : <WifiOff className="w-6 h-6" />}
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                    <span>Status Sinkronisasi &amp; Database Real-time</span>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                      dbStatus === 'online' ? 'bg-emerald-100 text-emerald-800' : dbStatus === 'high_latency' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        dbStatus === 'online' ? 'bg-emerald-500' : dbStatus === 'high_latency' ? 'bg-amber-500 animate-ping' : 'bg-rose-500'
+                      }`} />
+                      <span>{dbStatus === 'online' ? 'Tersinkron (Online)' : dbStatus === 'high_latency' ? 'Koneksi Lambat' : 'Offline'}</span>
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Seluruh entitas data kelas, siswa, pendidik, dan pengaturan tersinkronisasi otomatis secara dua arah ke database.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0">
+                {dbStatus !== 'offline' && (
+                  <div className="text-left md:text-right space-y-0.5">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Latensi Respon</span>
+                    <span className="font-mono text-xs font-bold text-slate-700">{dbLatency} ms</span>
+                  </div>
+                )}
+                {lastSyncTime && (
+                  <div className="text-left md:text-right space-y-0.5">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Terakhir Sinkron</span>
+                    <span className="text-xs font-bold text-slate-700 font-mono">
+                      {Math.round((Date.now() - lastSyncTime) / 1000)} detik lalu
+                    </span>
+                  </div>
+                )}
+                {onReconnectDb && (
+                  <button
+                    type="button"
+                    onClick={onReconnectDb}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-all cursor-pointer shadow-xs active:scale-95"
+                    title="Uji Ulang Koneksi & Sinkronkan"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Sinkronkan Sekarang</span>
+                  </button>
+                )}
+              </div>
+            </div>
 
             <div className="bg-white rounded-xl p-5 border space-y-4">
               <div className="flex justify-between items-center">

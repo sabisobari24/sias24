@@ -2494,15 +2494,15 @@ export default function App({ initialMode }: AppProps = {}) {
                 <nav className="flex flex-wrap items-center justify-center gap-1.5 md:gap-2">
                   {[
                     { id: 'beranda', label: 'Beranda' },
-                    { id: 'akademik', label: 'Kurikulum & Akademik' },
-                    { id: 'kesiswaan', label: 'Kesiswaan & Karakter' },
-                    { id: 'sarpras', label: 'Sarana & Prasarana' },
-                    { id: 'berita', label: 'Pengumuman & Berita' },
+                    { id: 'akademik', label: 'Kurikulum' },
+                    { id: 'kesiswaan', label: 'Kesiswaan' },
+                    { id: 'sarpras', label: 'Sarpras' },
+                    { id: 'berita', label: 'Berita' },
                   ].map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setPublicTab(tab.id as any)}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         publicTab === tab.id 
                           ? 'bg-blue-900 text-white shadow-sm' 
                           : 'text-slate-600 hover:text-blue-900 hover:bg-slate-50'
@@ -2520,7 +2520,7 @@ export default function App({ initialMode }: AppProps = {}) {
                     title="Masuk ke Portal Sistem Integrasi Administrasi Siswa"
                   >
                     <User className="w-3.5 h-3.5" />
-                    <span>Masuk Portal SIAS</span>
+                    <span>Portal SIAS</span>
                   </a>
 
                   {/* Dark Mode Toggle Button */}
@@ -3389,7 +3389,7 @@ export default function App({ initialMode }: AppProps = {}) {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between px-1">
                       <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Menu Administrasi</h3>
-                      <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full border border-purple-100">9 Menu</span>
+                      <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full border border-purple-100">10 Menu</span>
                     </div>
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       <button
@@ -3401,7 +3401,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <TrendingUp className="w-4 h-4 shrink-0" />
-                        <span className="truncate">Metrik &amp; Statistik</span>
+                        <span className="truncate">Statistik</span>
                       </button>
 
                       <button
@@ -3413,7 +3413,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <Users className="w-4 h-4 shrink-0" />
-                        <span className="truncate">Kelola Siswa</span>
+                        <span className="truncate">Data Siswa</span>
                       </button>
 
                       <button
@@ -3425,7 +3425,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <Shield className="w-4 h-4 shrink-0" />
-                        <span className="truncate">Kelola Pendidik</span>
+                        <span className="truncate">Data Guru</span>
                       </button>
 
                       <button
@@ -3437,7 +3437,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <Database className="w-4 h-4 shrink-0" />
-                        <span className="truncate">Kelas &amp; Sinkronisasi</span>
+                        <span className="truncate">Kelas &amp; Database</span>
                       </button>
 
                       <button
@@ -3449,7 +3449,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <FileCheck className="w-4 h-4 shrink-0 text-indigo-500" />
-                        <span className="truncate">Setting CBT Ujian</span>
+                        <span className="truncate">Jadwal CBT</span>
                       </button>
 
                       <button
@@ -3462,7 +3462,7 @@ export default function App({ initialMode }: AppProps = {}) {
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <UserCheck className="w-4 h-4 shrink-0" />
-                          <span className="truncate">Validasi Akun Baru</span>
+                          <span className="truncate">Validasi Akun</span>
                         </div>
                         {pendingRegistrations.length > 0 && (
                           <span className="bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
@@ -3480,7 +3480,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <Globe className="w-4 h-4 shrink-0 text-emerald-500" />
-                        <span className="truncate">Kelola Konten Web</span>
+                        <span className="truncate">Konten Web</span>
                       </button>
 
                       <button
@@ -3492,7 +3492,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <Award className="w-4 h-4 shrink-0 text-amber-500" />
-                        <span className="truncate">Input Prestasi Siswa</span>
+                        <span className="truncate">Prestasi Siswa</span>
                       </button>
 
                       <button
@@ -3504,7 +3504,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <ShieldCheck className="w-4 h-4 shrink-0 text-yellow-500" />
-                        <span className="truncate">Setting Sertifikat Digital</span>
+                        <span className="truncate">Sertifikat Digital</span>
                       </button>
 
                       <button
@@ -3516,7 +3516,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <CreditCard className="w-4 h-4 shrink-0 text-indigo-500" />
-                        <span className="truncate">Setting Kartu Pelajar</span>
+                        <span className="truncate">Kartu Pelajar</span>
                       </button>
                     </div>
                   </div>
@@ -3527,12 +3527,12 @@ export default function App({ initialMode }: AppProps = {}) {
                     <h3 className="px-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Menu Siswa</h3>
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
-                        { id: 'profil', label: 'Profil Lengkap', icon: User },
-                        { id: 'elearning', label: 'E-Learning Materi', icon: BookOpen },
-                        { id: 'absensi', label: 'Absen Hari Ini', icon: Calendar },
-                        { id: 'cbt-ujian', label: 'CBT & Ujian', icon: FileCheck },
+                        { id: 'profil', label: 'Profil Siswa', icon: User },
+                        { id: 'elearning', label: 'E-Learning', icon: BookOpen },
+                        { id: 'absensi', label: 'Presensi', icon: Calendar },
+                        { id: 'cbt-ujian', label: 'Ujian CBT', icon: FileCheck },
                         { id: 'pelanggaran', label: 'Pelanggaran', icon: AlertTriangle },
-                        { id: 'catatan', label: 'Catatan Wali & BK', icon: FileText }
+                        { id: 'catatan', label: 'Catatan Guru', icon: FileText }
                       ].map(tab => (
                         <button
                           key={tab.id}
@@ -3557,10 +3557,10 @@ export default function App({ initialMode }: AppProps = {}) {
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
                         { id: 'profil', label: 'Profil Siswa', icon: User },
-                        { id: 'absensi', label: 'Absensi Siswa', icon: Calendar },
-                        { id: 'pelanggaran', label: 'Pelanggaran Siswa', icon: AlertTriangle },
-                        { id: 'catatan', label: 'Catatan Guru & BK', icon: FileText },
-                        { id: 'komunikasi', label: 'Hubungi Sekolah', icon: MessageSquare }
+                        { id: 'absensi', label: 'Presensi', icon: Calendar },
+                        { id: 'pelanggaran', label: 'Pelanggaran', icon: AlertTriangle },
+                        { id: 'catatan', label: 'Catatan Siswa', icon: FileText },
+                        { id: 'komunikasi', label: 'Kontak Sekolah', icon: MessageSquare }
                       ].map(tab => (
                         <button
                           key={tab.id}
@@ -3585,14 +3585,14 @@ export default function App({ initialMode }: AppProps = {}) {
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
                         { id: 'presensi', label: 'Presensi Kelas', icon: UserCheck },
-                        { id: 'elearning', label: 'E-Learning Interaktif', icon: BookOpen },
-                        { id: 'pelanggaran', label: 'Input Pelanggaran', icon: AlertTriangle },
-                        { id: 'riwayat', label: 'Riwayat Laporan', icon: Search },
-                        { id: 'verifikasi-mandiri', label: 'Verifikasi Absensi', icon: Check },
+                        { id: 'elearning', label: 'E-Learning', icon: BookOpen },
+                        { id: 'pelanggaran', label: 'Pelanggaran', icon: AlertTriangle },
+                        { id: 'riwayat', label: 'Riwayat Siswa', icon: Search },
+                        { id: 'verifikasi-mandiri', label: 'Verifikasi Presensi', icon: Check },
                         { id: 'jurnal-harian', label: 'Jurnal Mengajar', icon: Save },
                         { id: 'jadwal-ujian', label: 'Jadwal Ujian', icon: Calendar },
-                        { id: 'bank-soal', label: 'Bank Soal CBT', icon: Database },
-                        { id: 'guru-wali-view', label: 'Pendampingan Wali', icon: GraduationCap }
+                        { id: 'bank-soal', label: 'Bank Soal', icon: Database },
+                        { id: 'guru-wali-view', label: 'Pendampingan', icon: GraduationCap }
                       ].map(tab => (
                         <button
                           key={tab.id}
@@ -3617,10 +3617,10 @@ export default function App({ initialMode }: AppProps = {}) {
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
                         { id: 'beranda', label: 'Beranda Kelas', icon: GraduationCap },
-                        { id: 'catatan', label: 'Jurnal Pembinaan', icon: FileText },
-                        { id: 'ekskul', label: 'Nilai Ekstrakurikuler', icon: Award },
-                        { id: 'prestasi', label: 'Raihan Prestasi', icon: Award },
-                        { id: 'pesan', label: 'Pesan Orang Tua', icon: MessageSquare }
+                        { id: 'catatan', label: 'Jurnal Binaan', icon: FileText },
+                        { id: 'ekskul', label: 'Ekstrakurikuler', icon: Award },
+                        { id: 'prestasi', label: 'Prestasi Kelas', icon: Award },
+                        { id: 'pesan', label: 'Pesan Ortu', icon: MessageSquare }
                       ].map(tab => (
                         <button
                           key={tab.id}
@@ -3644,11 +3644,11 @@ export default function App({ initialMode }: AppProps = {}) {
                     <h3 className="px-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Menu BK</h3>
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
-                        { id: 'beranda', label: 'Beranda Konseling', icon: HeartHandshake },
+                        { id: 'beranda', label: 'Konseling', icon: HeartHandshake },
                         { id: 'bimbingan', label: 'Bimbingan Siswa', icon: Search },
                         { id: 'jurnal', label: 'Jurnal Bimbingan', icon: FileText },
                         { id: 'jadwal', label: 'Jadwal Bimbingan', icon: Calendar },
-                        { id: 'pesan', label: 'Pesan Orang Tua', icon: MessageSquare }
+                        { id: 'pesan', label: 'Pesan Ortu', icon: MessageSquare }
                       ].map(tab => (
                         <button
                           key={tab.id}
@@ -3672,11 +3672,11 @@ export default function App({ initialMode }: AppProps = {}) {
                     <h3 className="px-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Menu Piket</h3>
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
-                        { id: 'pintu-depan', label: 'Pintu Depan', icon: School },
-                        { id: 'absensi-piket', label: 'Absensi Siswa', icon: Calendar },
-                        { id: 'guru-absen', label: 'Guru Piket/Izin', icon: Users },
+                        { id: 'pintu-depan', label: 'Gerbang Sekolah', icon: School },
+                        { id: 'absensi-piket', label: 'Presensi Siswa', icon: Calendar },
+                        { id: 'guru-absen', label: 'Pendidik Izin', icon: Users },
                         { id: 'kejadian-piket', label: 'Jurnal Kejadian', icon: FileText },
-                        { id: 'verifikasi-mandiri', label: 'Verifikasi Absensi', icon: Check }
+                        { id: 'verifikasi-mandiri', label: 'Verifikasi Presensi', icon: Check }
                       ].map(tab => (
                         <button
                           key={tab.id}
@@ -3701,10 +3701,10 @@ export default function App({ initialMode }: AppProps = {}) {
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
                         { id: 'beranda', label: 'Beranda Wali', icon: GraduationCap },
-                        { id: 'bimbingan', label: 'Laporan Absensi', icon: FileText },
-                        { id: 'bimbingan-bk', label: 'Bimbingan Guru Wali', icon: HeartHandshake },
+                        { id: 'bimbingan', label: 'Rekap Presensi', icon: FileText },
+                        { id: 'bimbingan-bk', label: 'Bimbingan Siswa', icon: HeartHandshake },
                         { id: 'bakat-minat', label: 'Bakat & Minat', icon: Award },
-                        { id: 'pesan', label: 'Pesan Orang Tua', icon: MessageSquare }
+                        { id: 'pesan', label: 'Pesan Ortu', icon: MessageSquare }
                       ].map(tab => (
                         <button
                           key={tab.id}
@@ -3731,13 +3731,13 @@ export default function App({ initialMode }: AppProps = {}) {
                     </div>
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
-                        { id: 'ringkasan', label: 'Info Grafik & Ringkasan', icon: TrendingUp },
-                        { id: 'kjp', label: 'Siswa Penerima KJP', icon: CreditCard },
-                        { id: 'pemberkasan', label: 'Jadwal Pemberkasan', icon: FileCheck },
-                        { id: 'nomor-surat', label: 'Agenda Nomor Surat', icon: FileText },
-                        { id: 'inventaris', label: 'Inventarisir Barang', icon: Package },
-                        { id: 'peminjaman-barang', label: 'BA Peminjaman Barang', icon: ClipboardList },
-                        { id: 'bos-bop', label: 'Laporan BOS & BOP', icon: DollarSign }
+                        { id: 'ringkasan', label: 'Ringkasan TU', icon: TrendingUp },
+                        { id: 'kjp', label: 'Penerima KJP', icon: CreditCard },
+                        { id: 'pemberkasan', label: 'Pemberkasan', icon: FileCheck },
+                        { id: 'nomor-surat', label: 'Nomor Surat', icon: FileText },
+                        { id: 'inventaris', label: 'Inventaris', icon: Package },
+                        { id: 'peminjaman-barang', label: 'Peminjaman', icon: ClipboardList },
+                        { id: 'bos-bop', label: 'Laporan BOS/BOP', icon: DollarSign }
                       ].map(tab => (
                         <button
                           key={tab.id}
