@@ -80,6 +80,7 @@ export default function WebContentEditor() {
   const [headSubject, setHeadSubject] = useState('');
   const [headHobby, setHeadHobby] = useState('');
   const [schoolLogo, setSchoolLogo] = useState('');
+  const [headerMotto, setHeaderMotto] = useState('Berpacu dalam Prestasi');
   const [akreditasi, setAkreditasi] = useState('Akreditasi A (Unggul)');
   const [vision, setVision] = useState('');
   const [missions, setMissions] = useState<string[]>([]);
@@ -160,6 +161,7 @@ export default function WebContentEditor() {
       setHeadSubject(activeSection.headSubject || '');
       setHeadHobby(activeSection.headHobby || '');
       setSchoolLogo(activeSection.schoolLogo || '');
+      setHeaderMotto(activeSection.headerMotto || 'Berpacu dalam Prestasi');
       setAkreditasi(activeSection.akreditasi || 'Akreditasi A (Unggul)');
       setVision(activeSection.vision || '');
       setMissions(activeSection.missions || []);
@@ -213,7 +215,7 @@ export default function WebContentEditor() {
       headSubject,
       headHobby,
       ...(activeSectionId === 'home' 
-        ? { akreditasi, schoolLogo, vision, missions, instagram, whatsapp, email } 
+        ? { akreditasi, headerMotto, schoolLogo, vision, missions, instagram, whatsapp, email } 
         : { headerBgImage, headerTitle, headerSubtitle }
       )
     });
@@ -880,7 +882,21 @@ export default function WebContentEditor() {
                     />
 
                     <div className="space-y-1.5 pt-2 border-t border-indigo-100/80">
-                      <label className="text-xs font-bold text-amber-900 block">Status Akreditasi Sekolah (Ditampilkan di Header Web)</label>
+                      <label className="text-xs font-bold text-amber-900 block">Slogan / Motto Header Sekolah (Ditampilkan di Bawah Nama SMPN 50)</label>
+                      <input 
+                        type="text" 
+                        value={headerMotto}
+                        onChange={(e) => setHeaderMotto(e.target.value)}
+                        className="w-full text-xs font-bold border border-amber-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-600 bg-white text-amber-950 shadow-2xs"
+                        placeholder="Contoh: Berpacu dalam Prestasi"
+                      />
+                      <p className="text-[10px] text-amber-800">
+                        Teks slogan ini akan ditampilkan sebagai lencana emas di bawah tulisan SMP NEGERI 50 JAKARTA pada Header Navigasi Web dan Portal.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5 pt-2 border-t border-indigo-100/80">
+                      <label className="text-xs font-bold text-amber-900 block">Status Akreditasi Sekolah (Ditampilkan di Kartu Profil)</label>
                       <input 
                         type="text" 
                         value={akreditasi}
@@ -889,7 +905,7 @@ export default function WebContentEditor() {
                         placeholder="Contoh: Akreditasi A (Unggul)"
                       />
                       <p className="text-[10px] text-amber-800">
-                        Teks akreditasi ini akan ditampilkan sebagai lencana emas di Judul Utama Beranda Web Sekolah menggantikan teks SIAS.
+                        Status akreditasi resmi satuan pendidikan BAN-S/M.
                       </p>
                     </div>
                   </div>

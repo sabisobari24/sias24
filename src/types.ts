@@ -400,6 +400,7 @@ export interface WebSectionContent {
   headerBgImage?: string;
   headerTitle?: string;
   headerSubtitle?: string;
+  headerMotto?: string;
   schoolLogo?: string;
   akreditasi?: string;
   headName?: string;

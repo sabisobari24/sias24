@@ -144,17 +144,65 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "headerBgImage": { "type": "string", "maxLength": 1000 },
+        "headerTitle": { "type": "string", "maxLength": 200 },
+        "headerSubtitle": { "type": "string", "maxLength": 500 },
+        "headerMotto": { "type": "string", "maxLength": 200 },
         "schoolLogo": { "type": "string", "maxLength": 10000 },
         "akreditasi": { "type": "string", "maxLength": 100 },
+        "headName": { "type": "string", "maxLength": 150 },
+        "headImage": { "type": "string", "maxLength": 1000 },
+        "headRole": { "type": "string", "maxLength": 100 },
+        "headMotto": { "type": "string", "maxLength": 5000 },
+        "headBorn": { "type": "string", "maxLength": 100 },
+        "headSubject": { "type": "string", "maxLength": 100 },
+        "headHobby": { "type": "string", "maxLength": 100 },
+        "staff": { "type": "array" },
+        "programs": { "type": "array" },
         "slides": { "type": "array" },
+        "subjects": { "type": "array" },
+        "extracurriculars": { "type": "array" },
+        "facilities": { "type": "array" },
+        "popupImages": { "type": "array" },
+        "articles": { "type": "array" },
+        "tickers": { "type": "array" },
+        "activities": { "type": "array" },
+        "agendas": { "type": "array" },
         "sambutan": { "type": "string", "maxLength": 5000 },
         "visi": { "type": "string", "maxLength": 2000 },
-        "misi": { "type": "array" },
+        "vision": { "type": "string", "maxLength": 2000 },
+        "missions": { "type": "array" },
         "instagram": { "type": "string", "maxLength": 200 },
         "whatsapp": { "type": "string", "maxLength": 50 },
         "email": { "type": "string", "maxLength": 100 }
       },
       "required": ["id"]
+    },
+    "QuestionBank": {
+      "title": "Question Bank",
+      "description": "Bank soal CBT untuk ujian daring",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "teacherId": { "type": "string", "maxLength": 128 },
+        "teacherName": { "type": "string", "maxLength": 150 },
+        "subject": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 200 },
+        "classId": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "questions": { "type": "array" }
+      },
+      "required": ["id", "teacherId", "title", "questions"]
+    },
+    "SystemDiagnostics": {
+      "title": "System Diagnostics",
+      "description": "Log verifikasi koneksi dan diagnosa database mandiri",
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "maxLength": 50 },
+        "message": { "type": "string", "maxLength": 300 },
+        "test": { "type": "boolean" }
+      }
     },
     "SchoolSettings": {
       "title": "School Settings",
@@ -226,6 +274,14 @@
     "/web_content/{contentId}": {
       "schema": "WebContent",
       "description": "Konten halaman publik situs web sekolah"
+    },
+    "/question_banks/{bankId}": {
+      "schema": "QuestionBank",
+      "description": "Bank soal evaluasi dan ujian berbasis komputer"
+    },
+    "/system_diagnostics/{testId}": {
+      "schema": "SystemDiagnostics",
+      "description": "Pemeriksaan integritas dan diagnosa koneksi database"
     },
     "/settings/{settingId}": {
       "schema": "SchoolSettings",

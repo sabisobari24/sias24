@@ -716,6 +716,7 @@ export const INITIAL_WEB_CONTENT: WebSectionContent[] = [
   {
     id: 'home',
     schoolLogo: 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj',
+    headerMotto: 'Berpacu dalam Prestasi',
     akreditasi: 'Akreditasi A (Unggul)',
     headName: 'Dra. Hj. Endah Purwani, M.M.',
     headRole: 'Kepala Sekolah',

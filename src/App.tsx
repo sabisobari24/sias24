@@ -506,7 +506,14 @@ export default function App({ initialMode }: AppProps = {}) {
   const [webHomeContent, setWebHomeContent] = useState<any>(() => {
     try {
       const saved = localStorage.getItem('siakad_web_home_content');
-      return saved ? JSON.parse(saved) : null;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (!parsed.headerMotto) {
+          parsed.headerMotto = 'Berpacu dalam Prestasi';
+        }
+        return parsed;
+      }
+      return null;
     } catch { return null; }
   });
   const [headmasterName, setHeadmasterName] = useState<string>(() => {
@@ -1098,6 +1105,9 @@ export default function App({ initialMode }: AppProps = {}) {
             title: (s.title || '').replace(/<[^>]*>/g, '').trim(),
             desc: (s.desc || '').replace(/<[^>]*>/g, '').trim()
           } : s);
+        }
+        if (!homeDoc.headerMotto) {
+          homeDoc.headerMotto = 'Berpacu dalam Prestasi';
         }
         setWebHomeContent(homeDoc);
         safeLocalStorageSet('siakad_web_home_content', JSON.stringify(homeDoc));
@@ -2480,13 +2490,13 @@ export default function App({ initialMode }: AppProps = {}) {
                       <School className="w-6 h-6 text-blue-900" />
                     )}
                   </div>
-                  <div className="leading-none">
-                    <div className="mb-1">
+                  <div className="flex flex-col justify-center text-left">
+                    <h1 className="text-xs md:text-sm font-black text-slate-800 tracking-tight leading-none uppercase">SMP NEGERI 50 JAKARTA</h1>
+                    <div className="mt-1">
                       <span className="text-[9px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider block w-max shadow-xs">
-                        {webHomeContent?.akreditasi || 'Akreditasi A (Unggul)'}
+                        {webHomeContent?.headerMotto || 'Berpacu dalam Prestasi'}
                       </span>
                     </div>
-                    <h1 className="text-xs md:text-sm font-black text-slate-800 tracking-tight leading-none uppercase">SMP NEGERI 50 JAKARTA</h1>
                   </div>
                 </button>
 
@@ -2689,13 +2699,13 @@ export default function App({ initialMode }: AppProps = {}) {
                               <School className="w-8 md:w-10 md:h-10 text-blue-900" />
                             )}
                           </div>
-                          <div className="space-y-1 text-left">
+                          <div className="space-y-1.5 text-left">
+                            <h1 className="text-xl md:text-2xl lg:text-3xl font-black tracking-tight leading-none">SMP NEGERI 50 JAKARTA</h1>
                             <div>
                               <span className="text-[10px] bg-amber-400 text-slate-950 font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider inline-block shadow-xs border border-amber-300">
-                                {webHomeContent?.akreditasi || 'Akreditasi A (Unggul)'}
+                                {webHomeContent?.headerMotto || 'Berpacu dalam Prestasi'}
                               </span>
                             </div>
-                            <h1 className="text-xl md:text-2xl lg:text-3xl font-black tracking-tight leading-none">SMP NEGERI 50 JAKARTA</h1>
                             <p className="text-xs text-indigo-100/95 max-w-xl font-medium">
                               Mewujudkan Prestasi yang Unggul, Disiplin, dan Berkarakter. Selamat datang di Portal Basis Data Terpadu Sekolah.
                             </p>

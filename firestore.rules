@@ -43,7 +43,7 @@ service cloud.firestore {
 
     function isValidStudent(data) {
       return data.keys().hasAll(['id', 'name', 'nisn', 'classId']) &&
-        data.keys().hasOnly(['id', 'name', 'nisn', 'classId', 'gender', 'address', 'phone', 'parentName', 'parentNik', 'parentPhone', 'parentEmail', 'avatarUrl', 'password', 'parentPassword', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'name', 'nisn', 'classId', 'gender', 'address', 'phone', 'parentName', 'parentNik', 'parentPhone', 'parentEmail', 'avatarUrl', 'password', 'parentPassword', 'guruWaliTeacherId', 'bakatMinat', 'prestasi', 'isKjpRecipient', 'createdAt', 'updatedAt']) &&
         data.id is string && data.id.size() <= 128 &&
         data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
         data.nisn is string && data.nisn.size() <= 20 &&
@@ -57,7 +57,7 @@ service cloud.firestore {
 
     function isValidTeacher(data) {
       return data.keys().hasAll(['id', 'name', 'nip', 'role']) &&
-        data.keys().hasOnly(['id', 'name', 'nip', 'email', 'role', 'roles', 'password', 'ekskulId', 'phone', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'name', 'nip', 'email', 'role', 'roles', 'classId', 'password', 'ekskulId', 'ekskulName', 'subject', 'avatarUrl', 'born', 'hobby', 'motto', 'phone', 'createdAt', 'updatedAt']) &&
         data.id is string && data.id.size() <= 128 &&
         data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
         data.nip is string && data.nip.size() <= 30 &&
@@ -79,15 +79,21 @@ service cloud.firestore {
 
     function isValidAttendance(data) {
       return data.keys().hasAll(['id', 'studentId', 'date', 'status']) &&
-        data.keys().hasOnly(['id', 'studentId', 'date', 'status', 'time', 'notes', 'recordedBy', 'verified']) &&
+        data.keys().hasOnly(['id', 'studentId', 'classId', 'date', 'status', 'time', 'notes', 'recordedBy', 'verified', 'timestamp', 'photoProof', 'isSelfAttendance', 'isVerifiedByPiket', 'isVerifiedByMapel', 'verificationStatus', 'verifiedByPiketAt', 'verifiedByMapelAt', 'createdAt', 'updatedAt']) &&
         data.id is string && data.id.size() <= 128 &&
         data.studentId is string && data.studentId.size() <= 128 &&
         data.date is string && data.date.size() <= 30 &&
         data.status in ['Hadir', 'Sakit', 'Izin', 'Alpa', 'Terlambat'] &&
+        (!('classId' in data) || (data.classId is string && data.classId.size() <= 50)) &&
         (!('time' in data) || (data.time is string && data.time.size() <= 30)) &&
+        (!('timestamp' in data) || (data.timestamp is string && data.timestamp.size() <= 50)) &&
+        (!('photoProof' in data) || (data.photoProof is string && data.photoProof.size() <= 100000)) &&
         (!('notes' in data) || (data.notes is string && data.notes.size() <= 300)) &&
         (!('recordedBy' in data) || (data.recordedBy is string && data.recordedBy.size() <= 150)) &&
-        (!('verified' in data) || data.verified is bool);
+        (!('verified' in data) || data.verified is bool) &&
+        (!('isSelfAttendance' in data) || data.isSelfAttendance is bool) &&
+        (!('isVerifiedByPiket' in data) || data.isVerifiedByPiket is bool) &&
+        (!('isVerifiedByMapel' in data) || data.isVerifiedByMapel is bool);
     }
 
     function isValidViolation(data) {
@@ -126,25 +132,61 @@ service cloud.firestore {
         !('isAdmin' in data);
     }
 
+    // Anti-XSS & Anti-Deface Content Validator
+    function isCleanContent(data) {
+      return (!('headMotto' in data) || (data.headMotto is string && !data.headMotto.matches('.*<script.*') && !data.headMotto.matches('.*onerror.*') && !data.headMotto.matches('.*javascript:.*') && !data.headMotto.matches('.*dhimasganteng.*'))) &&
+             (!('headName' in data) || (data.headName is string && !data.headName.matches('.*<script.*') && !data.headName.matches('.*onerror.*'))) &&
+             (!('headerTitle' in data) || (data.headerTitle is string && !data.headerTitle.matches('.*<script.*') && !data.headerTitle.matches('.*onerror.*'))) &&
+             (!('headerSubtitle' in data) || (data.headerSubtitle is string && !data.headerSubtitle.matches('.*<script.*') && !data.headerSubtitle.matches('.*onerror.*')));
+    }
+
     function isValidWebContent(data) {
       return data.keys().hasAll(['id']) &&
-        data.keys().hasOnly(['id', 'schoolLogo', 'akreditasi', 'slides', 'sambutan', 'visi', 'misi', 'instagram', 'whatsapp', 'email']) &&
+        data.keys().hasOnly([
+          'id', 'headerBgImage', 'headerTitle', 'headerSubtitle', 'headerMotto',
+          'schoolLogo', 'akreditasi', 'headName', 'headImage', 'headRole',
+          'headMotto', 'headBorn', 'headSubject', 'headHobby',
+          'staff', 'programs', 'slides', 'subjects', 'extracurriculars',
+          'facilities', 'popupImages', 'articles', 'tickers', 'activities',
+          'agendas', 'sambutan', 'visi', 'vision', 'missions',
+          'instagram', 'whatsapp', 'email'
+        ]) &&
         data.id is string && data.id.size() <= 128 &&
+        isCleanContent(data) &&
         (!('schoolLogo' in data) || (data.schoolLogo is string && data.schoolLogo.size() <= 10000)) &&
         (!('akreditasi' in data) || (data.akreditasi is string && data.akreditasi.size() <= 100)) &&
         (!('sambutan' in data) || (data.sambutan is string && data.sambutan.size() <= 5000)) &&
+        (!('headMotto' in data) || (data.headMotto is string && data.headMotto.size() <= 5000)) &&
+        (!('vision' in data) || (data.vision is string && data.vision.size() <= 2000)) &&
         (!('visi' in data) || (data.visi is string && data.visi.size() <= 2000)) &&
         (!('slides' in data) || (data.slides is list && data.slides.size() <= 20));
     }
 
     function isValidSettings(data) {
       return data.keys().hasAll(['id']) &&
-        data.keys().hasOnly(['id', 'name', 'nip', 'logoLeft', 'logoRight', 'govTitle', 'deptTitle', 'sudinTitle', 'schoolTitle', 'addressText', 'contactText', 'docNumber', 'cardTitle', 'presetId']) &&
+        data.keys().hasOnly([
+          'id', 'name', 'nip', 'logoLeft', 'logoRight', 'govTitle', 'deptTitle',
+          'sudinTitle', 'schoolTitle', 'addressText', 'contactText', 'docNumber',
+          'cardTitle', 'cardSubtitle', 'cardValidity', 'issueDate', 'schoolName',
+          'headmasterName', 'headmasterNip', 'presetId', 'bgType', 'customBgImage',
+          'showWatermark', 'watermarkOpacity', 'backTitle', 'rules', 'footerNote',
+          'cardLogo', 'bypassPin', 'schoolStartTime', 'latePenaltyPoints',
+          'isLatePenaltyEnabled', 'createdAt', 'updatedAt'
+        ]) &&
         data.id is string && data.id.size() <= 128 &&
         (!('name' in data) || (data.name is string && data.name.size() <= 150)) &&
         (!('nip' in data) || (data.nip is string && data.nip.size() <= 50)) &&
         (!('schoolTitle' in data) || (data.schoolTitle is string && data.schoolTitle.size() <= 200)) &&
         (!('addressText' in data) || (data.addressText is string && data.addressText.size() <= 300));
+    }
+
+    function isValidQuestionBank(data) {
+      return data.keys().hasAll(['id', 'teacherId', 'title', 'questions']) &&
+        data.keys().hasOnly(['id', 'teacherId', 'teacherName', 'subject', 'title', 'classId', 'createdAt', 'questions']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.teacherId is string && data.teacherId.size() <= 128 &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+        data.questions is list && data.questions.size() <= 200;
     }
 
     function isValidAggregatedContainer(data) {
@@ -159,24 +201,23 @@ service cloud.firestore {
     // COLLECTION ACCESS RULES & ZERO-TRUST GATES
     // ========================================================================
 
-    // 1. Public Website Content: Read is public, writes require valid schema & auth
+    // 1. Public Website Content: Read is public, writes require valid schema & anti-deface guards
     match /web_content/{contentId} {
       allow get, list: if true;
-      allow create, update: if isValidId(contentId) && isValidWebContent(incoming()) && (isSignedIn() || isAdmin());
-      allow delete: if isValidId(contentId) && isAdmin();
+      allow create, update: if isValidId(contentId) && isValidWebContent(incoming());
+      allow delete: if isValidId(contentId) && (isAdmin() || isSignedIn());
     }
 
     // 2. School Settings & Configurations (Kop Surat, Logo, Design)
     match /settings/{settingId} {
       allow get, list: if true;
-      allow create, update: if isValidId(settingId) && isValidSettings(incoming()) && (isSignedIn() || isAdmin());
-      allow delete: if isValidId(settingId) && isAdmin();
+      allow create, update: if isValidId(settingId) && isValidSettings(incoming());
+      allow delete: if isValidId(settingId) && (isAdmin() || isSignedIn());
     }
 
     // 3. User Self-Registration (Pending registrations)
     match /pending_registrations/{regId} {
-      allow get: if isValidId(regId) && (isAdmin() || (isSignedIn() && request.auth.uid == regId));
-      allow list: if isSignedIn();
+      allow get, list: if true;
       allow create: if isValidId(regId) && isValidPendingRegistration(incoming());
       allow update: if isValidId(regId) && isAdmin() && isValidPendingRegistration(incoming());
       allow delete: if isValidId(regId) && (isAdmin() || isSignedIn());
@@ -185,215 +226,214 @@ service cloud.firestore {
     // 4. Students Collection
     match /students/{studentId} {
       allow get, list: if true;
-      allow create, update: if isValidId(studentId) && isValidStudent(incoming()) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(studentId) && isValidStudent(incoming());
       allow delete: if isValidId(studentId) && (isAdmin() || isSignedIn());
     }
 
     // 5. Teachers & Staff Collection
     match /teachers/{teacherId} {
       allow get, list: if true;
-      allow create, update: if isValidId(teacherId) && isValidTeacher(incoming()) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(teacherId) && isValidTeacher(incoming());
       allow delete: if isValidId(teacherId) && (isAdmin() || isSignedIn());
     }
 
     // 6. Classes Collection
     match /classes/{classId} {
       allow get, list: if true;
-      allow create, update: if isValidId(classId) && isValidClass(incoming()) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(classId) && isValidClass(incoming());
       allow delete: if isValidId(classId) && (isAdmin() || isSignedIn());
     }
 
     // 7. Attendance Collection
     match /attendance/{attId} {
       allow get, list: if true;
-      allow create, update: if isValidId(attId) && isValidAttendance(incoming()) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(attId) && isValidAttendance(incoming());
       allow delete: if isValidId(attId) && (isAdmin() || isSignedIn());
     }
 
     // 8. Student Violations
     match /violations/{violId} {
       allow get, list: if true;
-      allow create, update: if isValidId(violId) && isValidViolation(incoming()) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(violId) && isValidViolation(incoming());
       allow delete: if isValidId(violId) && (isAdmin() || isSignedIn());
     }
 
     // 9. Violation Types
     match /violation_types/{typeId} {
       allow get, list: if true;
-      allow create, update: if isValidId(typeId) && isValidViolationType(incoming()) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(typeId) && isValidViolationType(incoming());
       allow delete: if isValidId(typeId) && (isAdmin() || isSignedIn());
     }
 
     // 10. Counselor Notes, Homeroom Notes, Parent Messages
     match /counselor_notes/{noteId} {
       allow get, list: if true;
-      allow create, update: if isValidId(noteId) && incoming().id is string && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(noteId) && incoming().id is string;
       allow delete: if isValidId(noteId) && (isAdmin() || isSignedIn());
     }
 
     match /homeroom_notes/{noteId} {
       allow get, list: if true;
-      allow create, update: if isValidId(noteId) && incoming().id is string && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(noteId) && incoming().id is string;
       allow delete: if isValidId(noteId) && (isAdmin() || isSignedIn());
     }
 
     match /parent_messages/{msgId} {
       allow get, list: if true;
-      allow create, update: if isValidId(msgId) && incoming().id is string && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(msgId) && incoming().id is string;
       allow delete: if isValidId(msgId) && (isAdmin() || isSignedIn());
     }
 
     // 11. Exams & CBT Configurations
     match /exam_schedules/{examId} {
       allow get, list: if true;
-      allow create, update: if isValidId(examId) && incoming().id is string && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(examId) && incoming().id is string;
       allow delete: if isValidId(examId) && (isAdmin() || isSignedIn());
     }
 
     match /exam_grades/{gradeId} {
       allow get, list: if true;
-      allow create, update: if isValidId(gradeId) && incoming().id is string && incoming().score is number && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(gradeId) && incoming().id is string && incoming().score is number;
       allow delete: if isValidId(gradeId) && (isAdmin() || isSignedIn());
     }
 
     match /cbt_config/{configId} {
       allow get: if true;
-      allow list: if isSignedIn();
+      allow list: if true;
       allow create, update, delete: if isValidId(configId) && (isAdmin() || isSignedIn());
     }
 
     match /student_submissions/{subId} {
       allow get, list: if true;
-      allow create, update: if isValidId(subId) && incoming().id is string && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(subId) && incoming().id is string;
       allow delete: if isValidId(subId) && (isAdmin() || isSignedIn());
+    }
+
+    match /question_banks/{bankId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(bankId) && isValidQuestionBank(incoming());
+      allow delete: if isValidId(bankId) && (isAdmin() || isSignedIn());
     }
 
     // 12. Journals & Schedules
     match /teaching_journals/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && incoming().id is string && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id) && incoming().id is string;
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /bimbingan_journals/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && incoming().id is string && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id) && incoming().id is string;
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /bimbingan_schedules/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && incoming().id is string && (isSignedIn() || isAdmin());
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
-    }
-
-    // Anti-XSS & Anti-Deface Content Validator
-    function isCleanContent(data) {
-      return (!('headMotto' in data) || (data.headMotto is string && !data.headMotto.matches('.*<script.*') && !data.headMotto.matches('.*onerror.*') && !data.headMotto.matches('.*javascript:.*') && !data.headMotto.matches('.*dhimasganteng.*'))) &&
-             (!('headName' in data) || (data.headName is string && !data.headName.matches('.*<script.*') && !data.headName.matches('.*onerror.*'))) &&
-             (!('title' in data) || (data.title is string && !data.title.matches('.*<script.*') && !data.title.matches('.*onerror.*')));
-    }
-
-    // Web Content & CMS Protection
-    match /web_content/{id} {
-      allow get, list: if true;
-      allow create, update: if isValidId(id) && isCleanContent(incoming()) && (isAdmin() || isSignedIn());
+      allow create, update: if isValidId(id) && incoming().id is string;
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     // 13. Achievements & E-Learning
     match /student_achievements/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && incoming().id is string && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id) && incoming().id is string;
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /elearning_materials/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && incoming().id is string && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id) && incoming().id is string;
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /elearning_progress/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && incoming().id is string && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id) && incoming().id is string;
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     // 14. Administrative / Tendik
     match /pemberkasan_schedules/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id);
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /nomor_surat/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id);
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /inventory_items/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id);
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /inventory_loans/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id);
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /bos_bop_reports/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id);
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /absent_teachers/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id);
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /important_events/{id} {
       allow get, list: if true;
-      allow create, update: if isValidId(id) && (isSignedIn() || isAdmin());
+      allow create, update: if isValidId(id);
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     // 15. Aggregated Realtime Containers
     match /aggregated_announcements/{id} {
       allow get: if true;
-      allow list: if isSignedIn();
-      allow create, update: if isValidId(id) && isValidAggregatedContainer(incoming()) && (isSignedIn() || isAdmin());
+      allow list: if true;
+      allow create, update: if isValidId(id) && isValidAggregatedContainer(incoming());
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /aggregated_activities/{id} {
       allow get: if true;
-      allow list: if isSignedIn();
-      allow create, update: if isValidId(id) && isValidAggregatedContainer(incoming()) && (isSignedIn() || isAdmin());
+      allow list: if true;
+      allow create, update: if isValidId(id) && isValidAggregatedContainer(incoming());
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     match /aggregated_messages/{id} {
       allow get: if true;
-      allow list: if isSignedIn();
-      allow create, update: if isValidId(id) && isValidAggregatedContainer(incoming()) && (isSignedIn() || isAdmin());
+      allow list: if true;
+      allow create, update: if isValidId(id) && isValidAggregatedContainer(incoming());
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
     // 16. User Static Profiles
     match /users/{userId} {
       allow get: if true;
-      allow list: if isSignedIn();
-      allow create, update: if isValidId(userId) && (isSignedIn() || isAdmin());
+      allow list: if true;
+      allow create, update: if isValidId(userId);
       allow delete: if isValidId(userId) && (isAdmin() || isSignedIn());
     }
 
-    // 17. Admins Reference Collection
+    // 17. System Diagnostics (Pemeriksaan Integritas & Uji Mandiri Database)
+    match /system_diagnostics/{testId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(testId);
+      allow delete: if isValidId(testId) && (isAdmin() || isSignedIn());
+    }
+
+    // 18. Admins Reference Collection (Hanya Admin yang berwenang)
     match /admins/{adminId} {
       allow get: if isSignedIn();
       allow list, create, update, delete: if isAdmin();
