@@ -312,6 +312,9 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
                       src={sl.image} 
                       alt={sl.title ? sl.title.replace(/<[^>]*>/g, '') : "Banner"} 
                       className="absolute inset-0 w-full h-full object-cover"
+                      style={{ imageRendering: '-webkit-optimize-contrast' }}
+                      loading="eager"
+                      decoding="async"
                       referrerPolicy="no-referrer"
                     />
                   )}

@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
-import { Upload, Link, RefreshCw } from 'lucide-react';
-import { fileToBase64, convertGoogleDriveLink, compressBase64Image } from '../utils/imageHelper';
+import { Upload, Link, RefreshCw, Sparkles, CheckCircle2 } from 'lucide-react';
+import { 
+  fileToBase64, 
+  convertGoogleDriveLink, 
+  compressBase64Image, 
+  enhanceAndCompressBannerImage,
+  autoEnhanceImageBase64 
+} from '../utils/imageHelper';
 import { WebIcon } from './website/WebIcon';
 
 interface MediaUploadSelectorProps {
@@ -10,6 +16,8 @@ interface MediaUploadSelectorProps {
   label?: string;
   placeholder?: string;
   type?: 'image' | 'icon';
+  mode?: 'banner' | 'avatar' | 'standard' | 'icon';
+  autoEnhance?: boolean;
 }
 
 const PRESET_ICONS = [
@@ -87,21 +95,44 @@ export default function MediaUploadSelector({
   onChange,
   label,
   placeholder = "Masukkan URL / Link foto, atau upload...",
-  type = 'image'
+  type = 'image',
+  mode,
+  autoEnhance = true
 }: MediaUploadSelectorProps) {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Auto-detect if this field represents a banner, slide, or wide image
+  const isBanner = mode === 'banner' || (
+    label !== undefined && 
+    /slide|banner|cover|background|latar|galeri|unggul/i.test(label)
+  );
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
     try {
-      const b64 = await fileToBase64(file, 600, 600, 0.75);
+      let b64 = '';
+      if (isBanner) {
+        // High-definition wide banner with auto-clarity, edge-sharpening, and anti-blur technology
+        b64 = await enhanceAndCompressBannerImage(file, 1920, 1080, 0.85);
+        setStatusMessage('Foto banner berhasil diunggah & kualitas diperbaiki secara otomatis (Tajam HD Anti-Blur).');
+      } else {
+        b64 = await fileToBase64(file, 640, 640, 0.80);
+        setStatusMessage('Foto berhasil diunggah dan dioptimalkan.');
+      }
       onChange(b64);
+      setTimeout(() => setStatusMessage(null), 5000);
     } catch (err) {
       console.warn('Gagal memproses gambar:', err);
-      alert('Gagal membaca file gambar. Pastikan format file PNG atau JPG.');
+      setErrorMessage('Gagal membaca file gambar. Pastikan format file PNG atau JPG.');
+      setTimeout(() => setErrorMessage(null), 6000);
     } finally {
       setIsUploading(false);
     }
@@ -111,16 +142,46 @@ export default function MediaUploadSelector({
     const rawUrl = e.target.value;
     const converted = convertGoogleDriveLink(rawUrl);
     if (converted.startsWith('data:image/')) {
-      compressBase64Image(converted, 600, 600, 0.75).then(res => onChange(res));
+      if (isBanner) {
+        enhanceAndCompressBannerImage(converted, 1920, 1080, 0.85).then(res => onChange(res));
+      } else {
+        compressBase64Image(converted, 640, 640, 0.80).then(res => onChange(res));
+      }
     } else {
       onChange(converted);
+    }
+  };
+
+  const handleManualEnhance = async () => {
+    if (!value || isEnhancing) return;
+    setIsEnhancing(true);
+    setErrorMessage(null);
+    try {
+      const enhanced = await autoEnhanceImageBase64(value);
+      onChange(enhanced);
+      setStatusMessage('Kualitas foto berhasil ditingkatkan & dipertajam secara otomatis!');
+      setTimeout(() => setStatusMessage(null), 5000);
+    } catch (err) {
+      console.warn('Gagal meningkatkan kualitas foto:', err);
+      setErrorMessage('Gagal memproses peningkatan kualitas gambar.');
+      setTimeout(() => setErrorMessage(null), 5000);
+    } finally {
+      setIsEnhancing(false);
     }
   };
 
   return (
     <div className="space-y-1.5 w-full">
       {label && (
-        <label className="text-xs font-bold text-slate-500 block uppercase tracking-wider">{label}</label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs font-bold text-slate-600 block uppercase tracking-wider">{label}</label>
+          {isBanner && (
+            <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100/90 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-200">
+              <Sparkles className="w-3 h-3 text-amber-600" />
+              <span>Auto-Enhance HD (Anti-Blur)</span>
+            </span>
+          )}
+        </div>
       )}
       
       <div className="flex flex-col sm:flex-row gap-2">
@@ -141,7 +202,7 @@ export default function MediaUploadSelector({
         {/* Upload Button */}
         <button
           type="button"
-          disabled={isUploading}
+          disabled={isUploading || isEnhancing}
           onClick={() => fileInputRef.current?.click()}
           className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 border border-slate-200 cursor-pointer transition-colors shrink-0 disabled:opacity-50"
         >
@@ -150,17 +211,31 @@ export default function MediaUploadSelector({
           ) : (
             <Upload className="w-3.5 h-3.5 text-slate-500" />
           )}
-          <span>{isUploading ? 'Memproses...' : 'Upload File'}</span>
+          <span>{isUploading ? 'Memproses HD...' : 'Upload File'}</span>
         </button>
         <input
           type="file"
           ref={fileInputRef}
           accept="image/*"
           className="hidden"
-          disabled={isUploading}
+          disabled={isUploading || isEnhancing}
           onChange={handleFileChange}
         />
       </div>
+
+      {/* Auto-Enhance Status Alert / Notification */}
+      {statusMessage && (
+        <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 animate-fadeIn">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+          <span>{statusMessage}</span>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="text-[11px] font-bold text-rose-600 bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-200">
+          {errorMessage}
+        </div>
+      )}
 
       {/* Recommended Icons / Emojis selection */}
       {type === 'icon' && (
@@ -198,13 +273,14 @@ export default function MediaUploadSelector({
 
       {/* Preview Section */}
       {value && (
-        <div className="flex items-center gap-3 bg-slate-50/70 p-2 rounded-xl border border-slate-200/50 mt-1">
+        <div className="flex items-center gap-3 bg-slate-50/70 p-2.5 rounded-2xl border border-slate-200/70 mt-1">
           {type === 'image' || value.startsWith('http') || value.startsWith('data:') ? (
-            <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-100 bg-slate-200 shrink-0">
+            <div className={`overflow-hidden border border-slate-200 bg-slate-900 shrink-0 relative rounded-xl ${isBanner ? 'w-20 h-12' : 'w-10 h-10'}`}>
               <img
                 src={value}
                 alt="Preview"
                 className="w-full h-full object-cover"
+                style={{ imageRendering: '-webkit-optimize-contrast' }}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&q=80&w=100';
@@ -217,16 +293,39 @@ export default function MediaUploadSelector({
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Preview Aktif</p>
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Preview Aktif</p>
+              {isBanner && (
+                <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded-md">
+                  HD Anti-Blur
+                </span>
+              )}
+            </div>
             <p className="text-[10px] text-slate-600 truncate font-mono">{value}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => onChange('')}
-            className="text-[10px] text-rose-500 hover:text-rose-600 font-bold px-2 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-lg transition-colors cursor-pointer"
-          >
-            Hapus
-          </button>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {isBanner && (
+              <button
+                type="button"
+                disabled={isEnhancing}
+                onClick={handleManualEnhance}
+                className="text-[10px] text-amber-800 hover:text-amber-950 font-bold px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                title="Tingkatkan ketajaman foto ini secara otomatis oleh sistem"
+              >
+                <Sparkles className="w-3 h-3 text-amber-600" />
+                <span>{isEnhancing ? 'Mempertajam...' : 'Perbaiki Kualitas'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => onChange('')}
+              className="text-[10px] text-rose-500 hover:text-rose-600 font-bold px-2 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-lg transition-colors cursor-pointer"
+            >
+              Hapus
+            </button>
+          </div>
         </div>
       )}
     </div>

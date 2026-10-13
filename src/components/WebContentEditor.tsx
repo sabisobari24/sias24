@@ -823,6 +823,7 @@ export default function WebContentEditor() {
                       value={headerBgImage}
                       onChange={setHeaderBgImage}
                       label="Background Gambar Header Banner (Upload Foto atau URL Direct)"
+                      mode="banner"
                       placeholder="https://..."
                     />
 
@@ -1515,6 +1516,7 @@ export default function WebContentEditor() {
                             value={slideForm.image || ''}
                             onChange={(val) => setSlideForm({ ...slideForm, image: val })}
                             label="Foto Cover / Thumbnail Poster Video (Opsional)"
+                            mode="banner"
                             placeholder="https://..."
                           />
                         </div>
@@ -1523,6 +1525,7 @@ export default function WebContentEditor() {
                           value={slideForm.image || ''}
                           onChange={(val) => setSlideForm({ ...slideForm, image: val })}
                           label="Gambar Foto Slide Dokumentasi"
+                          mode="banner"
                           placeholder="https://..."
                         />
                       )}
