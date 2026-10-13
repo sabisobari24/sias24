@@ -32,22 +32,123 @@ export function convertGoogleDriveLink(url: string): string {
 
 /**
  * Converts a file uploaded from local computer into a compressed base64 data URL string
+ * Supports optional maxWidth, maxHeight, and quality to keep file sizes under 40KB
  */
-export function fileToBase64(file: File): Promise<string> {
+export function compressImageFile(
+  file: File,
+  maxWidth: number = 500,
+  maxHeight: number = 500,
+  quality: number = 0.72
+): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve('');
+      return;
+    }
+
     const reader = new FileReader();
-    reader.readAsDataURL(file);
     reader.onload = (event) => {
+      const rawResult = event.target?.result as string;
+      if (!rawResult) {
+        resolve('');
+        return;
+      }
+
+      // If svg, return directly if under 100KB
+      if (file.type === 'image/svg+xml' && file.size < 100 * 1024) {
+        resolve(rawResult);
+        return;
+      }
+
       const img = new Image();
-      img.src = event.target?.result as string;
       img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width <= 0 || height <= 0) {
+            resolve(rawResult);
+            return;
+          }
+
+          // Calculate new dimensions preserving aspect ratio
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = Math.max(1, width);
+          canvas.height = Math.max(1, height);
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(rawResult);
+            return;
+          }
+
+          // If PNG with transparency, keep clean background or transparent PNG
+          const isPng = file.type === 'image/png';
+          if (!isPng) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // For small PNG logos (<= 320px), use PNG to preserve crisp transparency; otherwise JPEG
+          const exportMime = (isPng && width <= 350 && height <= 350) ? 'image/png' : 'image/jpeg';
+          const compressedB64 = canvas.toDataURL(exportMime, quality);
+          resolve(compressedB64);
+        } catch (canvasErr) {
+          console.warn('Canvas compression error:', canvasErr);
+          resolve(rawResult);
+        }
+      };
+      img.onerror = () => {
+        resolve(rawResult);
+      };
+      img.src = rawResult;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Compresses an existing base64 image data URL string
+ */
+export function compressBase64Image(
+  dataUrl: string,
+  maxWidth: number = 500,
+  maxHeight: number = 500,
+  quality: number = 0.72
+): Promise<string> {
+  return new Promise((resolve) => {
+    if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+      resolve(dataUrl);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      try {
         const canvas = document.createElement('canvas');
-        const maxWidth = 800;
-        const maxHeight = 800;
         let width = img.width;
         let height = img.height;
 
-        // Calculate new dimensions preserving aspect ratio
+        if (width <= maxWidth && height <= maxHeight && dataUrl.length < 80 * 1024) {
+          resolve(dataUrl);
+          return;
+        }
+
         if (width > height) {
           if (width > maxWidth) {
             height = Math.round((height * maxWidth) / width);
@@ -60,24 +161,36 @@ export function fileToBase64(file: File): Promise<string> {
           }
         }
 
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
 
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve(event.target?.result as string); // fallback to original if context fails
+          resolve(dataUrl);
           return;
         }
 
+        const isPng = dataUrl.startsWith('data:image/png');
+        if (!isPng) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+        }
+
         ctx.drawImage(img, 0, 0, width, height);
-        // Compress as JPEG at 0.70 quality to dramatically reduce size (~25KB-50KB)
-        const compressedB64 = canvas.toDataURL('image/jpeg', 0.70);
-        resolve(compressedB64);
-      };
-      img.onerror = (err) => {
-        reject(err);
-      };
+        const exportMime = (isPng && width <= 350 && height <= 350) ? 'image/png' : 'image/jpeg';
+        resolve(canvas.toDataURL(exportMime, quality));
+      } catch (e) {
+        resolve(dataUrl);
+      }
     };
-    reader.onerror = (error) => reject(error);
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
   });
+}
+
+/**
+ * Converts a file uploaded from local computer into a compressed base64 data URL string
+ */
+export function fileToBase64(file: File, maxWidth = 600, maxHeight = 600, quality = 0.72): Promise<string> {
+  return compressImageFile(file, maxWidth, maxHeight, quality);
 }

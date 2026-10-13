@@ -14,6 +14,7 @@ import SettingKartuPelajar from './common/SettingKartuPelajar';
 import { printBatchStudentCards } from '../utils/qrHelper';
 import { syncCollection, saveDocument } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
+import { compressImageFile } from '../utils/imageHelper';
 
 interface AdminPanelProps {
   students: Student[];
@@ -3039,12 +3040,13 @@ export default function AdminPanel({
                           type="file"
                           accept="image/*"
                           className="hidden"
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                onUpdateHeadmasterName(headmasterName, reader.result as string, undefined, {
+                              try {
+                                const compressed = await compressImageFile(file, 320, 320, 0.85);
+                                safeLocalStorageSet('siakad_logo_left', compressed);
+                                onUpdateHeadmasterName(headmasterName, compressed, undefined, {
                                   nip: headmasterNipInput,
                                   govTitle: govTitleInput,
                                   deptTitle: deptTitleInput,
@@ -3053,8 +3055,9 @@ export default function AdminPanel({
                                   addressText: addressTextInput,
                                   contactText: contactTextInput
                                 });
-                              };
-                              reader.readAsDataURL(file);
+                              } catch (err) {
+                                console.error('Error processing logo left:', err);
+                              }
                             }
                           }}
                         />
@@ -3063,6 +3066,7 @@ export default function AdminPanel({
                         <button
                           type="button"
                           onClick={() => {
+                            safeLocalStorageSet('siakad_logo_left', '');
                             onUpdateHeadmasterName(headmasterName, '', undefined, {
                               nip: headmasterNipInput,
                               govTitle: govTitleInput,
@@ -3103,19 +3107,14 @@ export default function AdminPanel({
                           type="file"
                           accept="image/*"
                           className="hidden"
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                const dataUrl = reader.result as string;
-                                setLogoRightInput(dataUrl);
-                                try {
-                                  localStorage.setItem('siakad_logo_right', dataUrl);
-                                } catch (err) {
-                                  console.warn('Storage error:', err);
-                                }
-                                onUpdateHeadmasterName(headmasterName, undefined, dataUrl, {
+                              try {
+                                const compressed = await compressImageFile(file, 320, 320, 0.85);
+                                setLogoRightInput(compressed);
+                                safeLocalStorageSet('siakad_logo_right', compressed);
+                                onUpdateHeadmasterName(headmasterName, undefined, compressed, {
                                   nip: headmasterNipInput,
                                   govTitle: govTitleInput,
                                   deptTitle: deptTitleInput,
@@ -3124,8 +3123,9 @@ export default function AdminPanel({
                                   addressText: addressTextInput,
                                   contactText: contactTextInput
                                 });
-                              };
-                              reader.readAsDataURL(file);
+                              } catch (err) {
+                                console.error('Error processing logo right:', err);
+                              }
                             }
                           }}
                         />

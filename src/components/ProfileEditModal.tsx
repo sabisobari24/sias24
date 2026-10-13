@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, User, Lock, Mail, Phone, MapPin, Key, Check, AlertCircle, Shield, Camera, Upload, Link2, Calendar, Heart, Quote } from 'lucide-react';
+import { X, User, Lock, Mail, Phone, MapPin, Key, Check, AlertCircle, Shield, Camera, Upload, Link2, Calendar, Heart, Quote, RefreshCw } from 'lucide-react';
 import { Student, Teacher, UserRole } from '../types';
+import { compressImageFile, compressBase64Image, convertGoogleDriveLink } from '../utils/imageHelper';
 
 interface ProfileEditModalProps {
   isOpen: boolean;
@@ -47,6 +48,21 @@ export default function ProfileEditModal({
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [showPasswordFields, setShowPasswordFields] = useState(false);
+  const [isCompressingAvatar, setIsCompressingAvatar] = useState(false);
+
+  const handleAvatarFile = async (file: File) => {
+    if (!file) return;
+    setIsCompressingAvatar(true);
+    try {
+      const compressed = await compressImageFile(file, 350, 350, 0.75);
+      setAvatarUrl(compressed);
+    } catch (err) {
+      console.warn('Gagal memproses gambar:', err);
+      setErrorMsg('Gagal memproses gambar foto. Pastikan format PNG atau JPG.');
+    } finally {
+      setIsCompressingAvatar(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen && activeUser) {
@@ -252,13 +268,17 @@ export default function ProfileEditModal({
           <div className="flex flex-col items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Foto Profil Pengguna</span>
             <div className="relative group">
-              <div className="w-20 h-20 rounded-full overflow-hidden ring-4 ring-indigo-100 shadow-inner bg-slate-200">
-                <img 
-                  src={avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120'} 
-                  alt="Avatar Preview" 
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
-                />
+              <div className="w-20 h-20 rounded-full overflow-hidden ring-4 ring-indigo-100 shadow-inner bg-slate-200 flex items-center justify-center">
+                {isCompressingAvatar ? (
+                  <RefreshCw className="w-6 h-6 text-indigo-600 animate-spin" />
+                ) : (
+                  <img 
+                    src={avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120'} 
+                    alt="Avatar Preview" 
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                )}
               </div>
               <label className="absolute bottom-0 right-0 p-1.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 shadow-md cursor-pointer transition-all">
                 <Camera className="w-3.5 h-3.5" />
@@ -268,13 +288,7 @@ export default function ProfileEditModal({
                   className="hidden" 
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        setAvatarUrl(reader.result as string);
-                      };
-                      reader.readAsDataURL(file);
-                    }
+                    if (file) handleAvatarFile(file);
                   }}
                 />
               </label>
@@ -299,21 +313,20 @@ export default function ProfileEditModal({
 
             {avatarInputMode === 'upload' ? (
               <label className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-[11px] font-semibold transition-all cursor-pointer">
-                <Upload className="w-3.5 h-3.5" />
-                <span>Pilih Foto dari Device</span>
+                {isCompressingAvatar ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5" />
+                )}
+                <span>{isCompressingAvatar ? 'Mengoptimalkan Foto...' : 'Pilih Foto dari Device'}</span>
                 <input 
                   type="file" 
                   accept="image/*" 
                   className="hidden" 
+                  disabled={isCompressingAvatar}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        setAvatarUrl(reader.result as string);
-                      };
-                      reader.readAsDataURL(file);
-                    }
+                    if (file) handleAvatarFile(file);
                   }}
                 />
               </label>
@@ -324,8 +337,14 @@ export default function ProfileEditModal({
                   placeholder="Paste URL Google Drive / Link Foto"
                   value={linkInputVal}
                   onChange={(e) => {
-                    setLinkInputVal(e.target.value);
-                    setAvatarUrl(e.target.value);
+                    const rawVal = e.target.value;
+                    setLinkInputVal(rawVal);
+                    const converted = convertGoogleDriveLink(rawVal);
+                    if (converted.startsWith('data:image/')) {
+                      compressBase64Image(converted, 350, 350, 0.75).then(res => setAvatarUrl(res));
+                    } else {
+                      setAvatarUrl(converted);
+                    }
                   }}
                   className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-[11px] outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"
                 />

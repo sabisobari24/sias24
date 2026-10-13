@@ -872,7 +872,7 @@ export default function GuruPanel({
     const rows = teacherBanks.map(b => [
       b.title,
       b.subject,
-      b.gradeClass || 'Semua Tingkat',
+      b.classId || (b as any).gradeClass || 'Semua Tingkat',
       b.questions?.length || 0,
       b.createdAt || '-',
       teacher.name

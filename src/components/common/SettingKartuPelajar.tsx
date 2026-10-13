@@ -26,6 +26,8 @@ import {
   Download
 } from 'lucide-react';
 import { getEffectiveSchoolLogo, saveSchoolCardLogo, DEFAULT_SCHOOL_LOGO } from '../../utils/schoolLogoHelper';
+import { compressImageFile } from '../../utils/imageHelper';
+import { safeLocalStorageSet } from '../../utils/storageHelper';
 import {
   CARD_BACKGROUND_PRESETS,
   CardBackgroundPreset,
@@ -104,7 +106,7 @@ export default function SettingKartuPelajar() {
   }, []);
 
   // Handle Logo Upload from Local Computer / Storage
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -119,18 +121,19 @@ export default function SettingKartuPelajar() {
     }
 
     setUploadError(null);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        setLogoUrl(result);
+    try {
+      const compressed = await compressImageFile(file, 320, 320, 0.85);
+      if (compressed) {
+        setLogoUrl(compressed);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.warn('Error processing logo:', err);
+      setUploadError('Gagal memproses gambar logo.');
+    }
   };
 
   // Handle Custom Background Upload
-  const handleBgFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBgFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -139,21 +142,17 @@ export default function SettingKartuPelajar() {
       return;
     }
 
-    if (file.size > 3 * 1024 * 1024) {
-      setBgUploadError('Ukuran gambar latar maksimal 3 MB.');
-      return;
-    }
-
     setBgUploadError(null);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        setCustomBgImage(result);
+    try {
+      const compressed = await compressImageFile(file, 640, 400, 0.75);
+      if (compressed) {
+        setCustomBgImage(compressed);
         setBgType('custom_image');
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.warn('Error processing background image:', err);
+      setBgUploadError('Gagal memproses gambar background.');
+    }
   };
 
   // Rules management functions
@@ -191,54 +190,58 @@ export default function SettingKartuPelajar() {
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Save Logo
-    saveSchoolCardLogo(logoUrl);
+    try {
+      // Save Logo
+      saveSchoolCardLogo(logoUrl);
 
-    // Save Card Design & Background & Rules
-    saveCardDesignConfig({
-      presetId: selectedPresetId,
-      bgType,
-      customBgImage,
-      showWatermark,
-      watermarkOpacity,
-      backTitle,
-      rules,
-      footerNote
-    });
+      // Save Card Design & Background & Rules
+      saveCardDesignConfig({
+        presetId: selectedPresetId,
+        bgType,
+        customBgImage,
+        showWatermark,
+        watermarkOpacity,
+        backTitle,
+        rules,
+        footerNote
+      });
 
-    // Save text properties
-    localStorage.setItem('siakad_kop_school_title', schoolName);
-    localStorage.setItem('siakad_card_title', cardTitle);
-    localStorage.setItem('siakad_card_subtitle', cardSubtitle);
-    localStorage.setItem('siakad_card_validity', cardValidity);
-    localStorage.setItem('siakad_headmaster_name', headmasterName);
-    localStorage.setItem('siakad_headmaster_nip', headmasterNip);
-    localStorage.setItem('siakad_card_issue_date', issueDate);
-    localStorage.setItem('siakad_kop_address', schoolAddress);
-    localStorage.setItem('siakad_kop_contact', schoolContact);
+      // Save text properties safely without quota crashes
+      safeLocalStorageSet('siakad_kop_school_title', schoolName);
+      safeLocalStorageSet('siakad_card_title', cardTitle);
+      safeLocalStorageSet('siakad_card_subtitle', cardSubtitle);
+      safeLocalStorageSet('siakad_card_validity', cardValidity);
+      safeLocalStorageSet('siakad_headmaster_name', headmasterName);
+      safeLocalStorageSet('siakad_headmaster_nip', headmasterNip);
+      safeLocalStorageSet('siakad_card_issue_date', issueDate);
+      safeLocalStorageSet('siakad_kop_address', schoolAddress);
+      safeLocalStorageSet('siakad_kop_contact', schoolContact);
 
-    // Sync to Firestore so all student accounts reflect the changes in real-time
-    saveCardDesignToFirestore({
-      presetId: selectedPresetId,
-      bgType,
-      customBgImage,
-      showWatermark,
-      watermarkOpacity,
-      backTitle,
-      rules,
-      footerNote,
-      cardLogo: logoUrl,
-      cardTitle,
-      cardSubtitle,
-      cardValidity,
-      issueDate,
-      schoolName,
-      headmasterName,
-      headmasterNip
-    }).catch(err => console.warn('Error saving card design to Firestore:', err));
+      // Sync to Firestore so all student accounts reflect the changes in real-time
+      saveCardDesignToFirestore({
+        presetId: selectedPresetId,
+        bgType,
+        customBgImage,
+        showWatermark,
+        watermarkOpacity,
+        backTitle,
+        rules,
+        footerNote,
+        cardLogo: logoUrl,
+        cardTitle,
+        cardSubtitle,
+        cardValidity,
+        issueDate,
+        schoolName,
+        headmasterName,
+        headmasterNip
+      }).catch(err => console.warn('Error saving card design to Firestore:', err));
 
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3500);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3500);
+    } catch (err) {
+      console.error('Error saving settings:', err);
+    }
   };
 
   const handleResetToDefaultLogo = () => {

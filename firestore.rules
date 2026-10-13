@@ -149,11 +149,13 @@ service cloud.firestore {
           'staff', 'programs', 'slides', 'subjects', 'extracurriculars',
           'facilities', 'popupImages', 'articles', 'tickers', 'activities',
           'agendas', 'sambutan', 'visi', 'vision', 'missions',
-          'instagram', 'whatsapp', 'email'
+          'instagram', 'whatsapp', 'email', 'createdAt', 'updatedAt'
         ]) &&
         data.id is string && data.id.size() <= 128 &&
         isCleanContent(data) &&
-        (!('schoolLogo' in data) || (data.schoolLogo is string && data.schoolLogo.size() <= 10000)) &&
+        (!('schoolLogo' in data) || (data.schoolLogo is string && data.schoolLogo.size() <= 250000)) &&
+        (!('headImage' in data) || (data.headImage is string && data.headImage.size() <= 250000)) &&
+        (!('headerBgImage' in data) || (data.headerBgImage is string && data.headerBgImage.size() <= 350000)) &&
         (!('akreditasi' in data) || (data.akreditasi is string && data.akreditasi.size() <= 100)) &&
         (!('sambutan' in data) || (data.sambutan is string && data.sambutan.size() <= 5000)) &&
         (!('headMotto' in data) || (data.headMotto is string && data.headMotto.size() <= 5000)) &&

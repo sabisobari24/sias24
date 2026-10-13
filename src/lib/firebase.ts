@@ -133,6 +133,10 @@ export function sanitizeData(data: any): any {
     return null;
   }
   if (typeof data === 'string') {
+    // If it's a data URL image, skip heavy string regexes to avoid UI freeze and corruption
+    if (data.startsWith('data:image/')) {
+      return data;
+    }
     // Purge dangerous scripts, event handlers, and deface URLs
     return data
       .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
@@ -746,6 +750,7 @@ export function saveDocument(collectionPath: string, id: string, data: any) {
   untrackDeletedId(collectionPath, id);
 
   const cleanData = sanitizeData({
+    id,
     ...data,
     updatedAt: new Date().toISOString()
   });

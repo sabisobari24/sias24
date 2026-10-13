@@ -28,6 +28,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { saveDocument, syncCollection, saveDocumentsBatch } from '../lib/firebase';
+import { compressImageFile } from '../utils/imageHelper';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import { printHTML } from '../utils/printHelper';
 import { downloadExcel } from '../utils/excelExport';
@@ -934,14 +935,17 @@ export default function CoachPanel({
   };
 
   // Handle Local Photo Selection Base64 helper
-  const handleLocalPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+  const handleLocalPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setter(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 600, 600, 0.75);
+        if (compressed) {
+          setter(compressed);
+        }
+      } catch (err) {
+        console.error('Failed to process image:', err);
+      }
     }
   };
 

@@ -1,5 +1,6 @@
 // Helper for Student ID Card Design, Background Presets, and Rules Management
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from './schoolLogoHelper';
+import { safeLocalStorageSet } from './storageHelper';
 
 export interface CardBackgroundPreset {
   id: string;
@@ -224,37 +225,41 @@ export function getCardDesignConfig(): CardDesignConfig {
 export function saveCardDesignConfig(config: Partial<CardDesignConfig>): void {
   if (typeof window === 'undefined') return;
 
-  if (config.presetId !== undefined) {
-    localStorage.setItem('siakad_card_preset', config.presetId);
-  }
-  if (config.bgType !== undefined) {
-    localStorage.setItem('siakad_card_bg_type', config.bgType);
-  }
-  if (config.customBgImage !== undefined) {
-    localStorage.setItem('siakad_card_bg_image', config.customBgImage);
-  }
-  if (config.showWatermark !== undefined) {
-    localStorage.setItem('siakad_card_show_watermark', config.showWatermark ? 'true' : 'false');
-  }
-  if (config.watermarkOpacity !== undefined) {
-    localStorage.setItem('siakad_card_watermark_opacity', config.watermarkOpacity.toString());
-  }
-  if (config.backTitle !== undefined) {
-    localStorage.setItem('siakad_card_back_title', config.backTitle);
-  }
-  if (config.footerNote !== undefined) {
-    localStorage.setItem('siakad_card_footer_note', config.footerNote);
-  }
-  if (config.rules !== undefined) {
-    localStorage.setItem('siakad_card_rules', JSON.stringify(config.rules));
-    // Also sync legacy rule1, rule2, rule3 for backward compatibility
-    if (config.rules[0]) localStorage.setItem('siakad_card_rule1', config.rules[0]);
-    if (config.rules[1]) localStorage.setItem('siakad_card_rule2', config.rules[1]);
-    if (config.rules[2]) localStorage.setItem('siakad_card_rule3', config.rules[2]);
-  }
+  try {
+    if (config.presetId !== undefined) {
+      safeLocalStorageSet('siakad_card_preset', config.presetId);
+    }
+    if (config.bgType !== undefined) {
+      safeLocalStorageSet('siakad_card_bg_type', config.bgType);
+    }
+    if (config.customBgImage !== undefined) {
+      safeLocalStorageSet('siakad_card_bg_image', config.customBgImage);
+    }
+    if (config.showWatermark !== undefined) {
+      safeLocalStorageSet('siakad_card_show_watermark', config.showWatermark ? 'true' : 'false');
+    }
+    if (config.watermarkOpacity !== undefined) {
+      safeLocalStorageSet('siakad_card_watermark_opacity', config.watermarkOpacity.toString());
+    }
+    if (config.backTitle !== undefined) {
+      safeLocalStorageSet('siakad_card_back_title', config.backTitle);
+    }
+    if (config.footerNote !== undefined) {
+      safeLocalStorageSet('siakad_card_footer_note', config.footerNote);
+    }
+    if (config.rules !== undefined) {
+      safeLocalStorageSet('siakad_card_rules', JSON.stringify(config.rules));
+      // Also sync legacy rule1, rule2, rule3 for backward compatibility
+      if (config.rules[0]) safeLocalStorageSet('siakad_card_rule1', config.rules[0]);
+      if (config.rules[1]) safeLocalStorageSet('siakad_card_rule2', config.rules[1]);
+      if (config.rules[2]) safeLocalStorageSet('siakad_card_rule3', config.rules[2]);
+    }
 
-  // Notify components
-  window.dispatchEvent(new CustomEvent('siakad_card_design_updated'));
+    // Notify components
+    window.dispatchEvent(new CustomEvent('siakad_card_design_updated'));
+  } catch (err) {
+    console.warn('Error saving card design config:', err);
+  }
 }
 
 export function getPresetById(presetId: string): CardBackgroundPreset {

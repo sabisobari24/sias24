@@ -1,5 +1,6 @@
 // Helper for School Card Logo management and persistence
 import defaultSchoolLogoAsset from '../assets/images/logo_1783497116979.jpg';
+import { safeLocalStorageSet } from './storageHelper';
 
 export const DEFAULT_SCHOOL_LOGO = defaultSchoolLogoAsset;
 
@@ -25,14 +26,18 @@ export function getEffectiveSchoolLogo(): string {
 export function saveSchoolCardLogo(logoUrl: string): void {
   if (typeof window === 'undefined') return;
 
-  if (logoUrl && logoUrl.trim() !== '') {
-    localStorage.setItem('siakad_logo_kartu_pelajar', logoUrl);
-    // Also sync to siakad_logo_right for Kop Surat consistency
-    localStorage.setItem('siakad_logo_right', logoUrl);
-  } else {
-    localStorage.removeItem('siakad_logo_kartu_pelajar');
-  }
+  try {
+    if (logoUrl && logoUrl.trim() !== '') {
+      safeLocalStorageSet('siakad_logo_kartu_pelajar', logoUrl);
+      // Also sync to siakad_logo_right for Kop Surat consistency
+      safeLocalStorageSet('siakad_logo_right', logoUrl);
+    } else {
+      localStorage.removeItem('siakad_logo_kartu_pelajar');
+    }
 
-  // Dispatch custom event to notify all components
-  window.dispatchEvent(new CustomEvent('siakad_logo_updated', { detail: { logo: logoUrl } }));
+    // Dispatch custom event to notify all components
+    window.dispatchEvent(new CustomEvent('siakad_logo_updated', { detail: { logo: logoUrl } }));
+  } catch (err) {
+    console.warn('Error saving school card logo:', err);
+  }
 }

@@ -1,6 +1,6 @@
-import React from 'react';
-import { Upload, Link } from 'lucide-react';
-import { fileToBase64, convertGoogleDriveLink } from '../utils/imageHelper';
+import React, { useState } from 'react';
+import { Upload, Link, RefreshCw } from 'lucide-react';
+import { fileToBase64, convertGoogleDriveLink, compressBase64Image } from '../utils/imageHelper';
 import { WebIcon } from './website/WebIcon';
 
 interface MediaUploadSelectorProps {
@@ -90,22 +90,31 @@ export default function MediaUploadSelector({
   type = 'image'
 }: MediaUploadSelectorProps) {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setIsUploading(true);
     try {
-      const b64 = await fileToBase64(file);
+      const b64 = await fileToBase64(file, 600, 600, 0.75);
       onChange(b64);
     } catch (err) {
-      alert('Gagal membaca file gambar. Silakan coba lagi.');
+      console.warn('Gagal memproses gambar:', err);
+      alert('Gagal membaca file gambar. Pastikan format file PNG atau JPG.');
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleLinkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawUrl = e.target.value;
     const converted = convertGoogleDriveLink(rawUrl);
-    onChange(converted);
+    if (converted.startsWith('data:image/')) {
+      compressBase64Image(converted, 600, 600, 0.75).then(res => onChange(res));
+    } else {
+      onChange(converted);
+    }
   };
 
   return (
@@ -132,17 +141,23 @@ export default function MediaUploadSelector({
         {/* Upload Button */}
         <button
           type="button"
+          disabled={isUploading}
           onClick={() => fileInputRef.current?.click()}
-          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 border border-slate-200 cursor-pointer transition-colors shrink-0"
+          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 border border-slate-200 cursor-pointer transition-colors shrink-0 disabled:opacity-50"
         >
-          <Upload className="w-3.5 h-3.5 text-slate-500" />
-          <span>Upload File</span>
+          {isUploading ? (
+            <RefreshCw className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
+          ) : (
+            <Upload className="w-3.5 h-3.5 text-slate-500" />
+          )}
+          <span>{isUploading ? 'Memproses...' : 'Upload File'}</span>
         </button>
         <input
           type="file"
           ref={fileInputRef}
           accept="image/*"
           className="hidden"
+          disabled={isUploading}
           onChange={handleFileChange}
         />
       </div>

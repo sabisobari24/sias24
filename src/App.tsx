@@ -583,7 +583,7 @@ export default function App({ initialMode }: AppProps = {}) {
 
   // Page mode: 'landing' (index.html) or 'portal' (login.html)
   const [pageMode, setPageMode] = useState<'landing' | 'portal'>(() => {
-    if (initialMode) return initialMode;
+    if (initialMode === 'portal') return 'portal';
     if (typeof window !== 'undefined') {
       const pathname = window.location.pathname.toLowerCase();
       const search = window.location.search.toLowerCase();
@@ -596,9 +596,19 @@ export default function App({ initialMode }: AppProps = {}) {
       ) {
         return 'portal';
       }
+      const savedPageMode = localStorage.getItem('siakad_page_mode');
+      const savedUser = localStorage.getItem('siakad_active_user');
+      const savedRole = localStorage.getItem('siakad_active_role');
+      if (savedUser && savedRole && savedPageMode === 'portal') {
+        return 'portal';
+      }
     }
-    return 'landing';
+    return initialMode || 'landing';
   });
+
+  useEffect(() => {
+    safeLocalStorageSet('siakad_page_mode', pageMode);
+  }, [pageMode]);
 
   // Sync pageMode when URL changes
   useEffect(() => {
@@ -669,12 +679,12 @@ export default function App({ initialMode }: AppProps = {}) {
 
   const [adminTabOverride, setAdminTabOverride] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | null>(null);
 
-  const [siswaTab, setSiswaTab] = useState<'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan'>('profil');
+  const [siswaTab, setSiswaTab] = useState<'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | 'elearning'>('profil');
   const [orangTuaTab, setOrangTuaTab] = useState<'profil' | 'absensi' | 'pelanggaran' | 'catatan' | 'komunikasi'>('profil');
-  const [guruTab, setGuruTab] = useState<'presensi' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal'>('presensi');
+  const [guruTab, setGuruTab] = useState<'presensi' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal' | 'elearning'>('presensi');
   const [waliKelasTab, setWaliKelasTab] = useState<'beranda' | 'catatan' | 'ekskul' | 'prestasi' | 'pesan'>('beranda');
-  const [bkTab, setBkTab] = useState<'beranda' | 'bimbingan' | 'jurnal' | 'jadwal' | 'pesan'>('beranda');
-  const [guruWaliTab, setGuruWaliTab] = useState<'beranda' | 'bimbingan' | 'bakat-minat' | 'pesan'>('beranda');
+  const [bkTab, setBkTab] = useState<'beranda' | 'bimbingan' | 'jurnal' | 'jadwal' | 'pesan' | 'prestasi'>('beranda');
+  const [guruWaliTab, setGuruWaliTab] = useState<'beranda' | 'bimbingan' | 'bimbingan-bk' | 'bakat-minat' | 'pesan'>('beranda');
   const [piketTab, setPiketTab] = useState<'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri'>('pintu-depan');
   const [tendikTab, setTendikTab] = useState<'ringkasan' | 'pemberkasan' | 'kjp' | 'nomor-surat' | 'inventaris' | 'peminjaman-barang' | 'bos-bop'>('ringkasan');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -1273,6 +1283,7 @@ export default function App({ initialMode }: AppProps = {}) {
     safeLocalStorageSet('siakad_kop_doc_number', docNumber);
     
     saveDocument('settings', 'headmaster', { 
+      id: 'headmaster',
       name, 
       nip,
       logoLeft: finalLogoLeft, 
@@ -1284,7 +1295,7 @@ export default function App({ initialMode }: AppProps = {}) {
       addressText,
       contactText,
       docNumber
-    });
+    }).catch(err => console.error("Error saving headmaster info:", err));
   };
 
   // --- INTEGRATED DATABASE LOGIC METHODS ---
@@ -1517,7 +1528,7 @@ export default function App({ initialMode }: AppProps = {}) {
       isVerifiedByMapel: isVerified,
       verifiedByPiketAt: role === 'piket' ? nowStr : (item.verifiedByPiketAt || nowStr),
       verifiedByMapelAt: role === 'mapel' ? nowStr : (item.verifiedByMapelAt || nowStr),
-      verificationStatus: isVerified ? 'Verified' : 'Rejected',
+      verificationStatus: (isVerified ? 'Verified' : 'Rejected') as 'Verified' | 'Rejected',
     };
 
     setAttendance((prev) => {
@@ -1726,62 +1737,76 @@ export default function App({ initialMode }: AppProps = {}) {
   };
 
   const handleAddStudent = (s: Student) => {
-    setStudents((prev) => {
-      const next = [...prev.filter((i) => i.id !== s.id), s];
-      localStorage.setItem('siakad_students', JSON.stringify(next));
-      return next;
-    });
-    saveDocument('students', s.id, s)
-      .catch((err) => console.error("Error adding student:", err));
+    try {
+      const next = [...students.filter((i) => i.id !== s.id), s];
+      setStudents(next);
+      safeLocalStorageSet('siakad_students', JSON.stringify(next));
+      saveDocument('students', s.id, s)
+        .catch((err) => console.error("Error adding student:", err));
+    } catch (err) {
+      console.error("Error adding student:", err);
+    }
   };
 
   const handleUpdateStudent = (s: Student) => {
-    setStudents((prev) => {
-      const next = prev.map((i) => i.id === s.id ? { ...i, ...s } : i);
-      localStorage.setItem('siakad_students', JSON.stringify(next));
-      return next;
-    });
-    saveDocument('students', s.id, s)
-      .catch((err) => console.error("Error updating student:", err));
+    try {
+      const next = students.map((i) => i.id === s.id ? { ...i, ...s } : i);
+      setStudents(next);
+      safeLocalStorageSet('siakad_students', JSON.stringify(next));
+      saveDocument('students', s.id, s)
+        .catch((err) => console.error("Error updating student:", err));
+    } catch (err) {
+      console.error("Error updating student:", err);
+    }
   };
 
   const handleDeleteStudent = (id: string) => {
-    setStudents((prev) => {
-      const next = prev.filter((i) => i.id !== id);
-      localStorage.setItem('siakad_students', JSON.stringify(next));
-      return next;
-    });
-    deleteDocument('students', id)
-      .catch((err) => console.error("Error deleting student:", err));
+    try {
+      const next = students.filter((i) => i.id !== id);
+      setStudents(next);
+      safeLocalStorageSet('siakad_students', JSON.stringify(next));
+      deleteDocument('students', id)
+        .catch((err) => console.error("Error deleting student:", err));
+    } catch (err) {
+      console.error("Error deleting student:", err);
+    }
   };
 
   const handleAddTeacher = (t: Teacher) => {
-    setTeachers((prev) => {
-      const next = [...prev.filter((i) => i.id !== t.id), t];
-      localStorage.setItem('siakad_teachers', JSON.stringify(next));
-      return next;
-    });
-    saveDocument('teachers', t.id, t)
-      .catch((err) => console.error("Error adding teacher:", err));
+    try {
+      const next = [...teachers.filter((i) => i.id !== t.id), t];
+      setTeachers(next);
+      safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
+      saveDocument('teachers', t.id, t)
+        .catch((err) => console.error("Error adding teacher:", err));
+    } catch (err) {
+      console.error("Error adding teacher:", err);
+    }
   };
 
   const handleUpdateTeacher = (t: Teacher) => {
-    setTeachers((prev) => {
-      const next = prev.map((i) => i.id === t.id ? { ...i, ...t } : i);
-      localStorage.setItem('siakad_teachers', JSON.stringify(next));
-      return next;
-    });
-    saveDocument('teachers', t.id, t)
-      .catch((err) => console.error("Error updating teacher:", err));
+    try {
+      const next = teachers.map((i) => i.id === t.id ? { ...i, ...t } : i);
+      setTeachers(next);
+      safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
+      saveDocument('teachers', t.id, t)
+        .catch((err) => console.error("Error updating teacher:", err));
+    } catch (err) {
+      console.error("Error updating teacher:", err);
+    }
   };
 
   const handleSaveProfile = (updatedUser: any) => {
-    if (activeRole === 'orang_tua' || activeRole === 'siswa') {
-      handleUpdateStudent(updatedUser);
+    try {
+      if (activeRole === 'orang_tua' || activeRole === 'siswa') {
+        handleUpdateStudent(updatedUser);
+      } else {
+        handleUpdateTeacher(updatedUser);
+      }
       setActiveUser(updatedUser);
-    } else {
-      handleUpdateTeacher(updatedUser);
-      setActiveUser(updatedUser);
+      safeLocalStorageSet('siakad_active_user', JSON.stringify(updatedUser));
+    } catch (err) {
+      console.error("Error saving profile:", err);
     }
   };
 
@@ -2401,6 +2426,7 @@ export default function App({ initialMode }: AppProps = {}) {
     setActiveRole(null);
     setActiveUser(null);
     setAdminTabOverride(null);
+    safeLocalStorageSet('siakad_page_mode', 'landing');
   };
 
   // Instant Login Handler from selection
@@ -2460,7 +2486,7 @@ export default function App({ initialMode }: AppProps = {}) {
   const totalBKNotes = counselorNotes.length;
   const resolvedBKNotes = counselorNotes.filter(n => {
     const notesStr = n.notes ? n.notes.toLowerCase() : '';
-    return notesStr.includes('selesai') || notesStr.includes('bina') || notesStr.includes('bimbingan') || notesStr.includes('baik') || n.acknowledgedByParent;
+    return notesStr.includes('selesai') || notesStr.includes('bina') || notesStr.includes('bimbingan') || notesStr.includes('baik') || (n as any).acknowledgedByParent;
   }).length;
   const bkResolutionRate = totalBKNotes > 0
     ? parseFloat(((resolvedBKNotes / totalBKNotes) * 100).toFixed(1))
