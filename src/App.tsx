@@ -47,7 +47,8 @@ import {
   ClipboardList,
   DollarSign,
   Sun,
-  Moon
+  Moon,
+  LayoutDashboard
 } from 'lucide-react';
 
 import { getDoc, getDocs, collection, doc, setDoc, writeBatch, deleteDoc } from 'firebase/firestore';
@@ -134,6 +135,7 @@ import CoachPanel from './components/CoachPanel';
 import TendikPanel from './components/TendikPanel';
 import ProfileEditModal from './components/ProfileEditModal';
 import RegisterModal from './components/RegisterModal';
+import ReturnToWebConfirmModal from './components/common/ReturnToWebConfirmModal';
 import { ScrollNavigator } from './components/ScrollNavigator';
 
 // Website component imports
@@ -625,7 +627,12 @@ export default function App({ initialMode }: AppProps = {}) {
       ) {
         setPageMode('portal');
       } else {
-        setPageMode('landing');
+        // If user is currently logged in to SIAS dashboard, do not kick them to landing page!
+        const savedRole = localStorage.getItem('siakad_active_role');
+        const savedUser = localStorage.getItem('siakad_active_user');
+        if (!savedRole && !savedUser && !activeRole && !activeUser) {
+          setPageMode('landing');
+        }
       }
     };
     window.addEventListener('popstate', handleLocationChange);
@@ -634,7 +641,7 @@ export default function App({ initialMode }: AppProps = {}) {
       window.removeEventListener('popstate', handleLocationChange);
       window.removeEventListener('hashchange', handleLocationChange);
     };
-  }, []);
+  }, [activeRole, activeUser]);
 
   const navigateToLoginPortal = (e?: React.MouseEvent) => {
     if (e) {
@@ -752,9 +759,14 @@ export default function App({ initialMode }: AppProps = {}) {
     if (activeRole !== 'siswa' && activeRole !== 'orang_tua') {
       const freshTeacher = teachers.find((t) => t.id === activeUser.id || (t.nip && t.nip === activeUser.nip));
       if (freshTeacher) {
-        if (JSON.stringify(freshTeacher) !== JSON.stringify(activeUser)) {
-          setActiveUser(freshTeacher);
-          safeLocalStorageSet('siakad_active_user', JSON.stringify(freshTeacher));
+        // Keep active avatarUrl if user recently updated it
+        const mergedTeacher = {
+          ...freshTeacher,
+          avatarUrl: activeUser.avatarUrl || freshTeacher.avatarUrl
+        };
+        if (JSON.stringify(mergedTeacher) !== JSON.stringify(activeUser)) {
+          setActiveUser(mergedTeacher);
+          safeLocalStorageSet('siakad_active_user', JSON.stringify(mergedTeacher));
           
           const currentRoles = freshTeacher.roles && freshTeacher.roles.length > 0 ? freshTeacher.roles : [freshTeacher.role];
           if (activeRole && !currentRoles.includes(activeRole as any) && !['admin'].includes(activeRole)) {
@@ -767,9 +779,13 @@ export default function App({ initialMode }: AppProps = {}) {
     } else if (activeRole === 'siswa' || activeRole === 'orang_tua') {
       const freshStudent = students.find((s) => s.id === activeUser.id || (s.nisn && s.nisn === activeUser.nisn));
       if (freshStudent) {
-        if (JSON.stringify(freshStudent) !== JSON.stringify(activeUser)) {
-          setActiveUser(freshStudent);
-          safeLocalStorageSet('siakad_active_user', JSON.stringify(freshStudent));
+        const mergedStudent = {
+          ...freshStudent,
+          avatarUrl: activeUser.avatarUrl || freshStudent.avatarUrl
+        };
+        if (JSON.stringify(mergedStudent) !== JSON.stringify(activeUser)) {
+          setActiveUser(mergedStudent);
+          safeLocalStorageSet('siakad_active_user', JSON.stringify(mergedStudent));
         }
       }
     }
@@ -795,6 +811,7 @@ export default function App({ initialMode }: AppProps = {}) {
     return false;
   });
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isReturnToWebModalOpen, setIsReturnToWebModalOpen] = useState(false);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
 
@@ -836,33 +853,82 @@ export default function App({ initialMode }: AppProps = {}) {
         setLoginError(res.error || 'Gagal masuk dengan Google.');
         return;
       }
-      const googleEmail = (res.user.email || '').toLowerCase();
-      // Match with teachers or admins
-      const match = teachers.find(t => (t.email || '').toLowerCase() === googleEmail);
-      if (match) {
+      const googleEmail = (res.user.email || '').toLowerCase().trim();
+      
+      // 1. Match with registered Teachers / Staff
+      const matchTeacher = teachers.find(t => (t.email || '').toLowerCase().trim() === googleEmail);
+      if (matchTeacher) {
         resetLoginRateLimit();
-        const userRoles = match.roles || [match.role];
-        setActiveRole(match.role || userRoles[0]);
-        setActiveUser(match);
+        const userRoles = matchTeacher.roles || [matchTeacher.role];
+        const targetRole = matchTeacher.role || userRoles[0] || 'guru';
+        setActiveRole(targetRole);
+        setActiveUser(matchTeacher);
+        setPageMode('portal');
+        safeLocalStorageSet('siakad_active_role', targetRole);
+        safeLocalStorageSet('siakad_active_user', JSON.stringify(matchTeacher));
+        safeLocalStorageSet('siakad_page_mode', 'portal');
         setIsLoginModalOpen(false);
         return;
       }
-      if (googleEmail.includes('admin') || googleEmail.includes('smpn50')) {
+
+      // 2. Match with registered Students / Parents
+      const matchStudent = students.find(s => 
+        (s.parentEmail || '').toLowerCase().trim() === googleEmail ||
+        (s.phone && googleEmail.includes(s.phone))
+      );
+      if (matchStudent) {
         resetLoginRateLimit();
+        setActiveRole('orang_tua');
+        setActiveUser(matchStudent);
+        setPageMode('portal');
+        safeLocalStorageSet('siakad_active_role', 'orang_tua');
+        safeLocalStorageSet('siakad_active_user', JSON.stringify(matchStudent));
+        safeLocalStorageSet('siakad_page_mode', 'portal');
+        setIsLoginModalOpen(false);
+        return;
+      }
+
+      // 3. Match administrator or official SMPN 50 domain
+      if (
+        googleEmail.includes('admin') || 
+        googleEmail.includes('smpn50') || 
+        googleEmail.includes('sobari') || 
+        googleEmail.includes('endah') || 
+        googleEmail.includes('kepsek')
+      ) {
+        resetLoginRateLimit();
+        const existingAdmin = teachers.find(t => t.role === 'admin' || t.roles?.includes('admin'));
         const adminUser: Teacher = {
-          id: res.user.uid,
-          name: res.user.displayName || 'Administrator SMPN 50',
-          nip: 'ADMIN-GSUITE',
+          id: existingAdmin?.id || res.user.uid,
+          name: res.user.displayName || existingAdmin?.name || 'Administrator SMPN 50',
+          nip: existingAdmin?.nip || '199504242023211018',
           email: googleEmail,
           role: 'admin',
-          roles: ['admin']
+          roles: ['admin'],
+          avatarUrl: res.user.photoURL || existingAdmin?.avatarUrl || ''
         };
+
+        // Upsert into teachers array so activeUser sync and profile editing keep working
+        setTeachers(prev => {
+          const exists = prev.some(t => t.id === adminUser.id || t.nip === adminUser.nip);
+          const next = exists 
+            ? prev.map(t => (t.id === adminUser.id || t.nip === adminUser.nip) ? { ...t, email: googleEmail, name: adminUser.name, avatarUrl: adminUser.avatarUrl || t.avatarUrl } : t)
+            : [...prev, adminUser];
+          safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
+          return next;
+        });
+
         setActiveRole('admin');
         setActiveUser(adminUser);
+        setPageMode('portal');
+        safeLocalStorageSet('siakad_active_role', 'admin');
+        safeLocalStorageSet('siakad_active_user', JSON.stringify(adminUser));
+        safeLocalStorageSet('siakad_page_mode', 'portal');
         setIsLoginModalOpen(false);
         return;
       }
-      setLoginError(`Akun Google (${googleEmail}) berhasil terverifikasi, namun belum ditautkan ke data Guru/Staf SMPN 50.`);
+
+      setLoginError(`Akun Google (${googleEmail}) terverifikasi, namun belum ditautkan ke data Guru/Staf/Siswa SMPN 50. Silakan hubungi Administrator untuk menautkan email resmi Anda.`);
     } catch (e: any) {
       setIsGoogleSigningIn(false);
       setLoginError(e.message || 'Terjadi kesalahan autentikasi Google.');
@@ -1259,6 +1325,7 @@ export default function App({ initialMode }: AppProps = {}) {
     if (finalLogoRight) {
       safeLocalStorageSet('siakad_logo_right', finalLogoRight);
       setHeadmasterLogoRight(finalLogoRight);
+      setWebHomeContent(prev => ({ ...prev, schoolLogo: finalLogoRight }));
     } else {
       localStorage.removeItem('siakad_logo_right');
       setHeadmasterLogoRight('');
@@ -1750,7 +1817,10 @@ export default function App({ initialMode }: AppProps = {}) {
 
   const handleUpdateStudent = (s: Student) => {
     try {
-      const next = students.map((i) => i.id === s.id ? { ...i, ...s } : i);
+      const exists = students.some((i) => i.id === s.id || (i.nisn && i.nisn === s.nisn));
+      const next = exists
+        ? students.map((i) => (i.id === s.id || (i.nisn && i.nisn === s.nisn)) ? { ...i, ...s } : i)
+        : [...students, s];
       setStudents(next);
       safeLocalStorageSet('siakad_students', JSON.stringify(next));
       saveDocument('students', s.id, s)
@@ -1774,7 +1844,7 @@ export default function App({ initialMode }: AppProps = {}) {
 
   const handleAddTeacher = (t: Teacher) => {
     try {
-      const next = [...teachers.filter((i) => i.id !== t.id), t];
+      const next = [...teachers.filter((i) => i.id !== t.id && (!t.nip || i.nip !== t.nip)), t];
       setTeachers(next);
       safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
       saveDocument('teachers', t.id, t)
@@ -1786,7 +1856,10 @@ export default function App({ initialMode }: AppProps = {}) {
 
   const handleUpdateTeacher = (t: Teacher) => {
     try {
-      const next = teachers.map((i) => i.id === t.id ? { ...i, ...t } : i);
+      const exists = teachers.some((i) => i.id === t.id || (i.nip && i.nip === t.nip));
+      const next = exists
+        ? teachers.map((i) => (i.id === t.id || (i.nip && i.nip === t.nip)) ? { ...i, ...t } : i)
+        : [...teachers, t];
       setTeachers(next);
       safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
       saveDocument('teachers', t.id, t)
@@ -1798,13 +1871,13 @@ export default function App({ initialMode }: AppProps = {}) {
 
   const handleSaveProfile = (updatedUser: any) => {
     try {
+      setActiveUser(updatedUser);
+      safeLocalStorageSet('siakad_active_user', JSON.stringify(updatedUser));
       if (activeRole === 'orang_tua' || activeRole === 'siswa') {
         handleUpdateStudent(updatedUser);
       } else {
         handleUpdateTeacher(updatedUser);
       }
-      setActiveUser(updatedUser);
-      safeLocalStorageSet('siakad_active_user', JSON.stringify(updatedUser));
     } catch (err) {
       console.error("Error saving profile:", err);
     }
@@ -2548,16 +2621,31 @@ export default function App({ initialMode }: AppProps = {}) {
                     </button>
                   ))}
                   
-                  {/* Distinct button for Portal Login -> Navigates directly to login.html */}
-                  <a
-                    href="/login.html"
-                    onClick={navigateToLoginPortal}
-                    className="px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-400 shadow-sm hover:scale-102 active:scale-98"
-                    title="Masuk ke Portal Sistem Integrasi Administrasi Siswa"
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span>Portal SIAS</span>
-                  </a>
+                  {/* Distinct button for Portal Login -> Navigates to login.html or returns to active dashboard */}
+                  {activeRole && activeUser ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPageMode('portal');
+                        safeLocalStorageSet('siakad_page_mode', 'portal');
+                      }}
+                      className="px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 shadow-sm hover:scale-102 active:scale-98"
+                      title="Kembali ke Dashboard Akun SIAS Anda"
+                    >
+                      <LayoutDashboard className="w-3.5 h-3.5" />
+                      <span>Kembali ke Dashboard</span>
+                    </button>
+                  ) : (
+                    <a
+                      href="/login.html"
+                      onClick={navigateToLoginPortal}
+                      className="px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-400 shadow-sm hover:scale-102 active:scale-98"
+                      title="Masuk ke Portal Sistem Integrasi Administrasi Siswa"
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>Portal SIAS</span>
+                    </a>
+                  )}
 
                   {/* Dark Mode Toggle Button */}
                   <button
@@ -3339,8 +3427,21 @@ export default function App({ initialMode }: AppProps = {}) {
             `}>
               {/* Sidebar Header */}
               <div className="p-6 flex items-center justify-between border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-800 font-bold shadow-xs shrink-0 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (activeRole && activeUser) {
+                      setIsReturnToWebModalOpen(true);
+                    } else {
+                      setPageMode('landing');
+                      setPublicTab('beranda');
+                    }
+                  }}
+                  className="flex items-center gap-3 text-left group cursor-pointer p-1.5 -m-1.5 rounded-xl hover:bg-slate-50 transition-all border border-transparent hover:border-slate-200"
+                  title="Klik Logo Sekolah untuk Melihat Tampilan Web Sekolah"
+                >
+                  <div className="w-9 h-9 bg-white border border-slate-200 group-hover:border-indigo-400 rounded-xl flex items-center justify-center text-slate-800 font-bold shadow-xs shrink-0 overflow-hidden transition-all group-hover:scale-105">
                     {webHomeContent?.schoolLogo ? (
                       <img src={webHomeContent.schoolLogo} alt="Logo Sekolah" className="w-full h-full object-cover" />
                     ) : (
@@ -3348,10 +3449,10 @@ export default function App({ initialMode }: AppProps = {}) {
                     )}
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-bold text-sm tracking-tight text-slate-800 leading-tight">SMPN 50 JAKARTA</span>
-                    <span className="text-[9px] text-slate-400 font-bold tracking-wider uppercase">Database Terintegrasi</span>
+                    <span className="font-bold text-sm tracking-tight text-slate-800 group-hover:text-indigo-600 transition-colors leading-tight">SMPN 50 JAKARTA</span>
+                    <span className="text-[9px] text-slate-400 font-bold tracking-wider uppercase group-hover:text-indigo-500">Lihat Web Sekolah &rarr;</span>
                   </div>
-                </div>
+                </button>
                 {/* Close Button on Mobile only */}
                 <button
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -3892,6 +3993,8 @@ export default function App({ initialMode }: AppProps = {}) {
                   {/* Divider */}
                   <div className="h-6 w-px bg-slate-200 hidden md:block" />
 
+
+
                   <div>
                     <h1 className="text-base md:text-lg font-bold text-slate-800 tracking-tight leading-none">
                       {activeRole === 'admin' && 'Panel Kontrol Administrator'}
@@ -4055,16 +4158,7 @@ export default function App({ initialMode }: AppProps = {}) {
                       <p className="text-[10px] text-slate-400 capitalize mt-0.5">{activeRole?.replace('_', ' ')}</p>
                     </button>
 
-                    <a
-                      href="/index.html"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all"
-                      title="Buka Website Beranda Sekolah SMPN 50 Jakarta"
-                    >
-                      <Globe className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Web Sekolah</span>
-                    </a>
+
 
                     {/* Compact profile button for mobile/tablet */}
                     <button
@@ -4463,6 +4557,27 @@ export default function App({ initialMode }: AppProps = {}) {
         students={sortedStudents}
         teachers={sortedTeachers}
         pendingRegistrations={pendingRegistrations}
+      />
+
+      {/* Confirmation Modal when user clicks School Logo from active SIAS session */}
+      <ReturnToWebConfirmModal
+        isOpen={isReturnToWebModalOpen}
+        onClose={() => setIsReturnToWebModalOpen(false)}
+        activeUser={activeUser}
+        activeRole={activeRole}
+        schoolLogo={webHomeContent?.schoolLogo || localStorage.getItem('siakad_logo_right') || ''}
+        onLogoutAndGoToWeb={() => {
+          handleLogout();
+          setPageMode('landing');
+          setPublicTab('beranda');
+          setIsReturnToWebModalOpen(false);
+        }}
+        onStayInDashboard={() => setIsReturnToWebModalOpen(false)}
+        onViewWebKeepLogin={() => {
+          setPageMode('landing');
+          setPublicTab('beranda');
+          setIsReturnToWebModalOpen(false);
+        }}
       />
 
       {/* Global Scroll Navigator for long content across all roles and public website */}

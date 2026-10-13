@@ -110,7 +110,17 @@ export async function signInWithGoogle() {
     return { success: true, user: result.user };
   } catch (err: any) {
     console.error('Google Sign-In Error:', err);
-    return { success: false, error: err.message || 'Gagal masuk dengan Google.' };
+    let errorMsg = err?.message || 'Gagal masuk dengan Google.';
+    if (err?.code === 'auth/popup-blocked') {
+      errorMsg = 'Jendela pop-up Google terblokir oleh browser. Izinkan pop-up untuk situs ini lalu coba lagi.';
+    } else if (err?.code === 'auth/popup-closed-by-user') {
+      errorMsg = 'Proses login Google dibatalkan (jendela ditutup sebelum selesai).';
+    } else if (err?.code === 'auth/cancelled-popup-request') {
+      errorMsg = 'Permintaan login Google sebelumnya dibatalkan. Silakan klik sekali lagi.';
+    } else if (err?.code === 'auth/network-request-failed') {
+      errorMsg = 'Koneksi internet terganggu saat menghubungkan ke akun Google.';
+    }
+    return { success: false, error: errorMsg };
   }
 }
 
