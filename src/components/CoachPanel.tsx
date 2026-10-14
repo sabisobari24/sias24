@@ -35,6 +35,7 @@ import { downloadExcel } from '../utils/excelExport';
 import { Student, Teacher, WebSectionContent, WebExtracurricular, StudentAchievement } from '../types';
 import { INITIAL_WEB_CONTENT } from '../data/initialWebContent';
 import { WebIcon } from './website/WebIcon';
+import { useDownload } from '../context/DownloadContext';
 
 interface CoachPanelProps {
   activeUser: Teacher;
@@ -952,6 +953,33 @@ export default function CoachPanel({
   // Get active student members
   const memberStudents = students.filter(s => memberIds.includes(s.id));
 
+  // Contextual download config for Coach Panel
+  const getCoachDownloadConfig = () => {
+    switch (activeTab) {
+      case 'absensi':
+        return [
+          { label: 'Rekap Kehadiran (Excel)', onClick: handleDownloadAttendanceRecap, type: 'excel' as const },
+        ];
+      case 'nilai':
+        return [
+          { label: 'Nilai Ekskul (Excel)', onClick: handleDownloadExcelGrades, type: 'excel' as const },
+          { label: 'Nilai Ekskul (PDF)', onClick: handleDownloadPDFGrades, type: 'pdf' as const },
+        ];
+      default:
+        return [
+          { label: 'Rekap Kehadiran (Excel)', onClick: handleDownloadAttendanceRecap, type: 'excel' as const },
+          { label: 'Nilai Ekskul (Excel)', onClick: handleDownloadExcelGrades, type: 'excel' as const },
+        ];
+    }
+  };
+
+  const { setDownloadActions, clearDownloadActions } = useDownload();
+
+  useEffect(() => {
+    setDownloadActions(getCoachDownloadConfig());
+    return () => clearDownloadActions();
+  }, [activeTab]);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
       {/* HEADER BAR */}
@@ -968,17 +996,33 @@ export default function CoachPanel({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {getCoachDownloadConfig().map((btn, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={btn.onClick}
+              className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
+              title={btn.label}
+            >
+              {btn.type === 'excel' ? (
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              ) : (
+                <FileText className="w-3.5 h-3.5 text-amber-600" />
+              )}
+              <span>{btn.label}</span>
+            </button>
+          ))}
           <span className="bg-emerald-500/20 text-emerald-400 font-black text-[10px] px-3 py-1.5 rounded-full uppercase tracking-wider flex items-center gap-1">
             <Globe className="w-3.5 h-3.5" />
-            <span>Website Ter-Sinkronisasi</span>
+            <span className="hidden sm:inline">Tersinkronisasi</span>
           </span>
           <button
             onClick={onLogout}
-            className="bg-rose-600/90 hover:bg-rose-700 font-bold text-xs text-white px-4 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-md border border-rose-500"
+            className="bg-rose-600/90 hover:bg-rose-700 font-bold text-xs text-white px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-md border border-rose-500"
           >
             <LogOut className="w-4 h-4" />
-            <span>Keluar Portal</span>
+            <span>Keluar</span>
           </button>
         </div>
       </header>

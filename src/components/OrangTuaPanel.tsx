@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Student, Attendance, StudentViolation, CounselorNote, HomeroomNote, ViolationType, SchoolClass, Teacher, ParentMessage, BimbinganSchedule, StudentAchievement, PemberkasanSchedule } from '../types';
 import { User, Calendar, AlertTriangle, FileText, HeartHandshake, CheckCircle2, MessageSquare, Send, Check, RefreshCw, Clock, Award, Download, Sparkles, FileCheck } from 'lucide-react';
-import { printCertificate } from '../utils/printHelper';
+import { printCertificate, printTablePDF } from '../utils/printHelper';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
+import { useDownload } from '../context/DownloadContext';
 
 interface OrangTuaPanelProps {
   student: Student;
@@ -79,6 +80,36 @@ export default function OrangTuaPanel({
     setNewMessage('');
   };
 
+  const getParentDownloadConfig = () => {
+    return [
+      {
+        label: 'Presensi Anak (PDF)',
+        onClick: () => {
+          const headers = ["Tanggal", "Status", "Keterangan"];
+          const rows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
+          printTablePDF(`Rekap Kehadiran Siswa - ${student.name}`, headers, rows, headmasterName);
+        },
+        type: 'pdf' as const,
+      },
+      {
+        label: 'Kedisiplinan (PDF)',
+        onClick: () => {
+          const headers = ["Tanggal", "Pelanggaran", "Poin"];
+          const rows = studentViolations.map(v => [v.date, violationTypes.find(vt => vt.id === v.violationTypeId)?.name || 'Pelanggaran', `${v.points} Poin`]);
+          printTablePDF(`Catatan Kedisiplinan Siswa - ${student.name}`, headers, rows, headmasterName);
+        },
+        type: 'pdf' as const,
+      }
+    ];
+  };
+
+  const { setDownloadActions, clearDownloadActions } = useDownload();
+
+  useEffect(() => {
+    setDownloadActions(getParentDownloadConfig());
+    return () => clearDownloadActions();
+  }, [student.id, studentAttendance.length, studentViolations.length]);
+
   return (
     <div className="space-y-6">
       {/* Parent Header */}
@@ -97,9 +128,27 @@ export default function OrangTuaPanel({
               </p>
             </div>
           </div>
-          <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/20 text-center">
-            <p className="text-xs text-orange-100">Kumulatif Poin Siswa</p>
-            <p className="text-2xl font-bold">{totalViolationPoints} Poin</p>
+
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <div className="flex flex-wrap items-center gap-2">
+              {getParentDownloadConfig().map((btn, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={btn.onClick}
+                  className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
+                  title={btn.label}
+                >
+                  <FileText className="w-3.5 h-3.5 text-amber-600" />
+                  <span>{btn.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/20 text-center">
+              <p className="text-xs text-orange-100">Kumulatif Poin</p>
+              <p className="text-xl font-bold">{totalViolationPoints} Poin</p>
+            </div>
           </div>
         </div>
       </div>

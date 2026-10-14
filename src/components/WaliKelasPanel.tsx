@@ -5,6 +5,7 @@ import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
 import { syncCollection } from '../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../data/initialWebContent';
+import { useDownload } from '../context/DownloadContext';
 
 interface WaliKelasPanelProps {
   teacher: Teacher;
@@ -311,6 +312,101 @@ export default function WaliKelasPanel({
     );
   });
 
+  const handleDownloadExcelPrestasi = () => {
+    const headers = ['No', 'NISN', 'Nama Siswa', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
+    const rows = classAchievements.map((a, i) => [
+      i + 1,
+      students.find(s => s.id === a.studentId)?.nisn || '-',
+      a.studentName,
+      a.title,
+      a.category,
+      a.level,
+      a.rank || '-',
+      a.date,
+      a.recordedBy
+    ]);
+    downloadExcel(`Prestasi_Kelas_${managedClass?.name || 'Wali'}.xlsx`, headers, rows, 'Prestasi Kelas');
+  };
+
+  const handlePrintPDFPrestasi = () => {
+    const headers = ['No', 'NISN', 'Nama Siswa', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
+    const rows = classAchievements.map((a, i) => [
+      i + 1,
+      students.find(s => s.id === a.studentId)?.nisn || '-',
+      a.studentName,
+      a.title,
+      a.category,
+      a.level,
+      a.rank || '-',
+      a.date,
+      a.recordedBy
+    ]);
+    printTablePDF(`Daftar Raihan Prestasi Siswa Kelas ${managedClass?.name || ''}`, headers, rows);
+  };
+
+  const handleDownloadExcelPresensi = () => {
+    const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Hadir', 'Sakit', 'Izin', 'Alpa', '% Kehadiran'];
+    const rows = classStudents.map((s, idx) => {
+      const sAtt = attendance.filter(a => a.studentId === s.id);
+      const h = sAtt.filter(a => a.status === 'Hadir').length;
+      const sk = sAtt.filter(a => a.status === 'Sakit').length;
+      const iz = sAtt.filter(a => a.status === 'Izin').length;
+      const a = sAtt.filter(a => a.status === 'Alpa').length;
+      const tot = sAtt.length;
+      const pct = tot > 0 ? `${Math.round((h / tot) * 100)}%` : '100%';
+      return [idx + 1, s.nisn, s.name, managedClass?.name || '-', h, sk, iz, a, pct];
+    });
+    downloadExcel(`Presensi_Kelas_${managedClass?.name || 'Wali'}.xlsx`, headers, rows, 'Presensi Kelas');
+  };
+
+  const handlePrintPDFPresensi = () => {
+    const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Hadir', 'Sakit', 'Izin', 'Alpa', '% Kehadiran'];
+    const rows = classStudents.map((s, idx) => {
+      const sAtt = attendance.filter(a => a.studentId === s.id);
+      const h = sAtt.filter(a => a.status === 'Hadir').length;
+      const sk = sAtt.filter(a => a.status === 'Sakit').length;
+      const iz = sAtt.filter(a => a.status === 'Izin').length;
+      const a = sAtt.filter(a => a.status === 'Alpa').length;
+      const tot = sAtt.length;
+      const pct = tot > 0 ? `${Math.round((h / tot) * 100)}%` : '100%';
+      return [idx + 1, s.nisn, s.name, managedClass?.name || '-', h, sk, iz, a, pct];
+    });
+    printTablePDF(`REKAPITULASI PRESENSI KELAS ${managedClass?.name || ''}`, headers, rows);
+  };
+
+  const getWaliKelasDownloadConfig = () => {
+    switch (activeTab) {
+      case 'catatan':
+        return [
+          { label: 'Jurnal Evaluasi (Excel)', onClick: handleDownloadExcelJurnal, type: 'excel' as const },
+          { label: 'Jurnal Evaluasi (PDF)', onClick: handlePrintPDFJurnal, type: 'pdf' as const },
+        ];
+      case 'ekskul':
+        return [
+          { label: 'Nilai Ekskul (Excel)', onClick: handleDownloadExcelEkskul, type: 'excel' as const },
+          { label: 'Nilai Ekskul (PDF)', onClick: handlePrintPDFEkskul, type: 'pdf' as const },
+        ];
+      case 'prestasi':
+        return [
+          { label: 'Prestasi Siswa (Excel)', onClick: handleDownloadExcelPrestasi, type: 'excel' as const },
+          { label: 'Prestasi Siswa (PDF)', onClick: handlePrintPDFPrestasi, type: 'pdf' as const },
+        ];
+      case 'beranda':
+      default:
+        return [
+          { label: 'Presensi Kelas (Excel)', onClick: handleDownloadExcelPresensi, type: 'excel' as const },
+          { label: 'Presensi Kelas (PDF)', onClick: handlePrintPDFPresensi, type: 'pdf' as const },
+        ];
+    }
+  };
+
+  const { setDownloadActions, clearDownloadActions } = useDownload();
+
+  useEffect(() => {
+    setDownloadActions(getWaliKelasDownloadConfig());
+    return () => clearDownloadActions();
+  }, [activeTab, managedClass?.id, classStudents.length]);
+
   return (
     <div className="space-y-6">
       {/* Wali Kelas Header */}
@@ -320,12 +416,26 @@ export default function WaliKelasPanel({
             <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Portal Wali Kelas</p>
             <h1 className="text-2xl font-bold">{teacher.name}</h1>
             <p className="text-blue-100 text-sm">
-              Mengampu Kelas: <span className="font-bold underline">{managedClass?.name || 'Belum Diatur'}</span>
+              Mengampu Kelas: <span className="font-bold underline">{managedClass?.name || 'Belum Diatur'}</span> &bull; {classStudents.length} Siswa Binaan
             </p>
           </div>
-          <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/20 text-center text-xs">
-            <span className="font-semibold block text-blue-100">Jumlah Siswa Binaaan</span>
-            <span className="text-lg font-bold">{classStudents.length} Siswa</span>
+          <div className="flex flex-wrap gap-2">
+            {getWaliKelasDownloadConfig().map((btn, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={btn.onClick}
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
+                title={btn.label}
+              >
+                {btn.type === 'excel' ? (
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                )}
+                <span>{btn.label}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -468,33 +578,15 @@ export default function WaliKelasPanel({
         {activeTab === 'catatan' && (
           <div className="space-y-6">
             {/* Header & Export Action Bar */}
-            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
               <div>
                 <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
                   <FileText className="w-5 h-5 text-blue-600" />
-                  Jurnal Pembinaan & Evaluasi Wali Kelas
+                  Jurnal Pembinaan &amp; Evaluasi Wali Kelas
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Catat bimbingan, evaluasi karakter, serta perkembangan akademik siswa binaan kelas {managedClass?.name || ''}. Catatan ini otomatis tersinkron dengan portal Siswa & Wali Murid.
+                  Catat bimbingan, evaluasi karakter, serta perkembangan akademik siswa binaan kelas {managedClass?.name || ''}. Catatan ini otomatis tersinkron dengan portal Siswa &amp; Wali Murid.
                 </p>
-              </div>
-
-              {/* Download & Cetak Buttons */}
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <button
-                  onClick={handleDownloadExcelJurnal}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>Unduh Excel Laporan</span>
-                </button>
-                <button
-                  onClick={handlePrintPDFJurnal}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Cetak / PDF Laporan</span>
-                </button>
               </div>
             </div>
 
@@ -639,7 +731,7 @@ export default function WaliKelasPanel({
         {activeTab === 'ekskul' && (
           <div className="space-y-6">
             {/* Header & Download Bar */}
-            <div className="bg-gradient-to-r from-amber-600 via-amber-700 to-amber-900 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="bg-gradient-to-r from-amber-600 via-amber-700 to-amber-900 rounded-2xl p-6 text-white shadow-md">
               <div>
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold mb-2 border border-white/20">
                   <Award className="w-4 h-4 text-amber-200" />
@@ -651,24 +743,6 @@ export default function WaliKelasPanel({
                 <p className="text-amber-100 text-xs mt-1">
                   Daftar nilai, predikat, dan evaluasi sikap yang telah di-input oleh masing-masing Pelatih / Pembina Ekskul.
                 </p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <button
-                  onClick={handleDownloadExcelEkskul}
-                  className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span>Unduh Excel Nilai Ekskul</span>
-                </button>
-                <button
-                  onClick={handlePrintPDFEkskul}
-                  className="px-4 py-2 bg-amber-950/40 hover:bg-amber-950/60 text-white border border-amber-300/30 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <Download className="w-4 h-4 text-amber-200" />
-                  <span>Cetak PDF Nilai Ekskul</span>
-                </button>
               </div>
             </div>
 
@@ -830,7 +904,7 @@ export default function WaliKelasPanel({
         {/* PRESTASI SISWA KELAS TAB */}
         {activeTab === 'prestasi' && (
           <div className="space-y-6">
-            <div className="bg-gradient-to-r from-blue-700 to-indigo-800 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-gradient-to-r from-blue-700 to-indigo-800 rounded-2xl p-6 text-white shadow-md">
               <div>
                 <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Kelas {managedClass?.name || '-'}</p>
                 <h2 className="text-xl font-bold flex items-center gap-2">
@@ -838,50 +912,6 @@ export default function WaliKelasPanel({
                   <span>Raihan Prestasi Siswa Kelas</span>
                 </h2>
                 <p className="text-blue-100 text-xs">Daftar rekapitulasi prestasi Akademik &amp; Non-Akademik siswa binaan Anda.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    const headers = ['No', 'NISN', 'Nama Siswa', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
-                    const rows = classAchievements.map((a, i) => [
-                      i + 1,
-                      students.find(s => s.id === a.studentId)?.nisn || '-',
-                      a.studentName,
-                      a.title,
-                      a.category,
-                      a.level,
-                      a.rank || '-',
-                      a.date,
-                      a.recordedBy
-                    ]);
-                    downloadExcel(`Prestasi_Kelas_${managedClass?.name || 'Wali'}.xlsx`, headers, rows, 'Prestasi Kelas');
-                  }}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold transition-all shadow-xs border border-slate-200 flex items-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span>Unduh Excel</span>
-                </button>
-                <button
-                  onClick={() => {
-                    const headers = ['No', 'NISN', 'Nama Siswa', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
-                    const rows = classAchievements.map((a, i) => [
-                      i + 1,
-                      students.find(s => s.id === a.studentId)?.nisn || '-',
-                      a.studentName,
-                      a.title,
-                      a.category,
-                      a.level,
-                      a.rank || '-',
-                      a.date,
-                      a.recordedBy
-                    ]);
-                    printTablePDF(`Daftar Raihan Prestasi Siswa Kelas ${managedClass?.name || ''}`, headers, rows);
-                  }}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold border border-slate-200 flex items-center gap-1.5 cursor-pointer shadow-xs hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <FileText className="w-4 h-4 text-blue-600" />
-                  <span>Cetak PDF</span>
-                </button>
               </div>
             </div>
 

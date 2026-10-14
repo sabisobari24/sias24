@@ -48,8 +48,12 @@ import {
   DollarSign,
   Sun,
   Moon,
-  LayoutDashboard
+  LayoutDashboard,
+  Download,
+  FileSpreadsheet,
+  ChevronDown
 } from 'lucide-react';
+import { useDownload } from './context/DownloadContext';
 
 import { getDoc, getDocs, collection, doc, setDoc, writeBatch, deleteDoc } from 'firebase/firestore';
 import { normalizeClassId, getSchoolClassName } from './utils/classUtils';
@@ -175,6 +179,10 @@ export default function App({ initialMode }: AppProps = {}) {
       }
     } catch { /* ignore */ }
   }, [isDarkMode]);
+
+  // Contextual Download Menu for all dashboards
+  const { downloadActions } = useDownload();
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState<boolean>(false);
 
   // Firebase connection monitor state
   const [dbStatus, setDbStatus] = useState<'online' | 'offline' | 'high_latency'>('online');
@@ -4143,6 +4151,65 @@ export default function App({ initialMode }: AppProps = {}) {
                       )}
                     </AnimatePresence>
                   </div>
+
+                  {/* Contextual Download Menu in Top Border Bar (adjacent to user name) */}
+                  {downloadActions && downloadActions.length > 0 && (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs border cursor-pointer bg-white hover:bg-slate-50 text-slate-800 border-slate-200/90 hover:border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-100 dark:border-slate-700"
+                        title="Menu Unduh & Ekspor Laporan"
+                      >
+                        <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span className="hidden sm:inline font-bold">Unduh</span>
+                        <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 px-1.5 py-0.2 rounded-full border border-emerald-200 dark:border-emerald-800">
+                          {downloadActions.length}
+                        </span>
+                        <ChevronDown className="w-3 h-3 text-slate-400" />
+                      </button>
+
+                      <AnimatePresence>
+                        {isDownloadMenuOpen && (
+                          <>
+                            <div className="fixed inset-0 z-30" onClick={() => setIsDownloadMenuOpen(false)} />
+                            <motion.div
+                              initial={{ opacity: 0, y: -4, scale: 0.96 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: -4, scale: 0.96 }}
+                              transition={{ duration: 0.12 }}
+                              className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 p-2 z-40 text-slate-800 dark:text-slate-200 text-xs font-medium"
+                            >
+                              <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                                <span>Menu Unduh &amp; Ekspor</span>
+                                <span className="capitalize text-indigo-600 dark:text-indigo-400">{activeRole?.replace('_', ' ')}</span>
+                              </div>
+                              <div className="py-1 space-y-1">
+                                {downloadActions.map((action, idx) => (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => {
+                                      action.onClick();
+                                      setIsDownloadMenuOpen(false);
+                                    }}
+                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                  >
+                                    {action.type === 'excel' ? (
+                                      <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    ) : (
+                                      <FileText className="w-4 h-4 text-rose-500 shrink-0" />
+                                    )}
+                                    <span className="truncate">{action.label}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
 
                   {/* Profile info & Mobile Logout */}
                   <div className="flex items-center gap-3 border-l border-slate-100 pl-3">

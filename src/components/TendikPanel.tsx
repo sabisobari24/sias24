@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useDownload } from '../context/DownloadContext';
 import {
   Student,
   SchoolClass,
@@ -667,6 +668,48 @@ export default function TendikPanel({
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   };
 
+  const getTendikDownloadConfig = () => {
+    switch (activeTab) {
+      case 'kjp':
+        return [
+          { label: 'Rekap KJP (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'kjp', title: 'Unduh Rekap Siswa KJP Plus' }), type: 'excel' as const },
+          { label: 'Rekap KJP (PDF)', onClick: () => setExportModal({ isOpen: true, type: 'kjp', title: 'Cetak PDF Rekap KJP Plus' }), type: 'pdf' as const },
+        ];
+      case 'nomor-surat':
+        return [
+          { label: 'Agenda Surat (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'nomor-surat', title: 'Unduh Agenda Penomoran Surat' }), type: 'excel' as const },
+          { label: 'Agenda Surat (PDF)', onClick: () => setExportModal({ isOpen: true, type: 'nomor-surat', title: 'Cetak Agenda Penomoran Surat' }), type: 'pdf' as const },
+        ];
+      case 'inventaris':
+        return [
+          { label: 'Aset Sarpras (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'inventaris', title: 'Unduh Rekap Inventaris Barang' }), type: 'excel' as const },
+          { label: 'Aset Sarpras (PDF)', onClick: () => setExportModal({ isOpen: true, type: 'inventaris', title: 'Cetak Inventaris Barang' }), type: 'pdf' as const },
+        ];
+      case 'pemberkasan':
+        return [
+          { label: 'Pemberkasan (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'pemberkasan', title: 'Unduh Rekap Agenda Pemberkasan' }), type: 'excel' as const },
+          { label: 'Pemberkasan (PDF)', onClick: () => setExportModal({ isOpen: true, type: 'pemberkasan', title: 'Cetak Rekap Agenda Pemberkasan' }), type: 'pdf' as const },
+        ];
+      case 'bos-bop':
+        return [
+          { label: 'Laporan BOS/BOP (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'bos-bop', title: 'Unduh Laporan Transparansi BOS & BOP' }), type: 'excel' as const },
+          { label: 'Laporan BOS/BOP (PDF)', onClick: () => setExportModal({ isOpen: true, type: 'bos-bop', title: 'Cetak Laporan Transparansi BOS & BOP' }), type: 'pdf' as const },
+        ];
+      default:
+        return [
+          { label: 'Rekap KJP (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'kjp', title: 'Unduh Rekap Siswa KJP Plus' }), type: 'excel' as const },
+          { label: 'Aset Sarpras (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'inventaris', title: 'Unduh Rekap Inventaris Barang' }), type: 'excel' as const },
+        ];
+    }
+  };
+
+  const { setDownloadActions, clearDownloadActions } = useDownload();
+
+  useEffect(() => {
+    setDownloadActions(getTendikDownloadConfig());
+    return () => clearDownloadActions();
+  }, [activeTab]);
+
   return (
     <div className="space-y-6 relative">
       {/* HEADER BANNER */}
@@ -686,10 +729,30 @@ export default function TendikPanel({
           </p>
         </div>
 
-        <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/20 text-right shrink-0 hidden md:block">
-          <span className="block text-[10px] uppercase tracking-wider text-teal-200 font-bold">Staf / Petugas Tendik:</span>
-          <span className="font-extrabold text-sm text-white">{teacher.name}</span>
-          <span className="block text-[10px] text-cyan-200 font-mono">NIP: {teacher.nip || '-'}</span>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+          <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20 text-right">
+            <span className="block text-[10px] uppercase tracking-wider text-teal-200 font-bold">Staf Tendik:</span>
+            <span className="font-extrabold text-sm text-white">{teacher.name}</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {getTendikDownloadConfig().map((btn, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={btn.onClick}
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
+                title={btn.label}
+              >
+                {btn.type === 'excel' ? (
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5 text-teal-600" />
+                )}
+                <span>{btn.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

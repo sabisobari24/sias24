@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teacher, CounselorNote, ParentMessage, BimbinganJournal, BimbinganSchedule, StudentAchievement } from '../types';
 import { HeartHandshake, Search, FileText, CheckCircle, Save, Send, MessageSquare, AlertTriangle, ShieldCheck, Download, FileSpreadsheet, Calendar, Trash2, Clock, Users, UserCheck, Award } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
+import { useDownload } from '../context/DownloadContext';
 
 interface BKPanelProps {
   teacher: Teacher;
@@ -327,38 +328,72 @@ export default function BKPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
+  const handleExportPrestasiBK = (format: 'excel' | 'pdf') => {
+    const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
+    const rows = studentAchievements.map((a, i) => [
+      i + 1,
+      students.find(s => s.id === a.studentId)?.nisn || '-',
+      a.studentName,
+      a.classId,
+      a.title,
+      a.category,
+      a.level,
+      a.rank || '-',
+      a.date,
+      a.recordedBy
+    ]);
+    if (format === 'excel') {
+      downloadExcel(`Portofolio_Prestasi_Siswa_BK.xlsx`, headers, rows, 'Prestasi Siswa BK');
+      setSuccessMsg('Rekap Prestasi Siswa berhasil diunduh (Excel)!');
+    } else {
+      printTablePDF(`Laporan Rekam Jejak Prestasi Siswa - BK`, headers, rows, headmasterName);
+      setSuccessMsg('Rekap Prestasi Siswa berhasil dicetak / disimpan ke PDF!');
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
   const getBKDownloadConfig = () => {
     switch (activeTab) {
       case 'beranda':
       case 'bimbingan':
         return [
-          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbinganBK('excel') },
-          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbinganBK('pdf') },
-          { label: 'Pelanggaran (Excel)', onClick: () => handleExportKedisiplinanBK('excel') },
-          { label: 'Pelanggaran (PDF)', onClick: () => handleExportKedisiplinanBK('pdf') },
+          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbinganBK('excel'), type: 'excel' as const },
+          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbinganBK('pdf'), type: 'pdf' as const },
         ];
       case 'jurnal':
         return [
-          { label: 'Jurnal BK (Excel)', onClick: () => handleExportJurnalBK('excel') },
-          { label: 'Jurnal BK (PDF)', onClick: () => handleExportJurnalBK('pdf') },
+          { label: 'Jurnal BK (Excel)', onClick: () => handleExportJurnalBK('excel'), type: 'excel' as const },
+          { label: 'Jurnal BK (PDF)', onClick: () => handleExportJurnalBK('pdf'), type: 'pdf' as const },
         ];
       case 'jadwal':
         return [
-          { label: 'Jadwal BK (Excel)', onClick: () => handleExportJadwalBK('excel') },
-          { label: 'Jadwal BK (PDF)', onClick: () => handleExportJadwalBK('pdf') },
+          { label: 'Jadwal BK (Excel)', onClick: () => handleExportJadwalBK('excel'), type: 'excel' as const },
+          { label: 'Jadwal BK (PDF)', onClick: () => handleExportJadwalBK('pdf'), type: 'pdf' as const },
         ];
       case 'pesan':
         return [
-          { label: 'Pesan Konseling (Excel)', onClick: () => handleExportPesanBK('excel') },
-          { label: 'Pesan Konseling (PDF)', onClick: () => handleExportPesanBK('pdf') },
+          { label: 'Pesan Konseling (Excel)', onClick: () => handleExportPesanBK('excel'), type: 'excel' as const },
+          { label: 'Pesan Konseling (PDF)', onClick: () => handleExportPesanBK('pdf'), type: 'pdf' as const },
+        ];
+      case 'prestasi':
+        return [
+          { label: 'Prestasi Siswa (Excel)', onClick: () => handleExportPrestasiBK('excel'), type: 'excel' as const },
+          { label: 'Prestasi Siswa (PDF)', onClick: () => handleExportPrestasiBK('pdf'), type: 'pdf' as const },
         ];
       default:
         return [
-          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbinganBK('excel') },
-          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbinganBK('pdf') },
+          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbinganBK('excel'), type: 'excel' as const },
+          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbinganBK('pdf'), type: 'pdf' as const },
         ];
     }
   };
+
+  const { setDownloadActions, clearDownloadActions } = useDownload();
+
+  useEffect(() => {
+    setDownloadActions(getBKDownloadConfig());
+    return () => clearDownloadActions();
+  }, [activeTab]);
 
   return (
     <div className="space-y-6">
@@ -1144,62 +1179,6 @@ export default function BKPanel({
         {/* PRESTASI SISWA TAB (BK) */}
         {activeTab === 'prestasi' && (
           <div className="space-y-6">
-            <div className="bg-gradient-to-r from-rose-700 via-pink-700 to-rose-800 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
-              <div>
-                <p className="text-rose-100 text-xs font-semibold uppercase tracking-wider">Bimbingan &amp; Konseling</p>
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <Award className="w-6 h-6 text-amber-300" />
-                  <span>Portofolio &amp; Raihan Prestasi Seluruh Siswa</span>
-                </h2>
-                <p className="text-rose-100 text-xs">Pencatatan rekam jejak apresiasi positif siswa untuk mendukung bimbingan karir dan kepribadian.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
-                    const rows = studentAchievements.map((a, i) => [
-                      i + 1,
-                      students.find(s => s.id === a.studentId)?.nisn || '-',
-                      a.studentName,
-                      a.classId,
-                      a.title,
-                      a.category,
-                      a.level,
-                      a.rank || '-',
-                      a.date,
-                      a.recordedBy
-                    ]);
-                    downloadExcel(`Portofolio_Prestasi_Siswa_BK.xlsx`, headers, rows, 'Prestasi Siswa BK');
-                  }}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold transition-all shadow-xs border border-slate-200 flex items-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span>Unduh Excel</span>
-                </button>
-                <button
-                  onClick={() => {
-                    const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
-                    const rows = studentAchievements.map((a, i) => [
-                      i + 1,
-                      students.find(s => s.id === a.studentId)?.nisn || '-',
-                      a.studentName,
-                      a.classId,
-                      a.title,
-                      a.category,
-                      a.level,
-                      a.rank || '-',
-                      a.date,
-                      a.recordedBy
-                    ]);
-                    printTablePDF(`Laporan Rekam Jejak Prestasi Siswa - BK`, headers, rows);
-                  }}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold border border-slate-200 flex items-center gap-1.5 cursor-pointer shadow-xs hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <FileText className="w-4 h-4 text-rose-600" />
-                  <span>Cetak PDF</span>
-                </button>
-              </div>
-            </div>
 
             {/* Table */}
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">

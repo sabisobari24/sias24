@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Student,
   Attendance,
@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF, printHTML } from '../utils/printHelper';
+import { useDownload } from '../context/DownloadContext';
 import ConfirmModal from './ConfirmModal';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import ExportDateFilterModal from './ExportDateFilterModal';
@@ -524,6 +525,34 @@ export default function PiketPanel({
   const todayViolations = violations.filter((v) => v.date === todayStr);
   const todayAbsentTeachers = absentTeachers.filter((t) => t.date === todayStr);
   const todayEvents = importantEvents.filter((ev) => ev.date === todayStr);
+
+  const { setDownloadActions, clearDownloadActions } = useDownload();
+
+  useEffect(() => {
+    setDownloadActions([
+      {
+        label: 'Laporan Rekap Harian (PDF)',
+        onClick: () => setExportModal({ isOpen: true, type: 'rekap-harian', title: 'Cetak / Unduh Rekap Laporan Harian Piket' }),
+        type: 'pdf',
+      },
+      {
+        label: 'Ekspor Kehadiran (Excel)',
+        onClick: () => setExportModal({ isOpen: true, type: 'kehadiran', title: 'Unduh Rekap Kehadiran Piket' }),
+        type: 'excel',
+      },
+      {
+        label: 'Ekspor Kedisiplinan (Excel)',
+        onClick: () => setExportModal({ isOpen: true, type: 'kedisiplinan', title: 'Unduh Rekap Kedisiplinan Piket' }),
+        type: 'excel',
+      },
+      {
+        label: 'Ekspor Jurnal Harian (Excel)',
+        onClick: () => setExportModal({ isOpen: true, type: 'jurnal', title: 'Unduh Jurnal Harian Piket' }),
+        type: 'excel',
+      },
+    ]);
+    return () => clearDownloadActions();
+  }, []);
 
   return (
     <div className="space-y-6">

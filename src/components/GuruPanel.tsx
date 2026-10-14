@@ -11,6 +11,7 @@ import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import { CbtScoreExporter } from './CbtScoreExporter';
 import { syncCollection } from '../lib/firebase';
 import ELearningPanel from './ELearningPanel';
+import { useDownload } from '../context/DownloadContext';
 
 interface GuruPanelProps {
   teacher: Teacher;
@@ -919,80 +920,68 @@ export default function GuruPanel({
     switch (activeTab) {
       case 'presensi': {
         const clsName = classes.find(c => c.id === selectedClassId)?.name || 'Kelas';
-        return {
-          labelExcel: `Presensi ${clsName} (Excel)`,
-          labelPdf: `Presensi ${clsName} (PDF)`,
-          onExcel: () => handleExportPresensiGuru('excel'),
-          onPdf: () => handleExportPresensiGuru('pdf'),
-        };
+        return [
+          { label: `Presensi ${clsName} (Excel)`, onClick: () => handleExportPresensiGuru('excel'), type: 'excel' as const },
+          { label: `Presensi ${clsName} (PDF)`, onClick: () => handleExportPresensiGuru('pdf'), type: 'pdf' as const },
+        ];
       }
       case 'pelanggaran': {
-        return {
-          labelExcel: 'Pelanggaran (Excel)',
-          labelPdf: 'Pelanggaran (PDF)',
-          onExcel: () => handleExportPelanggaranGuru('excel'),
-          onPdf: () => handleExportPelanggaranGuru('pdf'),
-        };
+        return [
+          { label: 'Pelanggaran (Excel)', onClick: () => handleExportPelanggaranGuru('excel'), type: 'excel' as const },
+          { label: 'Pelanggaran (PDF)', onClick: () => handleExportPelanggaranGuru('pdf'), type: 'pdf' as const },
+        ];
       }
       case 'jurnal-harian': {
-        return {
-          labelExcel: 'Jurnal Mengajar (Excel)',
-          labelPdf: 'Jurnal Mengajar (PDF)',
-          onExcel: () => handleExportTeachingJournal('excel'),
-          onPdf: () => handleExportTeachingJournal('pdf'),
-        };
+        return [
+          { label: 'Jurnal Mengajar (Excel)', onClick: () => handleExportTeachingJournal('excel'), type: 'excel' as const },
+          { label: 'Jurnal Mengajar (PDF)', onClick: () => handleExportTeachingJournal('pdf'), type: 'pdf' as const },
+        ];
       }
       case 'riwayat': {
-        return {
-          labelExcel: 'Riwayat Laporan (Excel)',
-          labelPdf: 'Riwayat Laporan (PDF)',
-          onExcel: () => handleExportRiwayatGuru('excel'),
-          onPdf: () => handleExportRiwayatGuru('pdf'),
-        };
+        return [
+          { label: 'Riwayat Laporan (Excel)', onClick: () => handleExportRiwayatGuru('excel'), type: 'excel' as const },
+          { label: 'Riwayat Laporan (PDF)', onClick: () => handleExportRiwayatGuru('pdf'), type: 'pdf' as const },
+        ];
       }
       case 'verifikasi-mandiri': {
-        return {
-          labelExcel: 'Verifikasi Absensi (Excel)',
-          labelPdf: 'Verifikasi Absensi (PDF)',
-          onExcel: () => handleExportVerifikasiMapel('excel'),
-          onPdf: () => handleExportVerifikasiMapel('pdf'),
-        };
+        return [
+          { label: 'Verifikasi Absensi (Excel)', onClick: () => handleExportVerifikasiMapel('excel'), type: 'excel' as const },
+          { label: 'Verifikasi Absensi (PDF)', onClick: () => handleExportVerifikasiMapel('pdf'), type: 'pdf' as const },
+        ];
       }
       case 'jadwal-ujian': {
-        return {
-          labelExcel: 'Jadwal Ujian (Excel)',
-          labelPdf: 'Jadwal Ujian (PDF)',
-          onExcel: () => handleExportJadwalUjian('excel'),
-          onPdf: () => handleExportJadwalUjian('pdf'),
-        };
+        return [
+          { label: 'Jadwal Ujian (Excel)', onClick: () => handleExportJadwalUjian('excel'), type: 'excel' as const },
+          { label: 'Jadwal Ujian (PDF)', onClick: () => handleExportJadwalUjian('pdf'), type: 'pdf' as const },
+        ];
       }
       case 'bank-soal': {
-        return {
-          labelExcel: 'Bank Soal (Excel)',
-          labelPdf: 'Bank Soal (PDF)',
-          onExcel: () => handleExportBankSoal('excel'),
-          onPdf: () => handleExportBankSoal('pdf'),
-        };
+        return [
+          { label: 'Bank Soal (Excel)', onClick: () => handleExportBankSoal('excel'), type: 'excel' as const },
+          { label: 'Bank Soal (PDF)', onClick: () => handleExportBankSoal('pdf'), type: 'pdf' as const },
+        ];
       }
       case 'guru-wali-view': {
-        return {
-          labelExcel: 'Guru Wali (Excel)',
-          labelPdf: 'Guru Wali (PDF)',
-          onExcel: () => handleExportGuruWaliView('excel'),
-          onPdf: () => handleExportGuruWaliView('pdf'),
-        };
+        return [
+          { label: 'Guru Wali (Excel)', onClick: () => handleExportGuruWaliView('excel'), type: 'excel' as const },
+          { label: 'Guru Wali (PDF)', onClick: () => handleExportGuruWaliView('pdf'), type: 'pdf' as const },
+        ];
       }
       default:
-        return {
-          labelExcel: 'Presensi (Excel)',
-          labelPdf: 'Presensi (PDF)',
-          onExcel: () => handleExportPresensiGuru('excel'),
-          onPdf: () => handleExportPresensiGuru('pdf'),
-        };
+        return [
+          { label: 'Presensi (Excel)', onClick: () => handleExportPresensiGuru('excel'), type: 'excel' as const },
+          { label: 'Presensi (PDF)', onClick: () => handleExportPresensiGuru('pdf'), type: 'pdf' as const },
+        ];
     }
   };
 
-  const downloadConfig = getContextualDownloadConfig();
+  const downloadButtons = getContextualDownloadConfig();
+  const { setDownloadActions, clearDownloadActions } = useDownload();
+
+  useEffect(() => {
+    setDownloadActions(downloadButtons);
+    return () => clearDownloadActions();
+  }, [activeTab, selectedClassId, attendanceDate]);
 
   // Calculate roles this teacher holds
   const qualifiedRoles: { role: string; label: string }[] = [
@@ -1022,24 +1011,22 @@ export default function GuruPanel({
             <p className="text-teal-100 text-sm">NIP: {teacher.nip}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={downloadConfig.onExcel}
-              className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
-              title={`Unduh ${downloadConfig.labelExcel}`}
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{downloadConfig.labelExcel}</span>
-            </button>
-            <button
-              type="button"
-              onClick={downloadConfig.onPdf}
-              className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
-              title={`Cetak ${downloadConfig.labelPdf}`}
-            >
-              <FileText className="w-3.5 h-3.5 text-teal-600" />
-              <span>{downloadConfig.labelPdf}</span>
-            </button>
+            {downloadButtons.map((btn, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={btn.onClick}
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
+                title={btn.label}
+              >
+                {btn.type === 'excel' ? (
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5 text-teal-600" />
+                )}
+                <span>{btn.label}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -1570,49 +1557,9 @@ export default function GuruPanel({
         {activeTab === 'jurnal-harian' && (
           <div className="space-y-6">
             <div className="bg-white rounded-xl p-6 border shadow-sm space-y-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-4 gap-4">
-                <div>
-                  <h3 className="font-bold text-slate-800 text-lg">Input Jurnal Mengajar Harian</h3>
-                  <p className="text-xs text-slate-500">Tulis dan simpan pertanggungjawaban kegiatan pembelajaran harian Anda.</p>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleExportTeachingJournal('excel')}
-                    className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-1 rounded-md text-[10px] font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                    title="Unduh Daftar Jurnal Mengajar format Excel"
-                  >
-                    <FileSpreadsheet className="w-3 h-3 text-emerald-600" />
-                    <span>Jurnal Mengajar (Excel)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExportTeachingJournal('pdf')}
-                    className="flex items-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2 py-1 rounded-md text-[10px] font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                    title="Cetak Daftar Jurnal Mengajar ke PDF"
-                  >
-                    <FileText className="w-3 h-3 text-rose-600" />
-                    <span>Jurnal Mengajar (PDF)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExportPresensiGuru('excel')}
-                    className="flex items-center gap-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-2 py-1 rounded-md text-[10px] font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                    title="Unduh Jurnal Kelas Aktif format Excel"
-                  >
-                    <FileSpreadsheet className="w-3 h-3 text-emerald-600" />
-                    <span>Absen Kelas (Excel)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExportPresensiGuru('pdf')}
-                    className="flex items-center gap-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-2 py-1 rounded-md text-[10px] font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                    title="Cetak Jurnal Kelas Aktif ke PDF"
-                  >
-                    <FileText className="w-3 h-3 text-rose-600" />
-                    <span>Absen Kelas (PDF)</span>
-                  </button>
-                </div>
+              <div className="border-b pb-4">
+                <h3 className="font-bold text-slate-800 text-lg">Input Jurnal Mengajar Harian</h3>
+                <p className="text-xs text-slate-500">Tulis dan simpan pertanggungjawaban kegiatan pembelajaran harian Anda.</p>
               </div>
 
               <form onSubmit={handleSubmitJournal} className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">

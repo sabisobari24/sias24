@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teacher, CounselorNote, ParentMessage, BimbinganJournal, BimbinganSchedule, StudentAchievement } from '../types';
 import { HeartHandshake, Search, FileText, CheckCircle, Save, Send, MessageSquare, AlertTriangle, ShieldCheck, Download, FileSpreadsheet, Star, Award, GraduationCap, Users, Calendar, Activity, Clock, Trash } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
+import { useDownload } from '../context/DownloadContext';
 
 interface GuruWaliPanelProps {
   teacher: Teacher;
@@ -271,32 +272,64 @@ export default function GuruWaliPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
+  const handleExportPrestasiGuruWali = (format: 'excel' | 'pdf') => {
+    const myStudentIds = myStudents.map(s => s.id);
+    const myAchs = studentAchievements.filter(a => myStudentIds.includes(a.studentId));
+    const headers = ['No', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
+    const rows = myAchs.map((a, i) => [
+      i + 1,
+      a.studentName,
+      a.classId,
+      a.title,
+      a.category,
+      a.level,
+      a.rank || '-',
+      a.date,
+      a.recordedBy
+    ]);
+    if (format === 'excel') {
+      downloadExcel(`Prestasi_Siswa_Bimbingan_GuruWali.xlsx`, headers, rows, 'Prestasi Bimbingan');
+      setSuccessMsg('Rekap Prestasi Siswa Bimbingan berhasil diunduh (Excel)!');
+    } else {
+      printTablePDF(`Daftar Raihan Prestasi Siswa Bimbingan - Guru Wali`, headers, rows, headmasterName);
+      setSuccessMsg('Rekap Prestasi Siswa Bimbingan berhasil dicetak / disimpan ke PDF!');
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
   const getGuruWaliDownloadConfig = () => {
     switch (activeTab) {
       case 'beranda':
       case 'bimbingan':
       case 'bimbingan-bk':
         return [
-          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbingan('excel') },
-          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbingan('pdf') },
+          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbingan('excel'), type: 'excel' as const },
+          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbingan('pdf'), type: 'pdf' as const },
         ];
       case 'bakat-minat':
         return [
-          { label: 'Bakat & Minat (Excel)', onClick: () => handleExportBakatMinat('excel') },
-          { label: 'Bakat & Minat (PDF)', onClick: () => handleExportBakatMinat('pdf') },
+          { label: 'Bakat & Minat (Excel)', onClick: () => handleExportBakatMinat('excel'), type: 'excel' as const },
+          { label: 'Bakat & Minat (PDF)', onClick: () => handleExportBakatMinat('pdf'), type: 'pdf' as const },
         ];
       case 'pesan':
         return [
-          { label: 'Pesan Orang Tua (Excel)', onClick: () => handleExportPesanGuruWali('excel') },
-          { label: 'Pesan Orang Tua (PDF)', onClick: () => handleExportPesanGuruWali('pdf') },
+          { label: 'Pesan Orang Tua (Excel)', onClick: () => handleExportPesanGuruWali('excel'), type: 'excel' as const },
+          { label: 'Pesan Orang Tua (PDF)', onClick: () => handleExportPesanGuruWali('pdf'), type: 'pdf' as const },
         ];
       default:
         return [
-          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbingan('excel') },
-          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbingan('pdf') },
+          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbingan('excel'), type: 'excel' as const },
+          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbingan('pdf'), type: 'pdf' as const },
         ];
     }
   };
+
+  const { setDownloadActions, clearDownloadActions } = useDownload();
+
+  useEffect(() => {
+    setDownloadActions(getGuruWaliDownloadConfig());
+    return () => clearDownloadActions();
+  }, [activeTab]);
 
   return (
     <div className="space-y-6">
@@ -1030,54 +1063,6 @@ export default function GuruWaliPanel({
                     <span>Daftar Raihan Prestasi Siswa Bimbingan (Akademik &amp; Non-Akademik)</span>
                   </h5>
                   <p className="text-[11px] text-slate-500">Hasil rekapitulasi terintegrasi dari Admin &amp; Pelatih Ekskul.</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      const myStudentIds = myStudents.map(s => s.id);
-                      const myAchs = studentAchievements.filter(a => myStudentIds.includes(a.studentId));
-                      const headers = ['No', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
-                      const rows = myAchs.map((a, i) => [
-                        i + 1,
-                        a.studentName,
-                        a.classId,
-                        a.title,
-                        a.category,
-                        a.level,
-                        a.rank || '-',
-                        a.date,
-                        a.recordedBy
-                      ]);
-                      downloadExcel(`Prestasi_Siswa_Bimbingan_GuruWali.xlsx`, headers, rows, 'Prestasi Bimbingan');
-                    }}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                    <span>Excel</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      const myStudentIds = myStudents.map(s => s.id);
-                      const myAchs = studentAchievements.filter(a => myStudentIds.includes(a.studentId));
-                      const headers = ['No', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
-                      const rows = myAchs.map((a, i) => [
-                        i + 1,
-                        a.studentName,
-                        a.classId,
-                        a.title,
-                        a.category,
-                        a.level,
-                        a.rank || '-',
-                        a.date,
-                        a.recordedBy
-                      ]);
-                      printTablePDF(`Daftar Raihan Prestasi Siswa Bimbingan - Guru Wali`, headers, rows);
-                    }}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm flex items-center gap-1 cursor-pointer"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>Cetak PDF</span>
-                  </button>
                 </div>
               </div>
 

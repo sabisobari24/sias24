@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig } from '../types';
 import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown } from 'lucide-react';
 import { downloadExcel, parseExcel } from '../utils/excelExport';
 import { printHTML, printTablePDF } from '../utils/printHelper';
+import { useDownload } from '../context/DownloadContext';
 import { getSchoolClassName } from '../utils/classUtils';
 import ConfirmModal from './ConfirmModal';
 import WebContentEditor from './WebContentEditor';
@@ -1310,6 +1311,38 @@ export default function AdminPanel({
     setTimeout(() => setSuccessMsg(''), 5000);
   };
 
+  const getAdminDownloadConfig = () => {
+    switch (activeTab) {
+      case 'siswa':
+        return [
+          { label: 'Database Siswa (Excel)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
+          { label: 'Database Siswa (PDF)', onClick: () => handleExportSiswa('pdf'), type: 'pdf' as const },
+        ];
+      case 'guru':
+        return [
+          { label: 'Database Pendidik (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
+          { label: 'Database Pendidik (PDF)', onClick: () => handleExportGuru('pdf'), type: 'pdf' as const },
+        ];
+      case 'prestasi':
+        return [
+          { label: 'Rekap Prestasi (Excel)', onClick: () => handleExportKustom('excel'), type: 'excel' as const },
+          { label: 'Rekap Prestasi (PDF)', onClick: () => handleExportKustom('pdf'), type: 'pdf' as const },
+        ];
+      default:
+        return [
+          { label: 'Database Siswa (Excel)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
+          { label: 'Database Pendidik (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
+        ];
+    }
+  };
+
+  const { setDownloadActions, clearDownloadActions } = useDownload();
+
+  useEffect(() => {
+    setDownloadActions(getAdminDownloadConfig());
+    return () => clearDownloadActions();
+  }, [activeTab]);
+
   return (
     <div className="space-y-6">
       {/* Admin Header */}
@@ -1320,9 +1353,24 @@ export default function AdminPanel({
             <h1 className="text-2xl font-bold">Panel Kontrol Pusat Administrasi</h1>
             <p className="text-purple-100 text-sm">Kelola semua entitas data sekolah, wali kelas, guru, siswa, dan konfigurasi database.</p>
           </div>
-          <span className="bg-white/15 px-3 py-1.5 rounded-lg border border-white/20 text-xs font-semibold shrink-0">
-            Sistem: Terintegrasi 100%
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {getAdminDownloadConfig().map((btn, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={btn.onClick}
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
+                title={btn.label}
+              >
+                {btn.type === 'excel' ? (
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5 text-purple-600" />
+                )}
+                <span>{btn.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

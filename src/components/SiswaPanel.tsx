@@ -57,6 +57,7 @@ import { downloadSingleStudentCardPDF } from '../utils/cardPdfHelper';
 import ELearningPanel from './ELearningPanel';
 import { fileToBase64, convertGoogleDriveLink } from '../utils/imageHelper';
 import { printCertificate, printTablePDF } from '../utils/printHelper';
+import { useDownload } from '../context/DownloadContext';
 
 // LOGIKA PENGHEMATAN KUOTA: Mengompresi ukuran gambar di sisi klien (browser siswa) menjadi maksimal 100 KB sebelum diupload
 export function compressImageBase64(canvas: HTMLCanvasElement, maxKb: number = 100): string {
@@ -665,23 +666,70 @@ export default function SiswaPanel({
     return sched.targetClassId === student.classId || sched.targetClassId === studentClass?.name;
   });
 
+  const getSiswaDownloadConfig = () => {
+    return [
+      {
+        label: 'Rekap Prestasi (PDF)',
+        onClick: () => {
+          const headers = ["Judul Prestasi", "Kategori", "Tingkat", "Peringkat", "Tanggal"];
+          const rows = myAchievements.map((a) => [a.title, a.category, `Tingkat ${a.level}`, a.rank || a.level, a.date]);
+          printTablePDF(`Rekapitulasi Raihan Prestasi Siswa - ${student.name}`, headers, rows, headmasterName);
+        },
+        type: 'pdf' as const,
+      },
+      {
+        label: 'Rekap Presensi (PDF)',
+        onClick: () => {
+          const headers = ["Tanggal", "Status", "Keterangan"];
+          const rows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
+          printTablePDF(`Rekap Presensi Kehadiran Siswa - ${student.name}`, headers, rows, headmasterName);
+        },
+        type: 'pdf' as const,
+      }
+    ];
+  };
+
+  const { setDownloadActions, clearDownloadActions } = useDownload();
+
+  useEffect(() => {
+    setDownloadActions(getSiswaDownloadConfig());
+    return () => clearDownloadActions();
+  }, [student.id, myAchievements.length, studentAttendance.length]);
+
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
         <div className="absolute top-0 right-0 transform translate-x-12 -translate-y-12 w-48 h-48 bg-white/10 rounded-full blur-2xl"></div>
-        <div className="relative flex flex-col md:flex-row items-center gap-6">
-          <img
-            src={student.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120"}
-            alt={student.name}
-            className="w-20 h-20 rounded-full border-4 border-white/30 object-cover shadow-lg"
-          />
-          <div className="text-center md:text-left space-y-1">
-            <p className="text-blue-100 text-sm font-medium tracking-wide uppercase">Selamat Datang di Portal Siswa</p>
-            <h1 className="text-2xl font-bold tracking-tight">{student.name}</h1>
-            <p className="text-blue-100 text-sm">
-              NISN: {student.nisn} &bull; {studentClass?.name || 'Belum Masuk Kelas'}
-            </p>
+        <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <img
+              src={student.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120"}
+              alt={student.name}
+              className="w-20 h-20 rounded-full border-4 border-white/30 object-cover shadow-lg"
+            />
+            <div className="text-center md:text-left space-y-1">
+              <p className="text-blue-100 text-sm font-medium tracking-wide uppercase">Selamat Datang di Portal Siswa</p>
+              <h1 className="text-2xl font-bold tracking-tight">{student.name}</h1>
+              <p className="text-blue-100 text-sm">
+                NISN: {student.nisn} &bull; {studentClass?.name || 'Belum Masuk Kelas'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {getSiswaDownloadConfig().map((btn, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={btn.onClick}
+                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
+                title={btn.label}
+              >
+                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                <span>{btn.label}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
