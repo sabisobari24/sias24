@@ -30,14 +30,25 @@ import {
   Video,
   Play,
   Link2,
-  Upload
+  Upload,
+  Heart,
+  Target,
+  Leaf,
+  ArrowUp,
+  ArrowDown,
+  Shield,
+  Star,
+  Lightbulb,
+  Zap,
+  Compass
 } from 'lucide-react';
 import { syncCollection, saveDocument } from '../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../data/initialWebContent';
-import { WebSectionContent, WebStaff, WebProgram, WebSlide, WebSubject, WebExtracurricular, WebFacility, WebArticle, WebTicker, WebActivity, WebAgenda } from '../types';
+import { WebSectionContent, WebStaff, WebProgram, WebSlide, WebSubject, WebExtracurricular, WebFacility, WebArticle, WebTicker, WebActivity, WebAgenda, WebVisionPillar } from '../types';
 import MediaUploadSelector from './MediaUploadSelector';
 import TextFormattingToolbar from './common/TextFormattingToolbar';
 import { getYouTubeEmbedUrl } from '../utils/mediaHelper';
+import { enhanceAndCompressBannerImage } from '../utils/imageHelper';
 import { WebIcon } from './website/WebIcon';
 
 export default function WebContentEditor() {
@@ -84,6 +95,10 @@ export default function WebContentEditor() {
   const [akreditasi, setAkreditasi] = useState('Akreditasi A (Unggul)');
   const [vision, setVision] = useState('');
   const [missions, setMissions] = useState<string[]>([]);
+  const [visionPillarsTitle, setVisionPillarsTitle] = useState('3 Pilar Inti Penopang Visi:');
+  const [visionPillars, setVisionPillars] = useState<WebVisionPillar[]>([]);
+  const [editingPillarIdx, setEditingPillarIdx] = useState<number | null>(null);
+  const [pillarForm, setPillarForm] = useState<Partial<WebVisionPillar>>({});
   const [instagram, setInstagram] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [email, setEmail] = useState('');
@@ -124,20 +139,41 @@ export default function WebContentEditor() {
   // Gallery images list state
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
 
+  const prevSectionIdRef = React.useRef(activeSectionId);
+
   // Update local states when active section changes
   useEffect(() => {
+    const isSectionSwitched = prevSectionIdRef.current !== activeSectionId;
+    prevSectionIdRef.current = activeSectionId;
+
     if (activeSection) {
-      if (activeSection.id === 'berita') {
-        setActiveSubTab('articles');
-      } else if (activeSection.id === 'home') {
-        if (!['header', 'slides', 'vision-mission'].includes(activeSubTab)) {
-          setActiveSubTab('header');
+      if (isSectionSwitched) {
+        if (activeSection.id === 'berita') {
+          setActiveSubTab('articles');
+        } else if (activeSection.id === 'home') {
+          if (!['header', 'slides', 'vision-mission'].includes(activeSubTab)) {
+            setActiveSubTab('header');
+          }
+        } else {
+          if (['articles', 'tickers', 'activities', 'agendas'].includes(activeSubTab)) {
+            setActiveSubTab('header');
+          }
         }
-      } else {
-        if (['articles', 'tickers', 'activities', 'agendas'].includes(activeSubTab)) {
-          setActiveSubTab('header');
-        }
+
+        // Close any active sub-editors ONLY upon switching section
+        setEditingStaffIdx(null);
+        setEditingProgIdx(null);
+        setEditingSlideIdx(null);
+        setEditingPillarIdx(null);
+        setEditingSubjectIdx(null);
+        setEditingExtraIdx(null);
+        setEditingFacilityIdx(null);
+        setEditingArticleIdx(null);
+        setEditingTickerIdx(null);
+        setEditingActivityIdx(null);
+        setEditingAgendaIdx(null);
       }
+
       setHeaderBgImage(activeSection.headerBgImage || (
         activeSection.id === 'academic' ? 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz' :
         activeSection.id === 'kesiswaan' ? 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz' :
@@ -165,22 +201,34 @@ export default function WebContentEditor() {
       setAkreditasi(activeSection.akreditasi || 'Akreditasi A (Unggul)');
       setVision(activeSection.vision || '');
       setMissions(activeSection.missions || []);
+      setVisionPillarsTitle(activeSection.visionPillarsTitle || '3 Pilar Inti Penopang Visi:');
+      setVisionPillars(Array.isArray(activeSection.visionPillars) && activeSection.visionPillars.length > 0 ? activeSection.visionPillars : [
+        {
+          id: 'p1',
+          title: 'Berkarakter',
+          desc: 'Akhlak mulia, religius, disiplin, santun, gotong royong, dan berintegritas.',
+          icon: 'Heart',
+          color: 'amber'
+        },
+        {
+          id: 'p2',
+          title: 'Berprestasi',
+          desc: 'Keunggulan akademik, sains, seni, literasi digital, & kompetisi nasional.',
+          icon: 'Award',
+          color: 'blue'
+        },
+        {
+          id: 'p3',
+          title: 'Berwawasan',
+          desc: 'Sekolah Adiwiyata, ramah anak, hijau, asri, sehat, & peduli lingkungan hidup.',
+          icon: 'Leaf',
+          color: 'emerald'
+        }
+      ]);
       setInstagram(activeSection.instagram || '');
       setWhatsapp(activeSection.whatsapp || '');
       setEmail(activeSection.email || '');
       setGalleryUrls(activeSection.popupImages || []);
-      
-      // Close any active sub-editors
-      setEditingStaffIdx(null);
-      setEditingProgIdx(null);
-      setEditingSlideIdx(null);
-      setEditingSubjectIdx(null);
-      setEditingExtraIdx(null);
-      setEditingFacilityIdx(null);
-      setEditingArticleIdx(null);
-      setEditingTickerIdx(null);
-      setEditingActivityIdx(null);
-      setEditingAgendaIdx(null);
     }
   }, [activeSectionId, contents]);
 
@@ -215,7 +263,7 @@ export default function WebContentEditor() {
       headSubject,
       headHobby,
       ...(activeSectionId === 'home' 
-        ? { akreditasi, headerMotto, schoolLogo, vision, missions, instagram, whatsapp, email } 
+        ? { akreditasi, headerMotto, schoolLogo, vision, missions, visionPillarsTitle, visionPillars, instagram, whatsapp, email } 
         : { headerBgImage, headerTitle, headerSubtitle }
       )
     });
@@ -289,18 +337,27 @@ export default function WebContentEditor() {
   };
 
   // Slide CRUD Operations
-  const handleSaveSlide = () => {
+  const handleSaveSlide = async () => {
     if (!activeSection) return;
     const list = [...(activeSection.slides || [])];
     if (editingSlideIdx === null) return;
 
-    if (editingSlideIdx === -1 && list.length >= 10) {
-      alert('Jumlah maksimum slider adalah 10 slide.');
+    if (editingSlideIdx === -1 && list.length >= 15) {
+      alert('Jumlah maksimum slider adalah 15 slide.');
       return;
     }
 
+    let slideImage = slideForm.image || (slideForm.type === 'video' ? 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600' : 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz');
+
+    // Auto compress if heavy base64 (> 65KB) to protect Firestore 1MB document limit & LocalStorage quota
+    if (slideImage.startsWith('data:image/') && slideImage.length > 68 * 1024) {
+      try {
+        slideImage = await enhanceAndCompressBannerImage(slideImage, 1280, 720, 0.72);
+      } catch (_) {}
+    }
+
     const newSlide: WebSlide = {
-      image: slideForm.image || (slideForm.type === 'video' ? 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600' : 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz'),
+      image: slideImage,
       title: (slideForm.title || '').replace(/<[^>]*>/g, '').trim(),
       desc: (slideForm.desc || '').replace(/<[^>]*>/g, '').trim(),
       type: slideForm.type || 'image',
@@ -313,7 +370,16 @@ export default function WebContentEditor() {
       list[editingSlideIdx] = newSlide;
     }
 
-    handleSaveSection({ slides: list });
+    // Auto-compress any other bloated slides in the list if they exist from before
+    for (let i = 0; i < list.length; i++) {
+      if (list[i]?.image?.startsWith('data:image/') && list[i].image.length > 75 * 1024) {
+        try {
+          list[i].image = await enhanceAndCompressBannerImage(list[i].image, 1280, 720, 0.70);
+        } catch (_) {}
+      }
+    }
+
+    await handleSaveSection({ slides: list });
     setEditingSlideIdx(null);
   };
 
@@ -324,6 +390,90 @@ export default function WebContentEditor() {
       list.splice(idx, 1);
       handleSaveSection({ slides: list });
     }
+  };
+
+  const handleMoveSlide = (idx: number, direction: 'up' | 'down') => {
+    if (!activeSection) return;
+    const list = [...(activeSection.slides || [])];
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= list.length) return;
+    const temp = list[idx];
+    list[idx] = list[targetIdx];
+    list[targetIdx] = temp;
+    handleSaveSection({ slides: list });
+  };
+
+  // Vision Pillars CRUD Operations (Home Vision Support Points)
+  const handleSavePillar = () => {
+    const list = [...(visionPillars || [])];
+    if (editingPillarIdx === null) return;
+
+    if (!pillarForm.title?.trim()) {
+      alert('Judul point penopang visi wajib diisi.');
+      return;
+    }
+
+    const newPillar: WebVisionPillar = {
+      id: pillarForm.id || 'p_' + Math.random().toString(36).substring(7),
+      title: (pillarForm.title || '').trim(),
+      desc: (pillarForm.desc || '').trim(),
+      icon: pillarForm.icon || 'Heart',
+      color: (pillarForm.color as any) || 'amber'
+    };
+
+    if (editingPillarIdx === -1) {
+      list.push(newPillar);
+    } else {
+      list[editingPillarIdx] = newPillar;
+    }
+
+    setVisionPillars(list);
+    handleSaveSection({ 
+      vision, 
+      missions, 
+      visionPillarsTitle, 
+      visionPillars: list, 
+      instagram, 
+      whatsapp, 
+      email 
+    });
+    setEditingPillarIdx(null);
+  };
+
+  const handleDeletePillar = (idx: number) => {
+    if (confirm('Hapus point penopang visi ini?')) {
+      const list = [...(visionPillars || [])];
+      list.splice(idx, 1);
+      setVisionPillars(list);
+      handleSaveSection({ 
+        vision, 
+        missions, 
+        visionPillarsTitle, 
+        visionPillars: list, 
+        instagram, 
+        whatsapp, 
+        email 
+      });
+    }
+  };
+
+  const handleMovePillar = (idx: number, direction: 'up' | 'down') => {
+    const list = [...(visionPillars || [])];
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= list.length) return;
+    const temp = list[idx];
+    list[idx] = list[targetIdx];
+    list[targetIdx] = temp;
+    setVisionPillars(list);
+    handleSaveSection({ 
+      vision, 
+      missions, 
+      visionPillarsTitle, 
+      visionPillars: list, 
+      instagram, 
+      whatsapp, 
+      email 
+    });
   };
 
   // Subject CRUD Operations (Academic specific)
@@ -956,6 +1106,237 @@ export default function WebContentEditor() {
                   />
                 </div>
 
+                {/* POINT-POINT PENOPANG VISI SEKOLAH */}
+                <div className="border-t border-slate-100 pt-6 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <Target className="w-4 h-4 text-amber-500" />
+                        <span>Point-Point Penopang Visi ({visionPillars.length} Point)</span>
+                      </h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Kelola pilar-pilar inti penopang visi yang tampil di kartu utama beranda website. Anda dapat mengatur judul, deskripsi, pilihan ikon, dan warna tema.
+                      </p>
+                    </div>
+
+                    {editingPillarIdx === null && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingPillarIdx(-1);
+                          setPillarForm({
+                            title: '',
+                            desc: '',
+                            icon: 'Heart',
+                            color: 'amber'
+                          });
+                        }}
+                        className="text-xs font-bold text-amber-900 hover:text-amber-950 flex items-center gap-1.5 bg-amber-100 hover:bg-amber-200/80 px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-2xs shrink-0 self-start sm:self-auto"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Tambah Point Penopang</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Pengaturan Judul Pengantar Pilar */}
+                  <div className="space-y-1.5 bg-amber-50/50 border border-amber-200/60 p-3.5 rounded-2xl">
+                    <label className="text-[11px] font-bold text-amber-950 block">Judul Label Penopang Visi pada Beranda</label>
+                    <input 
+                      type="text" 
+                      value={visionPillarsTitle}
+                      onChange={(e) => setVisionPillarsTitle(e.target.value)}
+                      className="w-full text-xs font-medium border border-amber-200 rounded-xl px-3.5 py-2 bg-white focus:outline-none focus:border-amber-500 text-slate-800"
+                      placeholder="Contoh: 3 Pilar Inti Penopang Visi:"
+                    />
+                    <p className="text-[10px] text-amber-800/80">Teks ini tampil di atas kartu-kartu pilar penopang visi di beranda.</p>
+                  </div>
+
+                  {/* Form Tambah / Edit Pillar Modal Drawer */}
+                  {editingPillarIdx !== null ? (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-5 space-y-4 text-left shadow-xs">
+                      <div className="flex items-center justify-between border-b border-slate-200/70 pb-3">
+                        <h5 className="font-extrabold text-slate-800 text-xs flex items-center gap-2">
+                          <Target className="w-4 h-4 text-amber-500" />
+                          <span>{editingPillarIdx === -1 ? 'Tambah Point Penopang Visi Baru' : 'Edit Point Penopang Visi'}</span>
+                        </h5>
+                        <button
+                          type="button"
+                          onClick={() => setEditingPillarIdx(null)}
+                          className="text-slate-400 hover:text-slate-600 p-1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-600 block">Judul Point / Pilar</label>
+                          <input 
+                            type="text" 
+                            value={pillarForm.title || ''}
+                            onChange={(e) => setPillarForm({ ...pillarForm, title: e.target.value })}
+                            className="w-full text-xs font-medium border border-slate-200 rounded-xl px-3.5 py-2.5 bg-white focus:outline-none focus:border-emerald-700"
+                            placeholder="Contoh: Berkarakter / Berprestasi / Berwawasan"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-600 block">Pilihan Ikon</label>
+                          <select 
+                            value={pillarForm.icon || 'Heart'}
+                            onChange={(e) => setPillarForm({ ...pillarForm, icon: e.target.value })}
+                            className="w-full text-xs font-semibold border border-slate-200 rounded-xl px-3.5 py-2.5 bg-white focus:outline-none focus:border-emerald-700"
+                          >
+                            <option value="Heart">❤️ Heart (Karakter / Akhlak Mulia)</option>
+                            <option value="Award">🏆 Award (Prestasi / Juara)</option>
+                            <option value="Leaf">🌱 Leaf (Lingkungan / Adiwiyata)</option>
+                            <option value="Target">🎯 Target (Tujuan / Fokus)</option>
+                            <option value="Shield">🛡️ Shield (Integritas / Keamanan)</option>
+                            <option value="Star">⭐ Star (Bintang Unggul)</option>
+                            <option value="Compass">🧭 Compass (Arah / Karakter)</option>
+                            <option value="Sparkles">✨ Sparkles (Kreativitas / Inovasi)</option>
+                            <option value="BookOpen">📖 BookOpen (Literasi / Akademik)</option>
+                            <option value="Users">👥 Users (Kolaborasi / Gotong Royong)</option>
+                            <option value="Lightbulb">💡 Lightbulb (Gagasan / Nalar Kritis)</option>
+                            <option value="Zap">⚡ Zap (Dinamis / Energi Positif)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-600 block">Warna Tema Aksen</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                          {[
+                            { id: 'amber', label: 'Emas (Amber)', bg: 'bg-amber-400' },
+                            { id: 'blue', label: 'Biru (Prestasi)', bg: 'bg-blue-400' },
+                            { id: 'emerald', label: 'Hijau (Asri)', bg: 'bg-emerald-400' },
+                            { id: 'purple', label: 'Ungu (Kreatif)', bg: 'bg-purple-400' },
+                            { id: 'rose', label: 'Merah (Semangat)', bg: 'bg-rose-400' },
+                            { id: 'teal', label: 'Toska (Harmoni)', bg: 'bg-teal-400' },
+                            { id: 'indigo', label: 'Indigo (Global)', bg: 'bg-indigo-400' }
+                          ].map((clr) => (
+                            <button
+                              key={clr.id}
+                              type="button"
+                              onClick={() => setPillarForm({ ...pillarForm, color: clr.id as any })}
+                              className={`py-2 px-2.5 rounded-xl text-[11px] font-bold border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                (pillarForm.color || 'amber') === clr.id
+                                  ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              <span className={`w-2.5 h-2.5 rounded-full ${clr.bg}`} />
+                              <span className="truncate">{clr.id}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-600 block">Deskripsi / Penjelasan Singkat Pilar</label>
+                        <textarea 
+                          rows={2}
+                          value={pillarForm.desc || ''}
+                          onChange={(e) => setPillarForm({ ...pillarForm, desc: e.target.value })}
+                          className="w-full text-xs font-medium border border-slate-200 rounded-xl p-3 bg-white focus:outline-none leading-relaxed text-slate-800"
+                          placeholder="Contoh: Akhlak mulia, religius, disiplin, santun, gotong royong, dan berintegritas."
+                        />
+                      </div>
+
+                      <div className="flex gap-2 justify-end pt-2 border-t border-slate-200/70">
+                        <button
+                          type="button"
+                          onClick={() => setEditingPillarIdx(null)}
+                          className="border border-slate-200 text-slate-600 font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer hover:bg-slate-100"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSavePillar}
+                          className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
+                        >
+                          Simpan Point
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* List of Pillars */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {visionPillars.map((pillar, pIdx) => (
+                      <div 
+                        key={pillar.id || pIdx}
+                        className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2 hover:border-slate-300 transition-all flex flex-col justify-between"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600">
+                              #{pIdx + 1}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 capitalize">
+                              {pillar.icon || 'Heart'} • {pillar.color || 'amber'}
+                            </span>
+                          </div>
+                          <h5 className="text-xs font-black text-slate-900">{pillar.title}</h5>
+                          <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-3">{pillar.desc}</p>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 mt-2">
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={pIdx === 0}
+                              onClick={() => handleMovePillar(pIdx, 'up')}
+                              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                              title="Geser ke kiri / atas"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={pIdx === visionPillars.length - 1}
+                              onClick={() => handleMovePillar(pIdx, 'down')}
+                              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                              title="Geser ke kanan / bawah"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingPillarIdx(pIdx);
+                                setPillarForm({ ...pillar });
+                              }}
+                              className="p-1.5 border border-slate-200 hover:border-emerald-600 rounded-lg text-slate-600 hover:text-emerald-700 bg-white transition-colors cursor-pointer"
+                              title="Edit Point"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePillar(pIdx)}
+                              className="p-1.5 border border-slate-200 hover:border-red-600 rounded-lg text-slate-400 hover:text-red-600 bg-white transition-colors cursor-pointer"
+                              title="Hapus Point"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {visionPillars.length === 0 && (
+                      <div className="col-span-full py-6 text-center text-xs text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-2xl font-mono">
+                        Belum ada point penopang visi. Klik tombol "Tambah Point Penopang" di atas.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-500 block">Butir-Butir Misi Sekolah</label>
@@ -1062,13 +1443,21 @@ export default function WebContentEditor() {
 
                 <button
                   onClick={async () => {
-                    await handleSaveSection({ vision, missions, instagram, whatsapp, email });
-                    showToast('Visi, Misi & Media Sosial berhasil disimpan!');
+                    await handleSaveSection({ 
+                      vision, 
+                      missions, 
+                      visionPillarsTitle, 
+                      visionPillars, 
+                      instagram, 
+                      whatsapp, 
+                      email 
+                    });
+                    showToast('Visi, Misi, Point Penopang Visi & Media Sosial berhasil disimpan!');
                   }}
                   className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
                 >
                   <Save className="w-4 h-4" />
-                  <span>Simpan Visi, Misi &amp; Sosial Media</span>
+                  <span>Simpan Visi, Misi, Penopang Visi &amp; Sosial Media</span>
                 </button>
               </motion.div>
             )}
@@ -1391,8 +1780,13 @@ export default function WebContentEditor() {
               >
                 <div className="border-b border-slate-100 pb-4 flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-extrabold text-slate-800 text-base">Slider Dokumentasi Unggulan</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Kelola gambar &amp; video slider (YouTube atau Upload Komputer), judul, dan takarir slideshow.</p>
+                    <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-2">
+                      <span>Slider Dokumentasi Unggulan</span>
+                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                        {activeSection?.slides?.length || 0} / 15 Slide
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Kelola gambar &amp; video slider (YouTube atau Upload Komputer), judul, dan takarir slideshow. Gambar otomatis dioptimalkan agar tajam dan ringan.</p>
                   </div>
                   {editingSlideIdx === null && (
                     <button
@@ -1601,6 +1995,26 @@ export default function WebContentEditor() {
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="flex items-center gap-0.5 mr-1 border-r border-slate-200 pr-1.5">
+                              <button
+                                type="button"
+                                disabled={sIdx === 0}
+                                onClick={() => handleMoveSlide(sIdx, 'up')}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
+                                title="Geser ke atas"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={sIdx === (activeSection?.slides?.length || 0) - 1}
+                                onClick={() => handleMoveSlide(sIdx, 'down')}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
+                                title="Geser ke bawah"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                             <button
                               onClick={() => {
                                 setEditingSlideIdx(sIdx);
@@ -1611,12 +2025,14 @@ export default function WebContentEditor() {
                                 });
                               }}
                               className="p-1.5 border border-slate-200 hover:border-emerald-600 rounded-lg text-slate-500 hover:text-emerald-700 transition-colors cursor-pointer"
+                              title="Edit Slide"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => handleDeleteSlide(sIdx)}
                               className="p-1.5 border border-slate-200 hover:border-red-600 rounded-lg text-slate-500 hover:text-red-600 transition-colors cursor-pointer"
+                              title="Hapus Slide"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>

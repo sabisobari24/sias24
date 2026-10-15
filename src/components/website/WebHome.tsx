@@ -29,12 +29,93 @@ import {
   Compass,
   Sparkles,
   Leaf,
-  Target
+  Target,
+  Shield,
+  Star,
+  Lightbulb,
+  Zap
 } from 'lucide-react';
 import { syncCollection } from '../../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../../data/initialWebContent';
+import { WebVisionPillar } from '../../types';
 import FormattedText from '../common/FormattedText';
 import { getYouTubeEmbedUrl } from '../../utils/mediaHelper';
+
+function renderPillarIcon(iconName?: string) {
+  switch (iconName) {
+    case 'Award': return <Award className="w-4 h-4" />;
+    case 'Leaf': return <Leaf className="w-4 h-4" />;
+    case 'Heart': return <Heart className="w-4 h-4" />;
+    case 'Target': return <Target className="w-4 h-4" />;
+    case 'Compass': return <Compass className="w-4 h-4" />;
+    case 'Sparkles': return <Sparkles className="w-4 h-4" />;
+    case 'BookOpen': return <BookOpen className="w-4 h-4" />;
+    case 'Users': return <Users className="w-4 h-4" />;
+    case 'School': return <School className="w-4 h-4" />;
+    case 'Shield': return <Shield className="w-4 h-4" />;
+    case 'Star': return <Star className="w-4 h-4" />;
+    case 'Lightbulb': return <Lightbulb className="w-4 h-4" />;
+    case 'Zap': return <Zap className="w-4 h-4" />;
+    default: return <Heart className="w-4 h-4" />;
+  }
+}
+
+function getPillarColorTheme(color?: string) {
+  switch (color) {
+    case 'blue':
+      return {
+        bg: 'bg-blue-400/20',
+        text: 'text-blue-300',
+        border: 'border-blue-400/30',
+        hoverText: 'group-hover:text-blue-300'
+      };
+    case 'emerald':
+    case 'green':
+      return {
+        bg: 'bg-emerald-400/20',
+        text: 'text-emerald-300',
+        border: 'border-emerald-400/30',
+        hoverText: 'group-hover:text-emerald-300'
+      };
+    case 'purple':
+      return {
+        bg: 'bg-purple-400/20',
+        text: 'text-purple-300',
+        border: 'border-purple-400/30',
+        hoverText: 'group-hover:text-purple-300'
+      };
+    case 'rose':
+    case 'red':
+      return {
+        bg: 'bg-rose-400/20',
+        text: 'text-rose-300',
+        border: 'border-rose-400/30',
+        hoverText: 'group-hover:text-rose-300'
+      };
+    case 'teal':
+      return {
+        bg: 'bg-teal-400/20',
+        text: 'text-teal-300',
+        border: 'border-teal-400/30',
+        hoverText: 'group-hover:text-teal-300'
+      };
+    case 'indigo':
+      return {
+        bg: 'bg-indigo-400/20',
+        text: 'text-indigo-300',
+        border: 'border-indigo-400/30',
+        hoverText: 'group-hover:text-indigo-300'
+      };
+    case 'amber':
+    default:
+      return {
+        bg: 'bg-amber-400/20',
+        text: 'text-amber-300',
+        border: 'border-amber-400/30',
+        hoverText: 'group-hover:text-amber-300'
+      };
+  }
+}
 
 interface WebHomeProps {
   onNavigateToTab: (tab: string) => void;
@@ -427,60 +508,71 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
                   </p>
                 </div>
 
-                {/* 3 Core Interactive Pillars */}
-                <div className="pt-2 border-t border-white/10">
-                  <div className="text-[11px] font-bold text-indigo-200/80 mb-3 uppercase tracking-wider flex items-center gap-1.5">
-                    <Target className="w-3.5 h-3.5 text-amber-400" />
-                    <span>3 Pilar Inti Penopang Visi:</span>
-                  </div>
+                {/* Dynamic Core Pillars Penopang Visi */}
+                {(() => {
+                  const pillars: WebVisionPillar[] = Array.isArray(webContent.visionPillars) && webContent.visionPillars.length > 0
+                    ? webContent.visionPillars
+                    : [
+                        {
+                          title: 'Berkarakter',
+                          desc: 'Akhlak mulia, religius, disiplin, santun, gotong royong, dan berintegritas.',
+                          icon: 'Heart',
+                          color: 'amber'
+                        },
+                        {
+                          title: 'Berprestasi',
+                          desc: 'Keunggulan akademik, sains, seni, literasi digital, & kompetisi nasional.',
+                          icon: 'Award',
+                          color: 'blue'
+                        },
+                        {
+                          title: 'Berwawasan',
+                          desc: 'Sekolah Adiwiyata, ramah anak, hijau, asri, sehat, & peduli lingkungan hidup.',
+                          icon: 'Leaf',
+                          color: 'emerald'
+                        }
+                      ];
+                  
+                  const pillarsTitle = webContent.visionPillarsTitle || `${pillars.length} Pilar Inti Penopang Visi:`;
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* Pilar 1: Karakter */}
-                    <div className="group rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 p-3.5 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-7 h-7 rounded-lg bg-amber-400/20 text-amber-300 flex items-center justify-center shrink-0 border border-amber-400/30">
-                          <Heart className="w-4 h-4" />
-                        </div>
-                        <h4 className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors">
-                          Berkarakter
-                        </h4>
+                  return (
+                    <div className="pt-2 border-t border-white/10">
+                      <div className="text-[11px] font-bold text-indigo-200/80 mb-3 uppercase tracking-wider flex items-center gap-1.5">
+                        <Target className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{pillarsTitle}</span>
                       </div>
-                      <p className="text-[11px] text-slate-300 leading-relaxed">
-                        Akhlak mulia, religius, disiplin, santun, gotong royong, dan berintegritas.
-                      </p>
-                    </div>
 
-                    {/* Pilar 2: Prestasi */}
-                    <div className="group rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 p-3.5 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-7 h-7 rounded-lg bg-blue-400/20 text-blue-300 flex items-center justify-center shrink-0 border border-blue-400/30">
-                          <Award className="w-4 h-4" />
-                        </div>
-                        <h4 className="text-xs font-bold text-white group-hover:text-blue-300 transition-colors">
-                          Berprestasi
-                        </h4>
+                      <div className={`grid grid-cols-1 ${
+                        pillars.length === 1 ? 'sm:grid-cols-1' :
+                        pillars.length === 2 ? 'sm:grid-cols-2' :
+                        pillars.length === 4 ? 'sm:grid-cols-2 lg:grid-cols-4' :
+                        'sm:grid-cols-3'
+                      } gap-3`}>
+                        {pillars.map((pillar, pIdx) => {
+                          const theme = getPillarColorTheme(pillar.color);
+                          return (
+                            <div 
+                              key={pillar.id || pIdx} 
+                              className="group rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 p-3.5 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5"
+                            >
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <div className={`w-7 h-7 rounded-lg ${theme.bg} ${theme.text} flex items-center justify-center shrink-0 border ${theme.border}`}>
+                                  {renderPillarIcon(pillar.icon)}
+                                </div>
+                                <h4 className={`text-xs font-bold text-white ${theme.hoverText} transition-colors`}>
+                                  {pillar.title}
+                                </h4>
+                              </div>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">
+                                {pillar.desc}
+                              </p>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <p className="text-[11px] text-slate-300 leading-relaxed">
-                        Keunggulan akademik, sains, seni, literasi digital, &amp; kompetisi nasional.
-                      </p>
                     </div>
-
-                    {/* Pilar 3: Lingkungan */}
-                    <div className="group rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 p-3.5 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-400/20 text-emerald-300 flex items-center justify-center shrink-0 border border-emerald-400/30">
-                          <Leaf className="w-4 h-4" />
-                        </div>
-                        <h4 className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
-                          Berwawasan
-                        </h4>
-                      </div>
-                      <p className="text-[11px] text-slate-300 leading-relaxed">
-                        Sekolah Adiwiyata, ramah anak, hijau, asri, sehat, &amp; peduli lingkungan hidup.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

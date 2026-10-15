@@ -395,6 +395,14 @@ export interface WebAgenda {
   location: string;
 }
 
+export interface WebVisionPillar {
+  id?: string;
+  title: string;
+  desc: string;
+  icon?: string;
+  color?: 'amber' | 'blue' | 'emerald' | 'purple' | 'rose' | 'teal' | 'indigo';
+}
+
 export interface WebSectionContent {
   id: 'home' | 'academic' | 'kesiswaan' | 'sarpras' | 'berita';
   headerBgImage?: string;
@@ -423,6 +431,8 @@ export interface WebSectionContent {
   agendas?: WebAgenda[];
   vision?: string;
   missions?: string[];
+  visionPillarsTitle?: string;
+  visionPillars?: WebVisionPillar[];
   instagram?: string;
   whatsapp?: string;
   email?: string;

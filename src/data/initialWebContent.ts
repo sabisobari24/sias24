@@ -723,6 +723,30 @@ export const INITIAL_WEB_CONTENT: WebSectionContent[] = [
     headImage: 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj',
     headMotto: 'Mari kita bersama-sama membangun generasi cerdas, berkarakter, dan peduli lingkungan. Melalui keselarasan visi dan misi, kita berkomitmen menghadirkan ekosistem pendidikan yang inklusif, ramah anak, serta adaptif terhadap perkembangan teknologi informasi demi mengantarkan anak didik menuju prestasi terbaiknya.',
     vision: 'Terwujudnya SMP Negeri 50 Jakarta yang berkarakter, berprestasi, dan berwawasan lingkungan.',
+    visionPillarsTitle: '3 Pilar Inti Penopang Visi:',
+    visionPillars: [
+      {
+        id: 'p1',
+        title: 'Berkarakter',
+        desc: 'Akhlak mulia, religius, disiplin, santun, gotong royong, dan berintegritas.',
+        icon: 'Heart',
+        color: 'amber'
+      },
+      {
+        id: 'p2',
+        title: 'Berprestasi',
+        desc: 'Keunggulan akademik, sains, seni, literasi digital, & kompetisi nasional.',
+        icon: 'Award',
+        color: 'blue'
+      },
+      {
+        id: 'p3',
+        title: 'Berwawasan',
+        desc: 'Sekolah Adiwiyata, ramah anak, hijau, asri, sehat, & peduli lingkungan hidup.',
+        icon: 'Leaf',
+        color: 'emerald'
+      }
+    ],
     missions: [
       'Membiasakan murid untuk beriman, bertakwa, dan berakhlak mulia.',
       'Menumbuhkan kedisiplinan, tanggung jawab, dan kemandirian dalam kehidupan sehari-hari.',

@@ -104,9 +104,9 @@ function applySharpenAndClarityFilter(
  */
 export function enhanceAndCompressBannerImage(
   source: File | string,
-  maxWidth: number = 1920,
-  maxHeight: number = 1080,
-  quality: number = 0.85
+  maxWidth: number = 1280,
+  maxHeight: number = 720,
+  quality: number = 0.78
 ): Promise<string> {
   return new Promise((resolve) => {
     if (!source) {
@@ -151,7 +151,7 @@ export function enhanceAndCompressBannerImage(
 
         // 2. Auto Dynamic Range & Vibrancy enhancement (CSS filter on context)
         try {
-          ctx.filter = 'contrast(106%) saturate(106%) brightness(101%)';
+          ctx.filter = 'contrast(105%) saturate(106%) brightness(101%)';
         } catch (_) {}
 
         // 3. Draw image onto canvas
@@ -163,23 +163,25 @@ export function enhanceAndCompressBannerImage(
         } catch (_) {}
 
         // 4. Automatic edge sharpening & unsharp masking to eliminate gallery blur
-        applySharpenAndClarityFilter(ctx, width, height, 0.24);
+        applySharpenAndClarityFilter(ctx, width, height, 0.22);
 
-        // 5. Intelligent encoding: Try modern WebP first for superior clarity with small file size
+        // 5. Intelligent encoding: Try modern WebP first for superior clarity with small file size (target <= 65KB)
         let outputUrl = '';
         try {
           const webp = canvas.toDataURL('image/webp', quality);
-          if (webp.startsWith('data:image/webp') && webp.length <= 260 * 1024) {
+          if (webp.startsWith('data:image/webp') && webp.length <= 68 * 1024) {
             outputUrl = webp;
           }
         } catch (_) {}
 
-        // Fallback to high-quality progressive JPEG if WebP unavailable or large
+        // Fallback to progressive JPEG if WebP unavailable or too large
         if (!outputUrl) {
           outputUrl = canvas.toDataURL('image/jpeg', quality);
-          // If still over 280KB, step down slightly to protect local storage quota
-          if (outputUrl.length > 280 * 1024) {
-            outputUrl = canvas.toDataURL('image/jpeg', 0.78);
+          if (outputUrl.length > 70 * 1024) {
+            outputUrl = canvas.toDataURL('image/jpeg', 0.68);
+          }
+          if (outputUrl.length > 70 * 1024) {
+            outputUrl = canvas.toDataURL('image/jpeg', 0.60);
           }
         }
 

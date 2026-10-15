@@ -120,8 +120,8 @@ export default function MediaUploadSelector({
     try {
       let b64 = '';
       if (isBanner) {
-        // High-definition wide banner with auto-clarity, edge-sharpening, and anti-blur technology
-        b64 = await enhanceAndCompressBannerImage(file, 1920, 1080, 0.85);
+        // High-definition wide banner with auto-clarity, edge-sharpening, and anti-blur technology (optimized for Firestore)
+        b64 = await enhanceAndCompressBannerImage(file, 1280, 720, 0.78);
         setStatusMessage('Foto banner berhasil diunggah & kualitas diperbaiki secara otomatis (Tajam HD Anti-Blur).');
       } else {
         b64 = await fileToBase64(file, 640, 640, 0.80);
@@ -135,6 +135,9 @@ export default function MediaUploadSelector({
       setTimeout(() => setErrorMessage(null), 6000);
     } finally {
       setIsUploading(false);
+      try {
+        if (e.target) e.target.value = '';
+      } catch (_) {}
     }
   };
 
@@ -245,11 +248,11 @@ export default function MediaUploadSelector({
             <span>Rekomendasi Icon &amp; Emoji Populer (Klik untuk Memilih):</span>
           </p>
           <div className="flex flex-wrap gap-1.5 max-h-[130px] overflow-y-auto pr-1">
-            {PRESET_ICONS.map((preset) => {
+            {PRESET_ICONS.map((preset, idx) => {
               const isSelected = value === preset.value;
               return (
                 <button
-                  key={preset.value}
+                  key={`${preset.value}-${preset.label}-${idx}`}
                   type="button"
                   onClick={() => onChange(preset.value)}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
