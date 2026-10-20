@@ -47,14 +47,26 @@ import {
   QrCode,
   ScanLine,
   FileDown,
-  Loader2
+  Loader2,
+  Crown,
+  Leaf,
+  Recycle
 } from 'lucide-react';
+import {
+  EcoWasteCategory,
+  EcoWasteDeposit,
+  EcoReward,
+  EcoRedemption,
+  EcoConfig
+} from '../types';
 import ExamBrowser from './ExamBrowser';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import StudentIdCardModal from './common/StudentIdCardModal';
 import { generateNISNQRCode } from '../utils/qrHelper';
 import { downloadSingleStudentCardPDF } from '../utils/cardPdfHelper';
 import ELearningPanel from './ELearningPanel';
+import { EcoTiketPanel } from './eco/EcoTiketPanel';
+import { EcoCertificateModal } from './eco/EcoCertificateModal';
 import { fileToBase64, convertGoogleDriveLink } from '../utils/imageHelper';
 import { printCertificate, printTablePDF } from '../utils/printHelper';
 import { useDownload } from '../context/DownloadContext';
@@ -92,8 +104,8 @@ interface SiswaPanelProps {
   bimbinganSchedules: BimbinganSchedule[];
   studentAchievements?: StudentAchievement[];
   pemberkasanSchedules?: PemberkasanSchedule[];
-  activeTabOverride?: 'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | null;
-  onTabChange?: (tab: 'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan') => void;
+  activeTabOverride?: 'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | 'eco-tiket' | null;
+  onTabChange?: (tab: 'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | 'eco-tiket') => void;
   cbtBypassPin?: string;
   headmasterName?: string;
   schoolName?: string;
@@ -102,6 +114,17 @@ interface SiswaPanelProps {
   elearningMaterials?: ELearningMaterial[];
   elearningProgress?: StudentLearningProgress[];
   onUpdateProgress?: (p: StudentLearningProgress) => void;
+
+  // ECo-Tiket & Duta Kebersihan Props
+  allStudents?: Student[];
+  ecoCategories?: EcoWasteCategory[];
+  ecoDeposits?: EcoWasteDeposit[];
+  ecoRewards?: EcoReward[];
+  ecoRedemptions?: EcoRedemption[];
+  ecoConfig?: EcoConfig;
+  onAddEcoDeposit?: (deposit: Omit<EcoWasteDeposit, 'id'>) => Promise<void> | void;
+  onRedeemEcoReward?: (redemption: Omit<EcoRedemption, 'id'>) => Promise<void> | void;
+  onRedeemEcoViolations?: (pointsToRedeem: number, ecoPointsSpent: number) => Promise<void> | void;
 }
 
 export default function SiswaPanel({
@@ -129,14 +152,24 @@ export default function SiswaPanel({
   elearningMaterials = [],
   elearningProgress = [],
   onUpdateProgress,
+  allStudents = [],
+  ecoCategories = [],
+  ecoDeposits = [],
+  ecoRewards = [],
+  ecoRedemptions = [],
+  ecoConfig,
+  onAddEcoDeposit,
+  onRedeemEcoReward,
+  onRedeemEcoViolations,
 }: SiswaPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan'>('profil');
+  const [internalActiveTab, setInternalActiveTab] = useState<'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | 'eco-tiket'>('profil');
   const [previewPhotoRecord, setPreviewPhotoRecord] = useState<Attendance | null>(null);
   const activeTab = activeTabOverride ? activeTabOverride : internalActiveTab;
-  const setActiveTab = (tab: 'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan') => {
+  const setActiveTab = (tab: 'profil' | 'elearning' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | 'eco-tiket') => {
     setInternalActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
+  const [isEcoCertOpen, setIsEcoCertOpen] = useState(false);
   const [activeExamForBrowser, setActiveExamForBrowser] = useState<ExamSchedule | null>(null);
   const [selectedCertForPreview, setSelectedCertForPreview] = useState<StudentAchievement | null>(null);
   const [selfStatus, setSelfStatus] = useState<'Hadir' | 'Sakit' | 'Izin'>('Hadir');
@@ -691,6 +724,41 @@ export default function SiswaPanel({
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
 
+  // Eco-Tiket Calculations for this student
+  const myEcoDeposits = (ecoDeposits || []).filter(d => d.studentId === student.id);
+  const myVerifiedDeposits = myEcoDeposits.filter(d => d.status === 'Diverifikasi');
+  const totalEarnedEcoPoints = myVerifiedDeposits.reduce((sum, d) => sum + (d.pointsEarned || 0), 0);
+  const myEcoRedemptions = (ecoRedemptions || []).filter(r => r.studentId === student.id);
+  const totalSpentEcoPoints = myEcoRedemptions
+    .filter(r => r.status === 'Selesai' || r.status === 'Menunggu')
+    .reduce((sum, r) => sum + (r.pointsSpent || 0), 0);
+  const activeEcoPoints = Math.max(0, totalEarnedEcoPoints - totalSpentEcoPoints);
+
+  // Leaderboard ranking to determine Duta Kebersihan
+  const isDutaKebersihan = React.useMemo(() => {
+    const minRequired = ecoConfig?.ambassadorMinPoints || 50;
+    if (totalEarnedEcoPoints < minRequired) return false;
+    
+    const studentPointsMap = new Map<string, number>();
+    (ecoDeposits || []).forEach(d => {
+      if (d.status === 'Diverifikasi') {
+        const cur = studentPointsMap.get(d.studentId) || 0;
+        studentPointsMap.set(d.studentId, cur + (d.pointsEarned || 0));
+      }
+    });
+
+    let highestPoints = 0;
+    let topStudentId = '';
+    studentPointsMap.forEach((pts, id) => {
+      if (pts > highestPoints) {
+        highestPoints = pts;
+        topStudentId = id;
+      }
+    });
+
+    return topStudentId === student.id || (totalEarnedEcoPoints >= highestPoints && totalEarnedEcoPoints > 0);
+  }, [ecoDeposits, student.id, totalEarnedEcoPoints, ecoConfig?.ambassadorMinPoints]);
+
   useEffect(() => {
     setDownloadActions(getSiswaDownloadConfig());
     return () => clearDownloadActions();
@@ -711,9 +779,27 @@ export default function SiswaPanel({
             <div className="text-center md:text-left space-y-1">
               <p className="text-blue-100 text-sm font-medium tracking-wide uppercase">Selamat Datang di Portal Siswa</p>
               <h1 className="text-2xl font-bold tracking-tight">{student.name}</h1>
-              <p className="text-blue-100 text-sm">
-                NISN: {student.nisn} &bull; {studentClass?.name || 'Belum Masuk Kelas'}
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-blue-100 text-sm">
+                  NISN: {student.nisn} &bull; {studentClass?.name || 'Belum Masuk Kelas'}
+                </p>
+                {isDutaKebersihan && (
+                  <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 font-black text-[11px] px-2.5 py-0.5 rounded-full shadow-md border border-yellow-200">
+                    <Crown className="w-3.5 h-3.5 text-amber-900" />
+                    <span>👑 DUTA KEBERSIHAN RESMI</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsEcoCertOpen(true);
+                      }}
+                      className="bg-slate-900 text-white hover:bg-slate-800 text-[10px] font-bold px-2 py-0.5 rounded-full cursor-pointer ml-1"
+                    >
+                      Lihat Piagam
+                    </button>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -738,7 +824,7 @@ export default function SiswaPanel({
       {activeTab === 'profil' && (
         <>
           {/* Overview Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Attendance Widget */}
             <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
               <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
@@ -773,6 +859,30 @@ export default function SiswaPanel({
                 <div className={`text-sm font-semibold rounded-md px-2 py-1 mt-1 text-center inline-block ${disciplineStatus.color}`}>
                   {disciplineStatus.label}
                 </div>
+              </div>
+            </div>
+
+            {/* ECo-Tiket & Duta Kebersihan Widget */}
+            <div 
+              onClick={() => setActiveTab('eco-tiket')}
+              className="bg-white hover:bg-emerald-50/40 rounded-xl p-5 border border-slate-100 hover:border-emerald-200 shadow-sm flex items-center gap-4 cursor-pointer transition-all group"
+            >
+              <div className="w-12 h-12 rounded-lg bg-emerald-50 group-hover:bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 transition-colors">
+                <Leaf className="w-6 h-6" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs text-slate-500 font-medium uppercase">ECo-Tiket</p>
+                  {isDutaKebersihan && (
+                    <span className="text-[9px] font-black uppercase bg-amber-400 text-amber-950 px-1.5 py-0.2 rounded-full">
+                      👑 DUTA
+                    </span>
+                  )}
+                </div>
+                <p className="text-xl font-bold text-slate-800">{activeEcoPoints} Poin</p>
+                <p className="text-xs text-emerald-600 font-bold flex items-center gap-0.5">
+                  <span>Tukar Sampah &raquo;</span>
+                </p>
               </div>
             </div>
           </div>
@@ -2059,6 +2169,30 @@ export default function SiswaPanel({
             headmasterName={headmasterName}
           />
         )}
+
+        {/* ECo-Tiket (Penukaran Sampah & Duta Kebersihan) TAB */}
+        {activeTab === 'eco-tiket' && (
+          <EcoTiketPanel
+            student={student}
+            allStudents={allStudents}
+            violations={violations}
+            categories={ecoCategories}
+            deposits={ecoDeposits}
+            rewards={ecoRewards}
+            redemptions={ecoRedemptions}
+            config={ecoConfig || {
+              id: 'global_eco_config',
+              ecoPointsPerViolationPoint: 5,
+              ambassadorMinPoints: 100,
+              isFeatureActive: true
+            }}
+            headmasterName={headmasterName}
+            schoolName={schoolName || 'SMP NEGERI 50 JAKARTA'}
+            onAddDeposit={onAddEcoDeposit}
+            onRedeemReward={onRedeemEcoReward}
+            onRedeemViolations={onRedeemEcoViolations}
+          />
+        )}
       </div></div></div>
 
       {activeExamForBrowser && (
@@ -2215,6 +2349,24 @@ export default function SiswaPanel({
         schoolName={schoolName || localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA'}
         schoolLogo={schoolLogo || localStorage.getItem('siakad_card_custom_logo') || localStorage.getItem('siakad_logo_right') || ''}
       />
+
+      {/* Duta Kebersihan Certificate Modal */}
+      {isEcoCertOpen && (
+        <EcoCertificateModal
+          isOpen={isEcoCertOpen}
+          onClose={() => setIsEcoCertOpen(false)}
+          data={{
+            studentName: student.name,
+            studentNisn: student.nisn,
+            className: studentClass?.name || student.classId || 'Kelas 7A',
+            totalEcoPoints: activeEcoPoints,
+            totalDepositsCount: myVerifiedDeposits.length,
+            dateStr: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+            headmasterName,
+            schoolName
+          }}
+        />
+      )}
     </div>
   );
 }

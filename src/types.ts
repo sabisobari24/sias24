@@ -563,6 +563,68 @@ export interface StudentLearningProgress {
   lastAccessedAt: string;
 }
 
+// ==========================================
+// ECo-Tiket (Penukaran Sampah & Duta Kebersihan)
+// ==========================================
 
+export interface EcoWasteCategory {
+  id: string;
+  name: string; // e.g. "Botol Plastik PET", "Gelas Plastik", "Kardus & Kertas", "Kaleng Aluminium", "Minyak Jelantah"
+  unit: string; // "buah", "kg", "liter"
+  pointsPerUnit: number; // e.g. 2 poin/buah, 15 poin/kg
+  icon?: string;
+  description?: string;
+}
 
+export interface EcoWasteDeposit {
+  id: string;
+  studentId: string;
+  studentName: string;
+  classId: string;
+  categoryId: string;
+  categoryName: string;
+  quantity: number;
+  unit: string;
+  pointsEarned: number;
+  date: string; // YYYY-MM-DD
+  notes?: string;
+  recordedBy: string; // Admin / Guru / Petugas Bank Sampah
+  status: 'Diverifikasi' | 'Menunggu' | 'Ditolak';
+  timestamp?: string;
+}
 
+export interface EcoReward {
+  id: string;
+  name: string; // e.g. "Tumbler Stainless Ramah Lingkungan", "Paket Alat Tulis Sekolah"
+  pointsRequired: number;
+  stock: number;
+  imageUrl?: string;
+  description?: string;
+  category?: 'Alat Tulis' | 'Merchandise' | 'Voucher' | 'Bibit Tanaman' | 'Lainnya';
+}
+
+export interface EcoRedemption {
+  id: string;
+  studentId: string;
+  studentName: string;
+  classId: string;
+  type: 'tebus_pelanggaran' | 'tukar_hadiah';
+  rewardId?: string;
+  rewardName?: string;
+  pointsSpent: number;
+  violationPointsReduced?: number; // Jumlah poin pelanggaran yang ditebus
+  date: string; // YYYY-MM-DD
+  status: 'Selesai' | 'Menunggu' | 'Ditolak';
+  notes?: string;
+  approvedBy?: string;
+  timestamp?: string;
+}
+
+export interface EcoConfig {
+  id: string;
+  ecoPointsPerViolationPoint: number; // e.g. 5 ECo-Points = 1 Poin Pelanggaran ditebus
+  ambassadorMinPoints: number; // e.g. 100 Poin minimal untuk gelar Duta Kebersihan
+  schoolTitle?: string;
+  isFeatureActive: boolean;
+  notes?: string;
+}

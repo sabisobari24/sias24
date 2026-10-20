@@ -398,6 +398,37 @@ service cloud.firestore {
       allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
     }
 
+    // ECo-Tiket (Bank Sampah & Penebusan Pelanggaran / Duta Kebersihan)
+    match /eco_waste_categories/{id} {
+      allow get, list: if true;
+      allow create, update: if isValidId(id);
+      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+    }
+
+    match /eco_deposits/{id} {
+      allow get, list: if true;
+      allow create, update: if isValidId(id);
+      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+    }
+
+    match /eco_rewards/{id} {
+      allow get, list: if true;
+      allow create, update: if isValidId(id);
+      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+    }
+
+    match /eco_redemptions/{id} {
+      allow get, list: if true;
+      allow create, update: if isValidId(id);
+      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+    }
+
+    match /eco_config/{id} {
+      allow get, list: if true;
+      allow create, update: if isValidId(id);
+      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+    }
+
     // 15. Aggregated Realtime Containers
     match /aggregated_announcements/{id} {
       allow get: if true;

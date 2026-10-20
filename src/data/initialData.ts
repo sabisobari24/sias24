@@ -1,4 +1,4 @@
-import { Student, Teacher, SchoolClass, Attendance, ViolationType, StudentViolation, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, AbsentTeacher, ImportantEvent, StudentAchievement, PemberkasanSchedule, NomorSurat, InventoryItem, InventoryLoan, BosBopReport, CertificateConfig, SchoolTimeConfig } from '../types';
+import { Student, Teacher, SchoolClass, Attendance, ViolationType, StudentViolation, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, AbsentTeacher, ImportantEvent, StudentAchievement, PemberkasanSchedule, NomorSurat, InventoryItem, InventoryLoan, BosBopReport, CertificateConfig, SchoolTimeConfig, EcoWasteCategory, EcoReward, EcoWasteDeposit, EcoRedemption, EcoConfig } from '../types';
 
 export const INITIAL_CLASSES: SchoolClass[] = [
   { id: 'Kelas 7A', name: 'Kelas VII-A', homeroomTeacherId: 't-sri' },
@@ -451,4 +451,189 @@ export const INITIAL_SCHOOL_TIME_CONFIG: SchoolTimeConfig = {
   schoolStartTime: '07:00',
   latePenaltyPoints: 5,
   isLatePenaltyEnabled: true,
+};
+
+// ==========================================
+// INITIAL DATA: ECO-TIKET
+// ==========================================
+
+export const INITIAL_ECO_CATEGORIES: EcoWasteCategory[] = [
+  {
+    id: 'eco-cat-1',
+    name: 'Botol Plastik PET Bersih',
+    unit: 'buah',
+    pointsPerUnit: 2,
+    icon: 'Bottle',
+    description: 'Botol air mineral, botol minuman soda, dalam keadaan bersih & pipih/gepeng.'
+  },
+  {
+    id: 'eco-cat-2',
+    name: 'Gelas Plastik Air Mineral',
+    unit: 'buah',
+    pointsPerUnit: 1,
+    icon: 'Coffee',
+    description: 'Cup / gelas plastik minuman yang sudah dibilas bersih.'
+  },
+  {
+    id: 'eco-cat-3',
+    name: 'Kardus & Kertas Bekas',
+    unit: 'kg',
+    pointsPerUnit: 15,
+    icon: 'Package',
+    description: 'Kardus cokelat, kertas HVS, buku bekas, karton kering tanpa plastik.'
+  },
+  {
+    id: 'eco-cat-4',
+    name: 'Kaleng Minuman & Aluminium',
+    unit: 'buah',
+    pointsPerUnit: 5,
+    icon: 'Disc',
+    description: 'Kaleng soda, susu, minuman penyegar berbahan aluminium/seng.'
+  },
+  {
+    id: 'eco-cat-5',
+    name: 'Minyak Jelantah Rumah Tangga',
+    unit: 'liter',
+    pointsPerUnit: 25,
+    icon: 'Droplet',
+    description: 'Minyak goreng bekas pakai yang disaring dalam botol bersih.'
+  },
+  {
+    id: 'eco-cat-6',
+    name: 'Sampah Plastik Lembaran / Kresek',
+    unit: 'kg',
+    pointsPerUnit: 10,
+    icon: 'ShoppingBag',
+    description: 'Kantong kresek, bungkus makanan ringan yang sudah bersih & kering.'
+  }
+];
+
+export const INITIAL_ECO_REWARDS: EcoReward[] = [
+  {
+    id: 'eco-rew-1',
+    name: 'Tumbler Stainless Steel Adiwiyata SMPN 50',
+    pointsRequired: 150,
+    stock: 25,
+    category: 'Merchandise',
+    description: 'Botol minum ramah lingkungan tahan panas/dingin dengan logo resmi sekolah.',
+    imageUrl: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&q=80&w=300'
+  },
+  {
+    id: 'eco-rew-2',
+    name: 'Paket Alat Tulis Ramah Lingkungan (Go Green)',
+    pointsRequired: 80,
+    stock: 50,
+    category: 'Alat Tulis',
+    description: 'Terdiri dari pensil daur ulang, pulpen bambu, penghapus non-toxic, & penggaris kayu.',
+    imageUrl: 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?auto=format&fit=crop&q=80&w=300'
+  },
+  {
+    id: 'eco-rew-3',
+    name: 'Voucher Kantin Sehat Sekolah Rp 15.000',
+    pointsRequired: 100,
+    stock: 40,
+    category: 'Voucher',
+    description: 'Voucher belanja makanan/minuman bergizi di kantin resmi SMPN 50 Jakarta.',
+    imageUrl: 'https://images.unsplash.com/photo-1559925393-8be0ec4767c8?auto=format&fit=crop&q=80&w=300'
+  },
+  {
+    id: 'eco-rew-4',
+    name: 'Tote Bag Kanvas Eco-Warrior SMPN 50',
+    pointsRequired: 120,
+    stock: 30,
+    category: 'Merchandise',
+    description: 'Tas belanja kain kanvas kuat pengganti kantong plastik sekali pakai.',
+    imageUrl: 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=300'
+  },
+  {
+    id: 'eco-rew-5',
+    name: 'Buku Catatan Kertas Daur Ulang (Recycled Note)',
+    pointsRequired: 50,
+    stock: 60,
+    category: 'Alat Tulis',
+    description: 'Buku catatan jilid spiral estetik berbahan 100% kertas daur ulang ramah alam.',
+    imageUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=300'
+  },
+  {
+    id: 'eco-rew-6',
+    name: 'Bibit Tanaman Hias & Sayur Hidroponik',
+    pointsRequired: 40,
+    stock: 45,
+    category: 'Bibit Tanaman',
+    description: 'Pot kecil bibit tanaman hijau untuk penghijauan kamar atau taman kelas.',
+    imageUrl: 'https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?auto=format&fit=crop&q=80&w=300'
+  }
+];
+
+export const INITIAL_ECO_DEPOSITS: EcoWasteDeposit[] = [
+  {
+    id: 'eco-dep-1',
+    studentId: 's-ahmad',
+    studentName: 'Ahmad Rifai',
+    classId: 'Kelas 7A',
+    categoryId: 'eco-cat-1',
+    categoryName: 'Botol Plastik PET Bersih',
+    quantity: 45,
+    unit: 'buah',
+    pointsEarned: 90,
+    date: '2026-08-01',
+    notes: 'Setoran botol air mineral kegiatan jumat bersih.',
+    recordedBy: 'Admin Sekolah',
+    status: 'Diverifikasi'
+  },
+  {
+    id: 'eco-dep-2',
+    studentId: 's-ahmad',
+    studentName: 'Ahmad Rifai',
+    classId: 'Kelas 7A',
+    categoryId: 'eco-cat-3',
+    categoryName: 'Kardus & Kertas Bekas',
+    quantity: 8,
+    unit: 'kg',
+    pointsEarned: 120,
+    date: '2026-08-08',
+    notes: 'Kardus bekas kemasan proyek kelas 7.',
+    recordedBy: 'Tim Bank Sampah',
+    status: 'Diverifikasi'
+  },
+  {
+    id: 'eco-dep-3',
+    studentId: 's-siti',
+    studentName: 'Siti Aminah',
+    classId: 'Kelas 7A',
+    categoryId: 'eco-cat-1',
+    categoryName: 'Botol Plastik PET Bersih',
+    quantity: 35,
+    unit: 'buah',
+    pointsEarned: 70,
+    date: '2026-08-05',
+    notes: 'Botol plastik pilahan rumah tangga.',
+    recordedBy: 'Admin Sekolah',
+    status: 'Diverifikasi'
+  },
+  {
+    id: 'eco-dep-4',
+    studentId: 's-siti',
+    studentName: 'Siti Aminah',
+    classId: 'Kelas 7A',
+    categoryId: 'eco-cat-4',
+    categoryName: 'Kaleng Minuman & Aluminium',
+    quantity: 12,
+    unit: 'buah',
+    pointsEarned: 60,
+    date: '2026-08-10',
+    notes: 'Kaleng minuman ringan.',
+    recordedBy: 'Tim Bank Sampah',
+    status: 'Diverifikasi'
+  }
+];
+
+export const INITIAL_ECO_REDEMPTIONS: EcoRedemption[] = [];
+
+export const INITIAL_ECO_CONFIG: EcoConfig = {
+  id: 'global_eco_config',
+  ecoPointsPerViolationPoint: 5, // 5 Poin Eco = 1 Poin Pelanggaran (50 Poin Eco = 10 Poin Pelanggaran)
+  ambassadorMinPoints: 100, // Minimal 100 poin terkumpul untuk kualifikasi Duta Kebersihan
+  isFeatureActive: true,
+  notes: 'Program Gerakan Siswa Peduli Lingkungan & Pengurangan Sampah SMPN 50 Jakarta'
 };

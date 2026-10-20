@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig } from '../types';
-import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown } from 'lucide-react';
+import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig, EcoWasteCategory, EcoWasteDeposit, EcoReward, EcoRedemption, EcoConfig } from '../types';
+import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown, Leaf, Recycle, Crown } from 'lucide-react';
 import { downloadExcel, parseExcel } from '../utils/excelExport';
 import { printHTML, printTablePDF } from '../utils/printHelper';
 import { useDownload } from '../context/DownloadContext';
@@ -12,6 +12,7 @@ import StudentIdCardModal from './common/StudentIdCardModal';
 import BatchStudentCardsModal from './common/BatchStudentCardsModal';
 import AttendanceQrScannerModal from './common/AttendanceQrScannerModal';
 import SettingKartuPelajar from './common/SettingKartuPelajar';
+import { AdminEcoTiketPanel } from './eco/AdminEcoTiketPanel';
 import { printBatchStudentCards } from '../utils/qrHelper';
 import { syncCollection, saveDocument } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
@@ -51,8 +52,8 @@ interface AdminPanelProps {
   headmasterName: string;
   headmasterLogoRight?: string;
   onUpdateHeadmasterName: (name: string, logoLeft?: string, logoRight?: string, extraFields?: any) => void;
-  activeTabOverride?: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | null;
-  onTabChange?: (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar') => void;
+  activeTabOverride?: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | null;
+  onTabChange?: (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket') => void;
   onSwitchRole?: (role: 'admin' | 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'guru_wali' | 'tendik', userObj?: Teacher) => void;
   studentAchievements?: StudentAchievement[];
   onAddStudentAchievement?: (ach: Omit<StudentAchievement, 'id'>) => void;
@@ -70,6 +71,24 @@ interface AdminPanelProps {
   onUpdateCbtBypassPin?: (pin: string) => void;
   webHomeContent?: any;
   onUpdateSocialLinks?: (instagram: string, whatsapp: string, email: string) => void;
+
+  // ECo-Tiket & Bank Sampah Props
+  ecoCategories?: EcoWasteCategory[];
+  ecoDeposits?: EcoWasteDeposit[];
+  ecoRewards?: EcoReward[];
+  ecoRedemptions?: EcoRedemption[];
+  ecoConfig?: EcoConfig;
+  onAddEcoDeposit?: (deposit: Omit<EcoWasteDeposit, 'id'>) => Promise<void> | void;
+  onUpdateEcoDepositStatus?: (id: string, status: 'Diverifikasi' | 'Menunggu' | 'Ditolak', approvedBy?: string) => Promise<void> | void;
+  onDeleteEcoDeposit?: (id: string) => Promise<void> | void;
+  onAddEcoCategory?: (cat: Omit<EcoWasteCategory, 'id'>) => Promise<void> | void;
+  onUpdateEcoCategory?: (cat: EcoWasteCategory) => Promise<void> | void;
+  onDeleteEcoCategory?: (id: string) => Promise<void> | void;
+  onAddEcoReward?: (reward: Omit<EcoReward, 'id'>) => Promise<void> | void;
+  onUpdateEcoReward?: (reward: EcoReward) => Promise<void> | void;
+  onDeleteEcoReward?: (id: string) => Promise<void> | void;
+  onUpdateEcoRedemptionStatus?: (id: string, status: 'Selesai' | 'Menunggu' | 'Ditolak', notes?: string) => Promise<void> | void;
+  onUpdateEcoConfig?: (config: EcoConfig) => Promise<void> | void;
 }
 
 export default function AdminPanel({
@@ -125,10 +144,26 @@ export default function AdminPanel({
   schoolTimeConfig = { schoolStartTime: '07:00', latePenaltyPoints: 5, isLatePenaltyEnabled: true },
   onUpdateSchoolTimeConfig,
   onQuickAttendance,
+  ecoCategories = [],
+  ecoDeposits = [],
+  ecoRewards = [],
+  ecoRedemptions = [],
+  ecoConfig,
+  onAddEcoDeposit,
+  onUpdateEcoDepositStatus,
+  onDeleteEcoDeposit,
+  onAddEcoCategory,
+  onUpdateEcoCategory,
+  onDeleteEcoCategory,
+  onAddEcoReward,
+  onUpdateEcoReward,
+  onDeleteEcoReward,
+  onUpdateEcoRedemptionStatus,
+  onUpdateEcoConfig,
 }: AdminPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar'>('ringkasan');
+  const [internalActiveTab, setInternalActiveTab] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket'>('ringkasan');
   const activeTab = activeTabOverride ? activeTabOverride : internalActiveTab;
-  const setActiveTab = (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar') => {
+  const setActiveTab = (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket') => {
     setInternalActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
@@ -1027,6 +1062,8 @@ export default function AdminPanel({
     );
   });
 
+  const isTeacherFilterActive = globalSearch.trim() !== '';
+
   // Export handlers
   const handleExportSiswa = (format: 'excel' | 'pdf', exportFilteredOnly: boolean = false) => {
     const listToExport = exportFilteredOnly ? filteredStudents : students;
@@ -1045,7 +1082,9 @@ export default function AdminPanel({
       s.parentName,
       s.parentPhone
     ]);
+
     const fileSuffix = filterDesc ? `_${selectedClass!.name.replace(/\s+/g, '_')}` : '';
+
     if (format === 'excel') {
       downloadExcel(`rekap_database_siswa${fileSuffix}.xlsx`, headers, rows, `Data Siswa${filterDesc}`);
       setSuccessMsg(`Berhasil mengunduh Database Siswa${filterDesc} (${listToExport.length} siswa) ke Excel!`);
@@ -1056,9 +1095,11 @@ export default function AdminPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportGuru = (format: 'excel' | 'pdf') => {
+  const handleExportGuru = (format: 'excel' | 'pdf', exportFilteredOnly: boolean = false) => {
+    const listToExport = exportFilteredOnly ? filteredTeachers : teachers;
+    const filterDesc = exportFilteredOnly && isTeacherFilterActive ? ` (Pencarian: ${globalSearch})` : '';
     const headers = ["ID Guru", "Nama Lengkap", "NIP", "Email", "Peran", "Kelas Pendamping (Wali)"];
-    const rows = teachers.map(t => {
+    const rows = listToExport.map(t => {
       let roleLabel = 'Guru Pengajar';
       if (t.roles && t.roles.length > 0) {
         roleLabel = t.roles.map(r => 
@@ -1082,12 +1123,13 @@ export default function AdminPanel({
         homeroomClass?.name || '-'
       ];
     });
+
     if (format === 'excel') {
       downloadExcel('rekap_database_pendidik.xlsx', headers, rows, 'Data Guru');
-      setSuccessMsg('Berhasil mengunduh Database Pendidik (Excel)!');
+      setSuccessMsg(`Berhasil mengunduh Database Pendidik (${listToExport.length} guru/staf) ke Excel!`);
     } else {
-      printTablePDF('Daftar Database Tenaga Pendidik & Kependidikan', headers, rows);
-      setSuccessMsg('Dokumen Database Pendidik berhasil dicetak / disimpan ke PDF!');
+      printTablePDF(`Daftar Database Tenaga Pendidik & Kependidikan${filterDesc}`, headers, rows);
+      setSuccessMsg(`Dokumen Database Pendidik (${listToExport.length} guru/staf) berhasil dicetak / disimpan ke PDF!`);
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
@@ -1349,31 +1391,151 @@ export default function AdminPanel({
     setTimeout(() => setSuccessMsg(''), 5000);
   };
 
+  const handleExportEcoDeposits = (format: 'excel' | 'pdf') => {
+    const headers = ["Tanggal", "Nama Siswa", "Kelas", "Jenis Sampah", "Volume", "Poin", "Status", "Pencatat"];
+    const rows = (ecoDeposits || []).map(d => [
+      d.date,
+      d.studentName,
+      d.classId,
+      d.categoryName,
+      `${d.quantity} ${d.unit}`,
+      d.pointsEarned,
+      d.status,
+      d.recordedBy
+    ]);
+    if (format === 'excel') {
+      downloadExcel('rekap_setoran_sampah_eco_tiket.xlsx', headers, rows, 'Setoran ECo-Tiket');
+      setSuccessMsg('Berhasil mengunduh Laporan Setoran ECo-Tiket (Excel)!');
+    } else {
+      printTablePDF('Rekapitulasi Setoran Sampah ECo-Tiket Siswa', headers, rows, headmasterName);
+      setSuccessMsg('Laporan Setoran ECo-Tiket siap dicetak / disimpan ke PDF!');
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  const handleExportEcoLeaderboard = (format: 'excel' | 'pdf') => {
+    const studentPointsMap = new Map<string, { total: number; name: string; classId: string; count: number }>();
+    (ecoDeposits || []).forEach(d => {
+      if (d.status === 'Diverifikasi') {
+        const cur = studentPointsMap.get(d.studentId) || { total: 0, name: d.studentName, classId: d.classId, count: 0 };
+        cur.total += (d.pointsEarned || 0);
+        cur.count += 1;
+        studentPointsMap.set(d.studentId, cur);
+      }
+    });
+    const sorted = Array.from(studentPointsMap.entries())
+      .map(([id, val]) => ({ id, ...val }))
+      .sort((a, b) => b.total - a.total);
+
+    const headers = ["Peringkat", "Nama Siswa", "Kelas", "Total Poin Terverifikasi", "Frekuensi Setor", "Status Gelar"];
+    const rows = sorted.map((s, idx) => [
+      idx + 1,
+      s.name,
+      s.classId,
+      s.total,
+      `${s.count} kali`,
+      idx === 0 && s.total > 0 ? 'DUTA KEBERSIHAN RESMI' : idx < 3 ? 'Kandidat Duta Lingkungan' : 'Peserta'
+    ]);
+
+    if (format === 'excel') {
+      downloadExcel('leaderboard_duta_kebersihan.xlsx', headers, rows, 'Duta Kebersihan');
+      setSuccessMsg('Berhasil mengunduh Leaderboard Duta Kebersihan (Excel)!');
+    } else {
+      printTablePDF('Leaderboard Duta Kebersihan & Peringkat ECo-Tiket', headers, rows, headmasterName);
+      setSuccessMsg('Leaderboard Duta Kebersihan siap dicetak / disimpan ke PDF!');
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  const handleExportPendingRegistrations = (format: 'excel' | 'pdf') => {
+    const headers = ["Nama Lengkap", "Peran Diajukan", "NIP / NISN / NIK", "Email", "No. HP", "Kelas / Keterangan"];
+    const rows = (pendingRegistrations || []).map(p => [
+      p.name,
+      p.role ? p.role.toUpperCase() : '-',
+      p.nipOrNisnOrNik || '-',
+      p.email || '-',
+      p.phone || '-',
+      p.classId || p.studentNisnOrName || '-'
+    ]);
+    if (format === 'excel') {
+      downloadExcel('antrean_validasi_registrasi.xlsx', headers, rows, 'Validasi Akun');
+      setSuccessMsg(`Berhasil mengunduh antrean registrasi (${rows.length} data) ke Excel!`);
+    } else {
+      printTablePDF('Daftar Antrean Permohonan Registrasi Akun Pengguna', headers, rows, headmasterName);
+      setSuccessMsg(`Dokumen antrean registrasi siap dicetak / disimpan ke PDF!`);
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  const handleExportCbtGrades = (format: 'excel' | 'pdf') => {
+    const headers = ["Tanggal Ujian", "Nama Siswa", "NISN", "Kelas", "Mata Pelajaran", "Jenis Ujian", "Skor CBT", "Status"];
+    const rows = examGrades.map(g => {
+      const s = students.find(std => std.id === g.studentId);
+      const sClass = classes.find(c => c.id === s?.classId || c.name.toLowerCase() === (s?.classId || '').toLowerCase());
+      return [
+        g.date,
+        s?.name || 'Siswa Terhapus',
+        s?.nisn || '-',
+        sClass?.name || '-',
+        g.subject,
+        g.examType,
+        g.score,
+        g.status
+      ];
+    });
+    if (format === 'excel') {
+      downloadExcel('rekap_seluruh_nilai_cbt.xlsx', headers, rows, 'Nilai CBT Global');
+      setSuccessMsg(`Berhasil mengunduh Rekap Nilai CBT Global (${rows.length} nilai) ke Excel!`);
+    } else {
+      printTablePDF('Rekapitulasi Seluruh Nilai Ujian CBT Siswa', headers, rows, headmasterName);
+      setSuccessMsg(`Dokumen Nilai CBT Global siap dicetak / disimpan ke PDF!`);
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
   const getAdminDownloadConfig = () => {
     switch (activeTab) {
       case 'siswa':
         return [
-          { label: 'Data Siswa (Excel)', onClick: () => handleExportSiswa('excel', isStudentFilterActive), type: 'excel' as const },
-          { label: 'Data Siswa (PDF)', onClick: () => handleExportSiswa('pdf', isStudentFilterActive), type: 'pdf' as const },
+          { label: 'Siswa (Excel)', onClick: () => handleExportSiswa('excel', isStudentFilterActive), type: 'excel' as const },
+          { label: 'Siswa (PDF)', onClick: () => handleExportSiswa('pdf', isStudentFilterActive), type: 'pdf' as const },
         ];
       case 'guru':
         return [
-          { label: 'Data Pendidik (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
-          { label: 'Data Pendidik (PDF)', onClick: () => handleExportGuru('pdf'), type: 'pdf' as const },
+          { label: 'Guru (Excel)', onClick: () => handleExportGuru('excel', isTeacherFilterActive), type: 'excel' as const },
+          { label: 'Guru (PDF)', onClick: () => handleExportGuru('pdf', isTeacherFilterActive), type: 'pdf' as const },
         ];
       case 'prestasi':
         return [
-          { label: 'Rekap Prestasi (Excel)', onClick: () => handleDownloadAchievements('excel'), type: 'excel' as const },
-          { label: 'Rekap Prestasi (PDF)', onClick: () => handleDownloadAchievements('pdf'), type: 'pdf' as const },
+          { label: 'Prestasi (Excel)', onClick: () => handleDownloadAchievements('excel'), type: 'excel' as const },
+          { label: 'Prestasi (PDF)', onClick: () => handleDownloadAchievements('pdf'), type: 'pdf' as const },
+        ];
+      case 'eco-tiket':
+        return [
+          { label: 'Setoran (Excel)', onClick: () => handleExportEcoDeposits('excel'), type: 'excel' as const },
+          { label: 'Setoran (PDF)', onClick: () => handleExportEcoDeposits('pdf'), type: 'pdf' as const },
+          { label: 'Duta ECo (Excel)', onClick: () => handleExportEcoLeaderboard('excel'), type: 'excel' as const },
+          { label: 'Duta ECo (PDF)', onClick: () => handleExportEcoLeaderboard('pdf'), type: 'pdf' as const },
+        ];
+      case 'setting-cbt':
+        return [
+          { label: 'Nilai CBT (Excel)', onClick: () => handleExportCbtGrades('excel'), type: 'excel' as const },
+          { label: 'Nilai CBT (PDF)', onClick: () => handleExportCbtGrades('pdf'), type: 'pdf' as const },
+        ];
+      case 'validasi-akun':
+        return [
+          { label: 'Antrean (Excel)', onClick: () => handleExportPendingRegistrations('excel'), type: 'excel' as const },
+          { label: 'Antrean (PDF)', onClick: () => handleExportPendingRegistrations('pdf'), type: 'pdf' as const },
         ];
       case 'ringkasan':
       default:
         return [
-          { label: 'Data Siswa (Excel)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
-          { label: 'Data Guru (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
+          { label: 'Siswa (Excel)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
+          { label: 'Guru (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
           { label: 'Presensi (Excel)', onClick: () => handleExportAbsensi('excel'), type: 'excel' as const },
           { label: 'Pelanggaran (Excel)', onClick: () => handleExportPelanggaran('excel'), type: 'excel' as const },
-          { label: 'Rapor Kolektif (Excel)', onClick: () => handleExportKustom('excel'), type: 'excel' as const },
+          { label: 'ECo-Tiket (Excel)', onClick: () => handleExportEcoDeposits('excel'), type: 'excel' as const },
+          { label: 'Rapor (Excel)', onClick: () => handleExportKustom('excel'), type: 'excel' as const },
         ];
     }
   };
@@ -1668,22 +1830,35 @@ export default function AdminPanel({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl p-5 border shadow-sm text-center">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-white rounded-xl p-4 border shadow-sm text-center">
                 <span className="text-2xl font-bold text-slate-800 block">{totalStudents}</span>
-                <span className="text-xs text-slate-400 font-bold uppercase mt-1 block">Total Siswa</span>
+                <span className="text-[11px] text-slate-400 font-bold uppercase mt-1 block">Total Siswa</span>
               </div>
-              <div className="bg-white rounded-xl p-5 border shadow-sm text-center">
+              <div className="bg-white rounded-xl p-4 border shadow-sm text-center">
                 <span className="text-2xl font-bold text-slate-800 block">{totalTeachers}</span>
-                <span className="text-xs text-slate-400 font-bold uppercase mt-1 block">Total Pendidik</span>
+                <span className="text-[11px] text-slate-400 font-bold uppercase mt-1 block">Total Pendidik</span>
               </div>
-              <div className="bg-white rounded-xl p-5 border shadow-sm text-center">
+              <div className="bg-white rounded-xl p-4 border shadow-sm text-center">
                 <span className="text-2xl font-bold text-slate-800 block">{avgAttendance}%</span>
-                <span className="text-xs text-slate-400 font-bold uppercase mt-1 block">Rata Presensi</span>
+                <span className="text-[11px] text-slate-400 font-bold uppercase mt-1 block">Rata Presensi</span>
               </div>
-              <div className="bg-white rounded-xl p-5 border shadow-sm text-center">
+              <div className="bg-white rounded-xl p-4 border shadow-sm text-center">
                 <span className="text-2xl font-bold text-rose-600 block">{totalViolationsCount}</span>
-                <span className="text-xs text-slate-400 font-bold uppercase mt-1 block">Total Pelanggaran</span>
+                <span className="text-[11px] text-slate-400 font-bold uppercase mt-1 block">Pelanggaran</span>
+              </div>
+              <div 
+                onClick={() => setActiveTab('eco-tiket')}
+                className="bg-emerald-50/50 hover:bg-emerald-50 rounded-xl p-4 border border-emerald-100 shadow-sm text-center cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
+                title="Buka Panel ECo-Tiket"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <Leaf className="w-4 h-4 text-emerald-600" />
+                  <span className="text-2xl font-bold text-emerald-700 block">
+                    {(ecoDeposits || []).filter(d => d.status === 'Diverifikasi').reduce((s, c) => s + (c.pointsEarned || 0), 0)}
+                  </span>
+                </div>
+                <span className="text-[11px] text-emerald-600 font-bold uppercase mt-1 block">Poin ECo-Tiket</span>
               </div>
             </div>
 
@@ -1752,7 +1927,7 @@ export default function AdminPanel({
               
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">1. Unduh Data Utama</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                   {/* Database Siswa */}
                   <div className="flex flex-col justify-between p-4 bg-purple-50/50 border border-purple-100 rounded-xl transition-all hover:bg-purple-50 font-semibold text-slate-700">
                     <div className="space-y-1 mb-3">
@@ -1842,6 +2017,32 @@ export default function AdminPanel({
                       <button
                         onClick={() => handleExportPelanggaran('pdf')}
                         className="flex-1 flex items-center justify-center gap-1 bg-white hover:bg-rose-50 hover:text-rose-700 border border-slate-200/80 hover:border-rose-300 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all shadow-sm active:scale-95"
+                      >
+                        <FileText className="w-3 h-3 text-rose-500" />
+                        <span>PDF</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Setoran ECo-Tiket & Duta Kebersihan */}
+                  <div className="flex flex-col justify-between p-4 bg-teal-50/50 border border-teal-100 rounded-xl transition-all hover:bg-teal-50 font-semibold text-slate-700">
+                    <div className="space-y-1 mb-3">
+                      <span className="text-xs font-bold text-teal-700 block">ECo-Tiket &amp; Duta</span>
+                      <span className="text-[10px] text-slate-400 block">{ecoDeposits.length} setoran sampah</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleExportEcoDeposits('excel')}
+                        className="flex-1 flex items-center justify-center gap-1 bg-white hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200/80 hover:border-emerald-300 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all shadow-sm active:scale-95"
+                        title="Unduh Setoran Sampah ECo (Excel)"
+                      >
+                        <FileSpreadsheet className="w-3 h-3 text-emerald-600" />
+                        <span>Excel</span>
+                      </button>
+                      <button
+                        onClick={() => handleExportEcoDeposits('pdf')}
+                        className="flex-1 flex items-center justify-center gap-1 bg-white hover:bg-rose-50 hover:text-rose-700 border border-slate-200/80 hover:border-rose-300 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all shadow-sm active:scale-95"
+                        title="Unduh Setoran Sampah ECo (PDF)"
                       >
                         <FileText className="w-3 h-3 text-rose-500" />
                         <span>PDF</span>
@@ -4864,6 +5065,37 @@ export default function AdminPanel({
         {/* Tab Setting Kartu Pelajar */}
         {activeTab === 'setting-kartu-pelajar' && (
           <SettingKartuPelajar />
+        )}
+
+        {/* Tab Kelola ECo-Tiket & Bank Sampah */}
+        {activeTab === 'eco-tiket' && (
+          <AdminEcoTiketPanel
+            students={students}
+            classes={classes}
+            categories={ecoCategories}
+            deposits={ecoDeposits}
+            rewards={ecoRewards}
+            redemptions={ecoRedemptions}
+            config={ecoConfig || {
+              id: 'global_eco_config',
+              ecoPointsPerViolationPoint: 5,
+              ambassadorMinPoints: 100,
+              isFeatureActive: true
+            }}
+            headmasterName={headmasterName}
+            schoolName={schoolTitleInput || 'SMP NEGERI 50 JAKARTA'}
+            onAddDeposit={onAddEcoDeposit}
+            onUpdateDepositStatus={onUpdateEcoDepositStatus}
+            onDeleteDeposit={onDeleteEcoDeposit}
+            onAddCategory={onAddEcoCategory}
+            onUpdateCategory={onUpdateEcoCategory}
+            onDeleteCategory={onDeleteEcoCategory}
+            onAddReward={onAddEcoReward}
+            onUpdateReward={onUpdateEcoReward}
+            onDeleteReward={onDeleteEcoReward}
+            onUpdateRedemptionStatus={onUpdateEcoRedemptionStatus}
+            onUpdateConfig={onUpdateEcoConfig}
+          />
         )}
 
         </div>

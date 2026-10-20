@@ -51,7 +51,9 @@ import {
   LayoutDashboard,
   Download,
   FileSpreadsheet,
-  ChevronDown
+  ChevronDown,
+  Leaf,
+  Recycle
 } from 'lucide-react';
 import { useDownload } from './context/DownloadContext';
 
@@ -94,7 +96,12 @@ import {
   StudentExamSubmission,
   SchoolTimeConfig,
   ELearningMaterial,
-  StudentLearningProgress
+  StudentLearningProgress,
+  EcoWasteCategory,
+  EcoWasteDeposit,
+  EcoReward,
+  EcoRedemption,
+  EcoConfig
 } from './types';
 
 import {
@@ -117,7 +124,12 @@ import {
   INITIAL_INVENTORY_ITEMS,
   INITIAL_INVENTORY_LOANS,
   INITIAL_BOS_BOP_REPORTS,
-  INITIAL_SCHOOL_TIME_CONFIG
+  INITIAL_SCHOOL_TIME_CONFIG,
+  INITIAL_ECO_CATEGORIES,
+  INITIAL_ECO_REWARDS,
+  INITIAL_ECO_DEPOSITS,
+  INITIAL_ECO_REDEMPTIONS,
+  INITIAL_ECO_CONFIG
 } from './data/initialData';
 
 import {
@@ -581,6 +593,42 @@ export default function App({ initialMode }: AppProps = {}) {
       .catch((err) => console.error("Error saving school time config:", err));
   };
 
+  // ECo-Tiket (Bank Sampah & Duta Kebersihan) States
+  const [ecoCategories, setEcoCategories] = useState<EcoWasteCategory[]>(() => {
+    try {
+      const saved = localStorage.getItem('siakad_eco_categories');
+      return saved ? JSON.parse(saved) : INITIAL_ECO_CATEGORIES;
+    } catch { return INITIAL_ECO_CATEGORIES; }
+  });
+
+  const [ecoRewards, setEcoRewards] = useState<EcoReward[]>(() => {
+    try {
+      const saved = localStorage.getItem('siakad_eco_rewards');
+      return saved ? JSON.parse(saved) : INITIAL_ECO_REWARDS;
+    } catch { return INITIAL_ECO_REWARDS; }
+  });
+
+  const [ecoDeposits, setEcoDeposits] = useState<EcoWasteDeposit[]>(() => {
+    try {
+      const saved = localStorage.getItem('siakad_eco_deposits');
+      return saved ? JSON.parse(saved) : INITIAL_ECO_DEPOSITS;
+    } catch { return INITIAL_ECO_DEPOSITS; }
+  });
+
+  const [ecoRedemptions, setEcoRedemptions] = useState<EcoRedemption[]>(() => {
+    try {
+      const saved = localStorage.getItem('siakad_eco_redemptions');
+      return saved ? JSON.parse(saved) : INITIAL_ECO_REDEMPTIONS;
+    } catch { return INITIAL_ECO_REDEMPTIONS; }
+  });
+
+  const [ecoConfig, setEcoConfig] = useState<EcoConfig>(() => {
+    try {
+      const saved = localStorage.getItem('siakad_eco_config');
+      return saved ? JSON.parse(saved) : INITIAL_ECO_CONFIG;
+    } catch { return INITIAL_ECO_CONFIG; }
+  });
+
   // Active Session State
   const [activeRole, setActiveRole] = useState<UserRole | null>(() => {
     const savedRole = localStorage.getItem('siakad_active_role');
@@ -692,9 +740,9 @@ export default function App({ initialMode }: AppProps = {}) {
   // Public website tab state
   const [publicTab, setPublicTab] = useState<'beranda' | 'akademik' | 'kesiswaan' | 'sarpras' | 'berita' | 'portal'>('beranda');
 
-  const [adminTabOverride, setAdminTabOverride] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | null>(null);
+  const [adminTabOverride, setAdminTabOverride] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | null>(null);
 
-  const [siswaTab, setSiswaTab] = useState<'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | 'elearning'>('profil');
+  const [siswaTab, setSiswaTab] = useState<'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | 'elearning' | 'eco-tiket'>('profil');
   const [orangTuaTab, setOrangTuaTab] = useState<'profil' | 'absensi' | 'pelanggaran' | 'catatan' | 'komunikasi'>('profil');
   const [guruTab, setGuruTab] = useState<'presensi' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal' | 'elearning'>('presensi');
   const [waliKelasTab, setWaliKelasTab] = useState<'beranda' | 'catatan' | 'ekskul' | 'prestasi' | 'pesan'>('beranda');
@@ -1198,6 +1246,33 @@ export default function App({ initialMode }: AppProps = {}) {
       }
     }, INITIAL_WEB_CONTENT);
 
+    const unsubEcoCategories = syncCollection<EcoWasteCategory>('eco_categories', (data) => {
+      setEcoCategories(data);
+      safeLocalStorageSet('siakad_eco_categories', JSON.stringify(data));
+    }, INITIAL_ECO_CATEGORIES);
+
+    const unsubEcoRewards = syncCollection<EcoReward>('eco_rewards', (data) => {
+      setEcoRewards(data);
+      safeLocalStorageSet('siakad_eco_rewards', JSON.stringify(data));
+    }, INITIAL_ECO_REWARDS);
+
+    const unsubEcoDeposits = syncCollection<EcoWasteDeposit>('eco_deposits', (data) => {
+      setEcoDeposits(data);
+      safeLocalStorageSet('siakad_eco_deposits', JSON.stringify(data));
+    }, INITIAL_ECO_DEPOSITS);
+
+    const unsubEcoRedemptions = syncCollection<EcoRedemption>('eco_redemptions', (data) => {
+      setEcoRedemptions(data);
+      safeLocalStorageSet('siakad_eco_redemptions', JSON.stringify(data));
+    }, INITIAL_ECO_REDEMPTIONS);
+
+    const unsubEcoConfig = syncCollection<EcoConfig>('eco_config', (data) => {
+      if (data && data.length > 0) {
+        setEcoConfig(data[0]);
+        safeLocalStorageSet('siakad_eco_config', JSON.stringify(data[0]));
+      }
+    }, [INITIAL_ECO_CONFIG]);
+
     // Active session headmaster migration
     try {
       const savedUser = localStorage.getItem('siakad_active_user');
@@ -1248,6 +1323,11 @@ export default function App({ initialMode }: AppProps = {}) {
       unsubELearningProgress();
       unsubStudentSubmissions();
       unsubWebContent();
+      unsubEcoCategories();
+      unsubEcoRewards();
+      unsubEcoDeposits();
+      unsubEcoRedemptions();
+      unsubEcoConfig();
       clearTimeout(timer);
     };
   }, []);
@@ -2384,6 +2464,203 @@ export default function App({ initialMode }: AppProps = {}) {
     });
     deleteDocument('student_achievements', id)
       .catch((err) => console.error("Error deleting student achievement:", err));
+  };
+
+  // ECo-Tiket & Bank Sampah Handlers
+  const handleAddEcoDeposit = async (dep: Omit<EcoWasteDeposit, 'id'>) => {
+    const id = `dep-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const newDep: EcoWasteDeposit = { ...dep, id };
+    setEcoDeposits(prev => {
+      const updated = [newDep, ...prev];
+      safeLocalStorageSet('siakad_eco_deposits', JSON.stringify(updated));
+      return updated;
+    });
+    try {
+      await saveDocument('eco_deposits', id, newDep);
+    } catch (err) {
+      console.error("Error saving eco deposit:", err);
+    }
+  };
+
+  const handleUpdateEcoDepositStatus = async (id: string, status: 'Diverifikasi' | 'Menunggu' | 'Ditolak', approvedBy: string = 'Admin') => {
+    setEcoDeposits(prev => {
+      const updated = prev.map(d => d.id === id ? { ...d, status, recordedBy: `${d.recordedBy || 'Siswa'} (Diverifikasi: ${approvedBy})` } : d);
+      safeLocalStorageSet('siakad_eco_deposits', JSON.stringify(updated));
+      return updated;
+    });
+    const target = ecoDeposits.find(d => d.id === id);
+    if (target) {
+      const updatedDoc = { ...target, status, recordedBy: `${target.recordedBy || 'Siswa'} (Diverifikasi: ${approvedBy})` };
+      try {
+        await saveDocument('eco_deposits', id, updatedDoc);
+      } catch (err) {
+        console.error("Error updating eco deposit status:", err);
+      }
+    }
+  };
+
+  const handleDeleteEcoDeposit = async (id: string) => {
+    setEcoDeposits(prev => {
+      const updated = prev.filter(d => d.id !== id);
+      safeLocalStorageSet('siakad_eco_deposits', JSON.stringify(updated));
+      return updated;
+    });
+    try {
+      await deleteDocument('eco_deposits', id);
+    } catch (err) {
+      console.error("Error deleting eco deposit:", err);
+    }
+  };
+
+  const handleRedeemEcoReward = async (red: Omit<EcoRedemption, 'id'>) => {
+    const id = `red-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const newRed: EcoRedemption = { ...red, id };
+    setEcoRedemptions(prev => {
+      const updated = [newRed, ...prev];
+      safeLocalStorageSet('siakad_eco_redemptions', JSON.stringify(updated));
+      return updated;
+    });
+    if (red.rewardId) {
+      setEcoRewards(prev => {
+        const updated = prev.map(rew => rew.id === red.rewardId ? { ...rew, stock: Math.max(0, rew.stock - 1) } : rew);
+        safeLocalStorageSet('siakad_eco_rewards', JSON.stringify(updated));
+        return updated;
+      });
+      const targetRew = ecoRewards.find(r => r.id === red.rewardId);
+      if (targetRew) {
+        saveDocument('eco_rewards', red.rewardId, { ...targetRew, stock: Math.max(0, targetRew.stock - 1) }).catch(() => {});
+      }
+    }
+    try {
+      await saveDocument('eco_redemptions', id, newRed);
+    } catch (err) {
+      console.error("Error saving eco redemption:", err);
+    }
+  };
+
+  const handleRedeemEcoViolations = async (pointsToRedeem: number, ecoPointsSpent: number) => {
+    if (!activeUser?.id) return;
+    const id = `red-v-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const newRed: EcoRedemption = {
+      id,
+      studentId: activeUser.id,
+      studentName: activeUser.name,
+      classId: activeUser.classId || 'Kelas 7A',
+      type: 'tebus_pelanggaran',
+      pointsSpent: ecoPointsSpent,
+      violationPointsReduced: pointsToRedeem,
+      date: new Date().toISOString().split('T')[0],
+      status: 'Selesai',
+      notes: `Penebusan ${pointsToRedeem} poin pelanggaran kedisiplinan menggunakan ${ecoPointsSpent} ECo-Points.`,
+      approvedBy: 'Sistem Bank Sampah & Kedisiplinan'
+    };
+    setEcoRedemptions(prev => {
+      const updated = [newRed, ...prev];
+      safeLocalStorageSet('siakad_eco_redemptions', JSON.stringify(updated));
+      return updated;
+    });
+    saveDocument('eco_redemptions', id, newRed).catch(() => {});
+
+    // Reduce points on existing student violation records
+    let remainingToDeduct = pointsToRedeem;
+    const studentVList = violations.filter(v => v.studentId === activeUser.id);
+    const updatedViolations = [...violations];
+
+    for (const v of studentVList) {
+      if (remainingToDeduct <= 0) break;
+      const vIdx = updatedViolations.findIndex(item => item.id === v.id);
+      if (vIdx === -1) continue;
+
+      if (v.points <= remainingToDeduct) {
+        remainingToDeduct -= v.points;
+        updatedViolations.splice(vIdx, 1);
+        deleteDocument('violations', v.id).catch(() => {});
+      } else {
+        const newPts = v.points - remainingToDeduct;
+        remainingToDeduct = 0;
+        const modified = { ...v, points: newPts, notes: `${v.notes || ''} [Tebus Poin: -${pointsToRedeem} poin]` };
+        updatedViolations[vIdx] = modified;
+        saveDocument('violations', v.id, modified).catch(() => {});
+      }
+    }
+    setViolations(updatedViolations);
+    safeLocalStorageSet('siakad_violations', JSON.stringify(updatedViolations));
+  };
+
+  const handleAddEcoCategory = async (cat: Omit<EcoWasteCategory, 'id'>) => {
+    const id = `eco-cat-${Date.now()}`;
+    const newCat = { ...cat, id };
+    setEcoCategories(prev => {
+      const updated = [...prev, newCat];
+      safeLocalStorageSet('siakad_eco_categories', JSON.stringify(updated));
+      return updated;
+    });
+    saveDocument('eco_categories', id, newCat).catch(() => {});
+  };
+
+  const handleUpdateEcoCategory = async (cat: EcoWasteCategory) => {
+    setEcoCategories(prev => {
+      const updated = prev.map(c => c.id === cat.id ? cat : c);
+      safeLocalStorageSet('siakad_eco_categories', JSON.stringify(updated));
+      return updated;
+    });
+    saveDocument('eco_categories', cat.id, cat).catch(() => {});
+  };
+
+  const handleDeleteEcoCategory = async (id: string) => {
+    setEcoCategories(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      safeLocalStorageSet('siakad_eco_categories', JSON.stringify(updated));
+      return updated;
+    });
+    deleteDocument('eco_categories', id).catch(() => {});
+  };
+
+  const handleAddEcoReward = async (reward: Omit<EcoReward, 'id'>) => {
+    const id = `eco-rew-${Date.now()}`;
+    const newRew = { ...reward, id };
+    setEcoRewards(prev => {
+      const updated = [...prev, newRew];
+      safeLocalStorageSet('siakad_eco_rewards', JSON.stringify(updated));
+      return updated;
+    });
+    saveDocument('eco_rewards', id, newRew).catch(() => {});
+  };
+
+  const handleUpdateEcoReward = async (reward: EcoReward) => {
+    setEcoRewards(prev => {
+      const updated = prev.map(r => r.id === reward.id ? reward : r);
+      safeLocalStorageSet('siakad_eco_rewards', JSON.stringify(updated));
+      return updated;
+    });
+    saveDocument('eco_rewards', reward.id, reward).catch(() => {});
+  };
+
+  const handleDeleteEcoReward = async (id: string) => {
+    setEcoRewards(prev => {
+      const updated = prev.filter(r => r.id !== id);
+      safeLocalStorageSet('siakad_eco_rewards', JSON.stringify(updated));
+      return updated;
+    });
+    deleteDocument('eco_rewards', id).catch(() => {});
+  };
+
+  const handleUpdateEcoRedemptionStatus = async (id: string, status: 'Selesai' | 'Menunggu' | 'Ditolak', notes?: string) => {
+    setEcoRedemptions(prev => {
+      const updated = prev.map(r => r.id === id ? { ...r, status, notes: notes || r.notes } : r);
+      safeLocalStorageSet('siakad_eco_redemptions', JSON.stringify(updated));
+      return updated;
+    });
+    const target = ecoRedemptions.find(r => r.id === id);
+    if (target) {
+      saveDocument('eco_redemptions', id, { ...target, status, notes: notes || target.notes }).catch(() => {});
+    }
+  };
+
+  const handleUpdateEcoConfig = async (cfg: EcoConfig) => {
+    setEcoConfig(cfg);
+    safeLocalStorageSet('siakad_eco_config', JSON.stringify(cfg));
+    saveDocument('eco_config', cfg.id || 'global_eco_config', cfg).catch(() => {});
   };
 
   // Database Reset to fresh seed
@@ -3534,7 +3811,7 @@ export default function App({ initialMode }: AppProps = {}) {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between px-1">
                       <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Menu Administrasi</h3>
-                      <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full border border-purple-100">10 Menu</span>
+                      <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full border border-purple-100">11 Menu</span>
                     </div>
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       <button
@@ -3663,6 +3940,18 @@ export default function App({ initialMode }: AppProps = {}) {
                         <CreditCard className="w-4 h-4 shrink-0 text-indigo-500" />
                         <span className="truncate">Kartu Pelajar</span>
                       </button>
+
+                      <button
+                        onClick={() => setAdminTabOverride('eco-tiket')}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          adminTabOverride === 'eco-tiket'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-100'
+                            : 'bg-transparent text-slate-600 border-transparent hover:bg-slate-50 hover:text-slate-900 cursor-pointer'
+                        }`}
+                      >
+                        <Leaf className="w-4 h-4 shrink-0 text-emerald-500" />
+                        <span className="truncate">ECo-Tiket &amp; Sampah</span>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -3674,6 +3963,7 @@ export default function App({ initialMode }: AppProps = {}) {
                       {[
                         { id: 'profil', label: 'Profil Siswa', icon: User },
                         { id: 'elearning', label: 'E-Learning', icon: BookOpen },
+                        { id: 'eco-tiket', label: 'ECo-Tiket', icon: Leaf },
                         { id: 'absensi', label: 'Presensi', icon: Calendar },
                         { id: 'cbt-ujian', label: 'Ujian CBT', icon: FileCheck },
                         { id: 'pelanggaran', label: 'Pelanggaran', icon: AlertTriangle },
@@ -4312,6 +4602,22 @@ export default function App({ initialMode }: AppProps = {}) {
                         onUpdateCbtBypassPin={handleUpdateCbtBypassPin}
                         webHomeContent={webHomeContent}
                         onUpdateSocialLinks={handleUpdateSocialLinks}
+                        ecoCategories={ecoCategories}
+                        ecoDeposits={ecoDeposits}
+                        ecoRewards={ecoRewards}
+                        ecoRedemptions={ecoRedemptions}
+                        ecoConfig={ecoConfig}
+                        onAddEcoDeposit={handleAddEcoDeposit}
+                        onUpdateEcoDepositStatus={handleUpdateEcoDepositStatus}
+                        onDeleteEcoDeposit={handleDeleteEcoDeposit}
+                        onAddEcoCategory={handleAddEcoCategory}
+                        onUpdateEcoCategory={handleUpdateEcoCategory}
+                        onDeleteEcoCategory={handleDeleteEcoCategory}
+                        onAddEcoReward={handleAddEcoReward}
+                        onUpdateEcoReward={handleUpdateEcoReward}
+                        onDeleteEcoReward={handleDeleteEcoReward}
+                        onUpdateEcoRedemptionStatus={handleUpdateEcoRedemptionStatus}
+                        onUpdateEcoConfig={handleUpdateEcoConfig}
                       />
                     ) : (
                       <>
@@ -4341,6 +4647,15 @@ export default function App({ initialMode }: AppProps = {}) {
                             elearningMaterials={elearningMaterials}
                             elearningProgress={elearningProgress}
                             onUpdateProgress={handleUpdateELearningProgress}
+                            allStudents={sortedStudents}
+                            ecoCategories={ecoCategories}
+                            ecoDeposits={ecoDeposits}
+                            ecoRewards={ecoRewards}
+                            ecoRedemptions={ecoRedemptions}
+                            ecoConfig={ecoConfig}
+                            onAddEcoDeposit={handleAddEcoDeposit}
+                            onRedeemEcoReward={handleRedeemEcoReward}
+                            onRedeemEcoViolations={handleRedeemEcoViolations}
                           />
                         )}
 
@@ -4547,6 +4862,22 @@ export default function App({ initialMode }: AppProps = {}) {
                             onUpdateCbtBypassPin={handleUpdateCbtBypassPin}
                             webHomeContent={webHomeContent}
                             onUpdateSocialLinks={handleUpdateSocialLinks}
+                            ecoCategories={ecoCategories}
+                            ecoDeposits={ecoDeposits}
+                            ecoRewards={ecoRewards}
+                            ecoRedemptions={ecoRedemptions}
+                            ecoConfig={ecoConfig}
+                            onAddEcoDeposit={handleAddEcoDeposit}
+                            onUpdateEcoDepositStatus={handleUpdateEcoDepositStatus}
+                            onDeleteEcoDeposit={handleDeleteEcoDeposit}
+                            onAddEcoCategory={handleAddEcoCategory}
+                            onUpdateEcoCategory={handleUpdateEcoCategory}
+                            onDeleteEcoCategory={handleDeleteEcoCategory}
+                            onAddEcoReward={handleAddEcoReward}
+                            onUpdateEcoReward={handleUpdateEcoReward}
+                            onDeleteEcoReward={handleDeleteEcoReward}
+                            onUpdateEcoRedemptionStatus={handleUpdateEcoRedemptionStatus}
+                            onUpdateEcoConfig={handleUpdateEcoConfig}
                             onSwitchRole={(role, userObj) => {
                               setActiveRole(role as UserRole);
                               if (userObj) {
@@ -4701,19 +5032,21 @@ export default function App({ initialMode }: AppProps = {}) {
             { id: 'beranda', label: 'Kembali ke Web', icon: School }
           ] :
           activeRole === 'admin' ? [
-            { id: 'ringkasan', label: 'Metrik & Statistik', icon: TrendingUp },
-            { id: 'siswa', label: 'Kelola Siswa', icon: Users },
-            { id: 'guru', label: 'Kelola Pendidik', icon: Shield },
-            { id: 'database-settings', label: 'Kelas & Sinkronisasi', icon: Database },
-            { id: 'setting-cbt', label: 'Setting CBT Ujian', icon: FileCheck },
-            { id: 'validasi-akun', label: 'Validasi Akun Baru', icon: UserCheck },
-            { id: 'kelola-web', label: 'Kelola Konten Web', icon: Globe },
-            { id: 'prestasi', label: 'Input Prestasi Siswa', icon: Award },
-            { id: 'setting-sertifikat', label: 'Setting Sertifikat Digital', icon: ShieldCheck },
-            { id: 'setting-kartu-pelajar', label: 'Setting Kartu Pelajar', icon: CreditCard }
+            { id: 'ringkasan', label: 'Statistik', icon: TrendingUp },
+            { id: 'siswa', label: 'Data Siswa', icon: Users },
+            { id: 'guru', label: 'Data Guru', icon: Shield },
+            { id: 'eco-tiket', label: 'ECo-Tiket', icon: Leaf },
+            { id: 'database-settings', label: 'Kelas & DB', icon: Database },
+            { id: 'setting-cbt', label: 'Jadwal CBT', icon: FileCheck },
+            { id: 'validasi-akun', label: 'Validasi Akun', icon: UserCheck },
+            { id: 'kelola-web', label: 'Konten Web', icon: Globe },
+            { id: 'prestasi', label: 'Prestasi', icon: Award },
+            { id: 'setting-sertifikat', label: 'Sertifikat', icon: ShieldCheck },
+            { id: 'setting-kartu-pelajar', label: 'Kartu Pelajar', icon: CreditCard }
           ] :
           activeRole === 'siswa' ? [
             { id: 'profil', label: 'Profil Lengkap', icon: User },
+            { id: 'eco-tiket', label: 'ECo-Tiket', icon: Leaf },
             { id: 'absensi', label: 'Absen Hari Ini', icon: Calendar },
             { id: 'cbt-ujian', label: 'CBT & Ujian', icon: FileCheck },
             { id: 'pelanggaran', label: 'Pelanggaran', icon: AlertTriangle },
