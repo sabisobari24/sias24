@@ -1058,14 +1058,30 @@ export default function AdminPanel({
 
   const handleExportGuru = (format: 'excel' | 'pdf') => {
     const headers = ["ID Guru", "Nama Lengkap", "NIP", "Email", "Peran", "Kelas Pendamping (Wali)"];
-    const rows = teachers.map(t => [
-      t.id,
-      t.name,
-      t.nip,
-      t.email,
-      t.role === 'admin' ? 'Super Admin' : t.role === 'wali_kelas' ? 'Wali Kelas' : t.role === 'bk' ? 'Guru BK' : t.role === 'piket' ? 'Guru Piket' : 'Guru Pengajar',
-      classes.find(c => c.id === t.classId)?.name || '-'
-    ]);
+    const rows = teachers.map(t => {
+      let roleLabel = 'Guru Pengajar';
+      if (t.roles && t.roles.length > 0) {
+        roleLabel = t.roles.map(r => 
+          r === 'admin' ? 'Super Admin' : 
+          r === 'wali_kelas' ? 'Wali Kelas' : 
+          r === 'guru_wali' ? 'Guru Wali' : 
+          r === 'bk' ? 'Guru BK' : 
+          r === 'piket' ? 'Guru Piket' : 
+          r === 'tendik' ? 'Tendik' : 'Guru Pengajar'
+        ).join(', ');
+      } else if (t.role) {
+        roleLabel = t.role === 'admin' ? 'Super Admin' : t.role === 'wali_kelas' ? 'Wali Kelas' : t.role === 'bk' ? 'Guru BK' : t.role === 'piket' ? 'Guru Piket' : 'Guru Pengajar';
+      }
+      const homeroomClass = classes.find(c => c.id === t.classId || c.homeroomTeacherId === t.id || c.name.toLowerCase() === (t.classId || '').toLowerCase());
+      return [
+        t.id,
+        t.name,
+        t.nip,
+        t.email,
+        roleLabel,
+        homeroomClass?.name || '-'
+      ];
+    });
     if (format === 'excel') {
       downloadExcel('rekap_database_pendidik.xlsx', headers, rows, 'Data Guru');
       setSuccessMsg('Berhasil mengunduh Database Pendidik (Excel)!');
@@ -1080,11 +1096,12 @@ export default function AdminPanel({
     const headers = ["Tanggal", "Nama Siswa", "NISN", "Kelas", "Status Kehadiran", "Catatan", "Pencatat / Verifikator"];
     const rows = attendance.map(a => {
       const s = students.find(std => std.id === a.studentId);
+      const studentClass = classes.find(c => c.id === a.classId || c.id === s?.classId || c.name.toLowerCase() === (s?.classId || '').toLowerCase() || c.name.toLowerCase() === (a.classId || '').toLowerCase());
       return [
         a.date,
         s?.name || 'Siswa Terhapus',
         s?.nisn || '-',
-        classes.find(c => c.id === a.classId)?.name || a.classId,
+        studentClass?.name || a.classId || '-',
         a.status,
         a.notes || '',
         a.recordedBy
@@ -1101,14 +1118,16 @@ export default function AdminPanel({
   };
 
   const handleExportPelanggaran = (format: 'excel' | 'pdf') => {
-    const headers = ["Tanggal", "Nama Siswa", "Kelas", "Pelanggaran", "Poin Pelanggaran", "Kategori", "Catatan Kejadian", "Pencatat"];
+    const headers = ["Tanggal", "Nama Siswa", "NISN", "Kelas", "Pelanggaran", "Poin Pelanggaran", "Kategori", "Catatan Kejadian", "Pencatat"];
     const rows = violations.map(v => {
       const s = students.find(std => std.id === v.studentId);
+      const sClass = classes.find(c => c.id === s?.classId || c.name.toLowerCase() === (s?.classId || '').toLowerCase());
       const t = violationTypes.find(vt => vt.id === v.violationTypeId);
       return [
         v.date,
         s?.name || 'Siswa Terhapus',
-        classes.find(c => c.id === s?.classId)?.name || '-',
+        s?.nisn || '-',
+        sClass?.name || '-',
         t?.name || 'Pelanggaran Khusus',
         v.points,
         t?.category || '-',
@@ -1135,7 +1154,12 @@ export default function AdminPanel({
       const filteredAttendance = attendance.filter(a => {
         const student = students.find(s => s.id === a.studentId);
         if (!student) return false;
-        if (rekapClassId !== 'all' && student.classId !== rekapClassId) return false;
+        if (rekapClassId !== 'all') {
+          const matchClass = student.classId === rekapClassId || 
+            a.classId === rekapClassId ||
+            (selectedClassObj && (student.classId?.toLowerCase() === selectedClassObj.name.toLowerCase() || a.classId?.toLowerCase() === selectedClassObj.name.toLowerCase()));
+          if (!matchClass) return false;
+        }
         if (rekapStartDate && a.date < rekapStartDate) return false;
         if (rekapEndDate && a.date > rekapEndDate) return false;
         return true;
@@ -1144,7 +1168,7 @@ export default function AdminPanel({
       const headers = ["Tahun Pelajaran", "Tanggal", "Nama Siswa", "NISN", "Kelas", "Status Kehadiran", "Catatan Khusus", "Pencatat"];
       const rows = filteredAttendance.map(a => {
         const s = students.find(std => std.id === a.studentId);
-        const sClass = classes.find(c => c.id === s?.classId);
+        const sClass = classes.find(c => c.id === s?.classId || c.id === a.classId || c.name.toLowerCase() === (s?.classId || '').toLowerCase());
         return [
           rekapTahunPelajaran,
           a.date,
@@ -1170,21 +1194,26 @@ export default function AdminPanel({
       const filteredViolations = violations.filter(v => {
         const student = students.find(s => s.id === v.studentId);
         if (!student) return false;
-        if (rekapClassId !== 'all' && student.classId !== rekapClassId) return false;
+        if (rekapClassId !== 'all') {
+          const matchClass = student.classId === rekapClassId || 
+            (selectedClassObj && student.classId?.toLowerCase() === selectedClassObj.name.toLowerCase());
+          if (!matchClass) return false;
+        }
         if (rekapStartDate && v.date < rekapStartDate) return false;
         if (rekapEndDate && v.date > rekapEndDate) return false;
         return true;
       });
 
-      const headers = ["Tahun Pelajaran", "Tanggal", "Nama Siswa", "Kelas", "Jenis Pelanggaran", "Poin", "Kategori", "Catatan Kejadian", "Pencatat"];
+      const headers = ["Tahun Pelajaran", "Tanggal", "Nama Siswa", "NISN", "Kelas", "Jenis Pelanggaran", "Poin", "Kategori", "Catatan Kejadian", "Pencatat"];
       const rows = filteredViolations.map(v => {
         const s = students.find(std => std.id === v.studentId);
-        const sClass = classes.find(c => c.id === s?.classId);
+        const sClass = classes.find(c => c.id === s?.classId || c.name.toLowerCase() === (s?.classId || '').toLowerCase());
         const type = violationTypes.find(vt => vt.id === v.violationTypeId);
         return [
           rekapTahunPelajaran,
           v.date,
           s?.name || 'Siswa Terhapus',
+          s?.nisn || '-',
           sClass?.name || '-',
           type?.name || 'Pelanggaran Khusus',
           v.points,
@@ -1207,21 +1236,26 @@ export default function AdminPanel({
       const filteredGrades = examGrades.filter(g => {
         const student = students.find(s => s.id === g.studentId);
         if (!student) return false;
-        if (rekapClassId !== 'all' && student.classId !== rekapClassId) return false;
+        if (rekapClassId !== 'all') {
+          const matchClass = student.classId === rekapClassId || 
+            (selectedClassObj && student.classId?.toLowerCase() === selectedClassObj.name.toLowerCase());
+          if (!matchClass) return false;
+        }
         if (rekapSubject !== 'all' && g.subject !== rekapSubject) return false;
         if (rekapStartDate && g.date < rekapStartDate) return false;
         if (rekapEndDate && g.date > rekapEndDate) return false;
         return true;
       });
 
-      const headers = ["Tahun Pelajaran", "Tanggal Ujian", "Nama Siswa", "Kelas", "Mata Pelajaran", "Jenis Ujian", "Skor CBT", "Status Kriteria"];
+      const headers = ["Tahun Pelajaran", "Tanggal Ujian", "Nama Siswa", "NISN", "Kelas", "Mata Pelajaran", "Jenis Ujian", "Skor CBT", "Status Kriteria"];
       const rows = filteredGrades.map(g => {
         const s = students.find(std => std.id === g.studentId);
-        const sClass = classes.find(c => c.id === s?.classId);
+        const sClass = classes.find(c => c.id === s?.classId || c.name.toLowerCase() === (s?.classId || '').toLowerCase());
         return [
           rekapTahunPelajaran,
           g.date,
           s?.name || 'Siswa Terhapus',
+          s?.nisn || '-',
           sClass?.name || '-',
           g.subject,
           g.examType,
@@ -1241,7 +1275,11 @@ export default function AdminPanel({
 
     else if (rekapReportType === 'kolektif') {
       const targetStudents = students.filter(s => {
-        if (rekapClassId !== 'all' && s.classId !== rekapClassId) return false;
+        if (rekapClassId !== 'all') {
+          const matchClass = s.classId === rekapClassId || 
+            (selectedClassObj && s.classId?.toLowerCase() === selectedClassObj.name.toLowerCase());
+          if (!matchClass) return false;
+        }
         return true;
       });
 
@@ -1260,7 +1298,7 @@ export default function AdminPanel({
       ];
 
       const rows = targetStudents.map(s => {
-        const sClass = classes.find(c => c.id === s.classId);
+        const sClass = classes.find(c => c.id === s.classId || c.name.toLowerCase() === (s.classId || '').toLowerCase());
         
         const sGrades = examGrades.filter(g => {
           if (g.studentId !== s.id) return false;
@@ -1276,7 +1314,7 @@ export default function AdminPanel({
         const totalLog = sAttendance.length;
         const pctAttendance = totalLog > 0 ? `${Math.round((countHadir / totalLog) * 100)}%` : '100%';
 
-        const sViolations = violations.filter(v => v.studentId === s.id);
+        const sViolations = violations.filter(v => v.studentId === v.studentId && v.studentId === s.id);
         const totalPoints = sViolations.reduce((sum, curr) => sum + curr.points, 0);
 
         let conduct = "Sangat Baik";
@@ -1315,23 +1353,27 @@ export default function AdminPanel({
     switch (activeTab) {
       case 'siswa':
         return [
-          { label: 'Database Siswa (Excel)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
-          { label: 'Database Siswa (PDF)', onClick: () => handleExportSiswa('pdf'), type: 'pdf' as const },
+          { label: 'Data Siswa (Excel)', onClick: () => handleExportSiswa('excel', isStudentFilterActive), type: 'excel' as const },
+          { label: 'Data Siswa (PDF)', onClick: () => handleExportSiswa('pdf', isStudentFilterActive), type: 'pdf' as const },
         ];
       case 'guru':
         return [
-          { label: 'Database Pendidik (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
-          { label: 'Database Pendidik (PDF)', onClick: () => handleExportGuru('pdf'), type: 'pdf' as const },
+          { label: 'Data Pendidik (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
+          { label: 'Data Pendidik (PDF)', onClick: () => handleExportGuru('pdf'), type: 'pdf' as const },
         ];
       case 'prestasi':
         return [
-          { label: 'Rekap Prestasi (Excel)', onClick: () => handleExportKustom('excel'), type: 'excel' as const },
-          { label: 'Rekap Prestasi (PDF)', onClick: () => handleExportKustom('pdf'), type: 'pdf' as const },
+          { label: 'Rekap Prestasi (Excel)', onClick: () => handleDownloadAchievements('excel'), type: 'excel' as const },
+          { label: 'Rekap Prestasi (PDF)', onClick: () => handleDownloadAchievements('pdf'), type: 'pdf' as const },
         ];
+      case 'ringkasan':
       default:
         return [
-          { label: 'Database Siswa (Excel)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
-          { label: 'Database Pendidik (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
+          { label: 'Data Siswa (Excel)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
+          { label: 'Data Guru (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
+          { label: 'Presensi (Excel)', onClick: () => handleExportAbsensi('excel'), type: 'excel' as const },
+          { label: 'Pelanggaran (Excel)', onClick: () => handleExportPelanggaran('excel'), type: 'excel' as const },
+          { label: 'Rapor Kolektif (Excel)', onClick: () => handleExportKustom('excel'), type: 'excel' as const },
         ];
     }
   };
@@ -1526,7 +1568,7 @@ export default function AdminPanel({
                 <div className="space-y-0.5">
                   <h4 className="font-bold text-sm flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-purple-200" />
-                    <span>Pindah Akses Cepat (Quick Access Switcher)</span>
+                    <span>Pindah Akses Cepat</span>
                   </h4>
                   <p className="text-[11px] text-purple-100">Beralih peran dan akun simulasi secara instan tanpa log out untuk menguji alur kerja pendidik.</p>
                 </div>
@@ -1584,8 +1626,8 @@ export default function AdminPanel({
                   {dbStatus === 'online' ? <Wifi className="w-6 h-6" /> : dbStatus === 'high_latency' ? <RefreshCw className="w-6 h-6 animate-spin-slow" /> : <WifiOff className="w-6 h-6" />}
                 </div>
                 <div className="text-left">
-                  <h4 className="font-bold text-sm text-slate-800">Pemantau Realtime Database Firebase (Connection Monitor)</h4>
-                  <p className="text-xs text-slate-400 mt-0.5">Memantau sinkronisasi sinkron-aktif dan latensi respon server secara instan.</p>
+                  <h4 className="font-bold text-sm text-slate-800">Status Sinkronisasi Database</h4>
+                  <p className="text-xs text-slate-400 mt-0.5">Memantau sinkronisasi aktif dan latensi respon server secara instan.</p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0">
@@ -1597,7 +1639,7 @@ export default function AdminPanel({
                     <span className={`w-1.5 h-1.5 rounded-full ${
                       dbStatus === 'online' ? 'bg-emerald-500' : dbStatus === 'high_latency' ? 'bg-amber-500 animate-ping' : 'bg-rose-500'
                     }`} />
-                    <span>{dbStatus === 'online' ? 'Terhubung (Online)' : dbStatus === 'high_latency' ? 'Koneksi Lambat' : 'Terputus (Offline)'}</span>
+                    <span>{dbStatus === 'online' ? 'Online' : dbStatus === 'high_latency' ? 'Lambat' : 'Offline'}</span>
                   </span>
                 </div>
                 {dbStatus !== 'offline' && (
@@ -1651,7 +1693,7 @@ export default function AdminPanel({
                 <h3 className="font-bold text-slate-800 text-base">Distribusi Kelas & Siswa</h3>
                 <div className="space-y-3">
                   {classes.map((cls) => {
-                    const count = students.filter(s => s.classId === cls.id).length;
+                    const count = getClassStudentCount(cls);
                     const percent = totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0;
                     return (
                       <div key={cls.id} className="space-y-1">
@@ -1709,7 +1751,7 @@ export default function AdminPanel({
               </div>
               
               <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">1. Unduh Cepat Database Utama (Global)</h4>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">1. Unduh Data Utama</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Database Siswa */}
                   <div className="flex flex-col justify-between p-4 bg-purple-50/50 border border-purple-100 rounded-xl transition-all hover:bg-purple-50 font-semibold text-slate-700">
@@ -1814,7 +1856,7 @@ export default function AdminPanel({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2.5">
                   <div className="flex items-center gap-2">
                     <Filter className="w-4.5 h-4.5 text-purple-600" />
-                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">2. Opsi Rekap Kustom (Sesuaikan Kriteria)</h4>
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">2. Unduh Rekap Kustom</h4>
                   </div>
                   <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full">
                     Saringan Aktif
@@ -4242,7 +4284,7 @@ export default function AdminPanel({
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                   <Plus className="w-4 h-4 text-purple-600" />
-                  <span>Input Prestasi Siswa Baru (Akademik / Non Akademik)</span>
+                  <span>Tambah Prestasi Siswa</span>
                 </h3>
                 <span className="text-xs text-slate-400 font-medium">Form Resmi Admin</span>
               </div>

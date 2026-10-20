@@ -822,8 +822,8 @@ export default function WebContentEditor() {
           ) : activeSectionId === 'home' ? (
             [
               { id: 'header', label: 'Kepala Sekolah & Sambutan', icon: User },
-              { id: 'slides', label: 'Carousel Foto Banner', icon: ImageIcon },
-              { id: 'vision-mission', label: 'Visi, Misi & Media Sosial', icon: ListTodo }
+              { id: 'slides', label: 'Slider Foto', icon: ImageIcon },
+              { id: 'vision-mission', label: 'Visi, Misi & Sosmed', icon: ListTodo }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -843,13 +843,13 @@ export default function WebContentEditor() {
               { id: 'header', label: 'Kepala Bidang', icon: User },
               { id: 'staff', label: 'Tim Anggota / Staf', icon: Layers },
               { id: 'programs', label: 'Program Kerja', icon: Sparkles },
-              { id: 'slides', label: 'Carousel Foto', icon: ImageIcon },
+              { id: 'slides', label: 'Slider Foto', icon: ImageIcon },
               { 
                 id: 'specialized', 
                 label: activeSectionId === 'academic' ? 'Mata Pelajaran' : activeSectionId === 'kesiswaan' ? 'Ekstrakurikuler' : 'Fasilitas & Profil', 
                 icon: activeSectionId === 'academic' ? BookOpen : activeSectionId === 'kesiswaan' ? Award : Building 
               },
-              { id: 'gallery', label: 'Galeri Slider PopUp', icon: ImageIcon }
+              { id: 'gallery', label: 'Galeri PopUp', icon: ImageIcon }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -962,7 +962,7 @@ export default function WebContentEditor() {
                     <div className="border-b border-emerald-100 pb-3">
                       <h4 className="text-xs font-extrabold text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
                         <ImageIcon className="w-4 h-4 text-emerald-700" />
-                        <span>Pengaturan Tampilan Header Banner Halaman ({activeSectionId === 'academic' ? 'Akademik' : activeSectionId === 'kesiswaan' ? 'Kesiswaan' : 'Sarana Prasarana'})</span>
+                        <span>Banner Header ({activeSectionId === 'academic' ? 'Akademik' : activeSectionId === 'kesiswaan' ? 'Kesiswaan' : 'Sarpras'})</span>
                       </h4>
                       <p className="text-[11px] text-slate-600 mt-0.5">
                         Atur gambar background, judul utama, dan sub-judul pada banner header paling atas untuk halaman ini.
@@ -972,7 +972,7 @@ export default function WebContentEditor() {
                     <MediaUploadSelector
                       value={headerBgImage}
                       onChange={setHeaderBgImage}
-                      label="Background Gambar Header Banner (Upload Foto atau URL Direct)"
+                      label="Background Header Banner"
                       mode="banner"
                       placeholder="https://..."
                     />
@@ -1858,7 +1858,7 @@ export default function WebContentEditor() {
                           <div className="space-y-1.5">
                             <label className="text-xs font-bold text-red-900 flex items-center gap-1.5">
                               <Link2 className="w-4 h-4 text-red-600" />
-                              <span>Link Video YouTube (Embed Link / Direct Link)</span>
+                              <span>Link Video YouTube</span>
                             </label>
                             <input 
                               type="text" 
@@ -1876,7 +1876,7 @@ export default function WebContentEditor() {
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Atau Upload Video dari Komputer</p>
                             <label className="inline-flex items-center gap-2 bg-white border border-slate-300 hover:border-red-600 text-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer shadow-2xs hover:bg-red-50 transition-all">
                               <Upload className="w-4 h-4 text-red-600" />
-                              <span>Upload File Video (.mp4, .webm)</span>
+                              <span>Upload Video</span>
                               <input 
                                 type="file" 
                                 accept="video/*" 
@@ -2194,7 +2194,7 @@ export default function WebContentEditor() {
                             <div>
                               <h5 className="text-xs font-black text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
                                 <ImageIcon className="w-4 h-4 text-indigo-600" />
-                                <span>Galeri Slider PopUp Foto Mata Pelajaran ({subjectForm.name || 'Mapel'})</span>
+                                <span>Galeri Foto Mapel ({subjectForm.name || 'Mapel'})</span>
                               </h5>
                               <p className="text-[11px] text-slate-500 mt-0.5">
                                 Foto/gambar dokumentasi yang tampil berputar saat siswa atau pengunjung mengklik mata pelajaran ini. Pengguna bisa Upload File langsung dari Komputer atau memasukkan Link Google Drive.
@@ -2461,7 +2461,7 @@ export default function WebContentEditor() {
                             <div>
                               <h5 className="text-xs font-black text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
                                 <ImageIcon className="w-4 h-4 text-indigo-600" />
-                                <span>Galeri Slider PopUp Foto Ekstrakurikuler ({extraForm.name || 'Ekskul'})</span>
+                                <span>Galeri Foto Ekskul ({extraForm.name || 'Ekskul'})</span>
                               </h5>
                               <p className="text-[11px] text-slate-500 mt-0.5">
                                 Foto/gambar kegiatan yang tampil berputar saat pengunjung mengklik ekstrakurikuler ini. Boleh diupload langsung dari Komputer atau memasukkan Link Google Drive.
@@ -2728,7 +2728,7 @@ export default function WebContentEditor() {
                             <div>
                               <h5 className="text-xs font-black text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
                                 <ImageIcon className="w-4 h-4 text-indigo-600" />
-                                <span>Galeri Slider PopUp Foto Sarana ({facilityForm.name || 'Sarpras'})</span>
+                                <span>Galeri Foto Sarpras ({facilityForm.name || 'Sarpras'})</span>
                               </h5>
                               <p className="text-[11px] text-slate-500 mt-0.5">
                                 Foto/gambar dokumentasi yang tampil berputar saat pengunjung mengklik sarana ini. Boleh diupload langsung dari Komputer atau memasukkan Link Google Drive.

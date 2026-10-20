@@ -169,19 +169,29 @@ export function enhanceAndCompressBannerImage(
         let outputUrl = '';
         try {
           const webp = canvas.toDataURL('image/webp', quality);
-          if (webp.startsWith('data:image/webp') && webp.length <= 68 * 1024) {
+          if (webp.startsWith('data:image/webp') && webp.length <= 65 * 1024) {
             outputUrl = webp;
           }
         } catch (_) {}
 
-        // Fallback to progressive JPEG if WebP unavailable or too large
+        // Fallback to progressive JPEG with dynamic quality/scale loop to guarantee <= 65KB
         if (!outputUrl) {
-          outputUrl = canvas.toDataURL('image/jpeg', quality);
-          if (outputUrl.length > 70 * 1024) {
-            outputUrl = canvas.toDataURL('image/jpeg', 0.68);
+          let q = quality;
+          outputUrl = canvas.toDataURL('image/jpeg', q);
+          while (outputUrl.length > 65 * 1024 && q > 0.45) {
+            q -= 0.08;
+            outputUrl = canvas.toDataURL('image/jpeg', q);
           }
-          if (outputUrl.length > 70 * 1024) {
-            outputUrl = canvas.toDataURL('image/jpeg', 0.60);
+          // If still over 65KB on highly detailed images, scale down dimensions slightly
+          if (outputUrl.length > 65 * 1024) {
+            const smallerCanvas = document.createElement('canvas');
+            smallerCanvas.width = Math.round(width * 0.8);
+            smallerCanvas.height = Math.round(height * 0.8);
+            const sCtx = smallerCanvas.getContext('2d');
+            if (sCtx) {
+              sCtx.drawImage(canvas, 0, 0, smallerCanvas.width, smallerCanvas.height);
+              outputUrl = smallerCanvas.toDataURL('image/jpeg', 0.65);
+            }
           }
         }
 

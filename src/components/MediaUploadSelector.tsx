@@ -122,7 +122,7 @@ export default function MediaUploadSelector({
       if (isBanner) {
         // High-definition wide banner with auto-clarity, edge-sharpening, and anti-blur technology (optimized for Firestore)
         b64 = await enhanceAndCompressBannerImage(file, 1280, 720, 0.78);
-        setStatusMessage('Foto banner berhasil diunggah & kualitas diperbaiki secara otomatis (Tajam HD Anti-Blur).');
+        setStatusMessage('Foto banner berhasil diunggah (Kualitas HD).');
       } else {
         b64 = await fileToBase64(file, 640, 640, 0.80);
         setStatusMessage('Foto berhasil diunggah dan dioptimalkan.');
@@ -146,7 +146,7 @@ export default function MediaUploadSelector({
     const converted = convertGoogleDriveLink(rawUrl);
     if (converted.startsWith('data:image/')) {
       if (isBanner) {
-        enhanceAndCompressBannerImage(converted, 1920, 1080, 0.85).then(res => onChange(res));
+        enhanceAndCompressBannerImage(converted, 1280, 720, 0.75).then(res => onChange(res));
       } else {
         compressBase64Image(converted, 640, 640, 0.80).then(res => onChange(res));
       }
@@ -162,7 +162,7 @@ export default function MediaUploadSelector({
     try {
       const enhanced = await autoEnhanceImageBase64(value);
       onChange(enhanced);
-      setStatusMessage('Kualitas foto berhasil ditingkatkan & dipertajam secara otomatis!');
+      setStatusMessage('Kualitas foto berhasil ditingkatkan!');
       setTimeout(() => setStatusMessage(null), 5000);
     } catch (err) {
       console.warn('Gagal meningkatkan kualitas foto:', err);
@@ -181,7 +181,7 @@ export default function MediaUploadSelector({
           {isBanner && (
             <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100/90 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-200">
               <Sparkles className="w-3 h-3 text-amber-600" />
-              <span>Auto-Enhance HD (Anti-Blur)</span>
+              <span>Auto HD</span>
             </span>
           )}
         </div>
@@ -214,7 +214,7 @@ export default function MediaUploadSelector({
           ) : (
             <Upload className="w-3.5 h-3.5 text-slate-500" />
           )}
-          <span>{isUploading ? 'Memproses HD...' : 'Upload File'}</span>
+          <span>{isUploading ? 'Mengunggah...' : 'Upload File'}</span>
         </button>
         <input
           type="file"
@@ -300,7 +300,7 @@ export default function MediaUploadSelector({
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Preview Aktif</p>
               {isBanner && (
                 <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded-md">
-                  HD Anti-Blur
+                  HD Jernih
                 </span>
               )}
             </div>
