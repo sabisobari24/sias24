@@ -447,6 +447,15 @@ export interface CertificateConfig {
   nonAcademicBgStyle?: 'gold' | 'blue' | 'classic' | 'emerald' | 'custom';
   logoLeftUrl?: string;
   logoRightUrl?: string;
+  logoAutoSync?: boolean; // Otomatis sinkronkan logo kanan dengan logo resmi sekolah
+  bgOpacity?: number; // 0.1 to 1.0
+  frameStyle?: 'double-gold' | 'ornate-corners' | 'emerald-modern' | 'royal-dark' | 'minimal-clean';
+  watermarkStyle?: 'tut-wuri' | 'adiwiyata' | 'school-crest' | 'trophy' | 'none';
+  fontFamily?: 'sans' | 'serif' | 'formal';
+  schoolHeader?: string;
+  subHeader?: string;
+  showStamp?: boolean;
+  showWatermark?: boolean;
   numberTemplate?: string; // e.g. "SER/{TYPE}/{YEAR}/{ID}"
   leftSigTitle?: string;
   leftSigName?: string;

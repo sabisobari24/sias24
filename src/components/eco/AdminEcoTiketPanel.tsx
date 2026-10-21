@@ -35,6 +35,7 @@ import {
 import { EcoCertificateModal } from './EcoCertificateModal';
 import { downloadExcel } from '../../utils/excelExport';
 import { printTablePDF } from '../../utils/printHelper';
+import { getEffectiveSchoolLogo, getEffectiveRegionalLogo } from '../../utils/schoolLogoHelper';
 
 interface AdminEcoTiketPanelProps {
   students: Student[];
@@ -90,6 +91,12 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
   // Filter & Search states
   const [depositSearch, setDepositSearch] = useState('');
   const [depositStatusFilter, setDepositStatusFilter] = useState<'all' | 'Menunggu' | 'Diverifikasi' | 'Ditolak'>('all');
+  const [depositClassFilter, setDepositClassFilter] = useState<string>('all');
+  
+  // Setor Sampah (Manual Deposit Modal) Fast Filters
+  const [depositStudentClassFilter, setDepositStudentClassFilter] = useState<string>('');
+  const [depositStudentSearch, setDepositStudentSearch] = useState<string>('');
+
   const [selectedStudentForCert, setSelectedStudentForCert] = useState<{
     name: string;
     nisn?: string;
@@ -107,6 +114,28 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
     notes: 'Diserahkan langsung ke Bank Sampah Sekolah',
     date: new Date().toISOString().split('T')[0]
   });
+
+  // Available unique class list
+  const availableClassNames = useMemo(() => {
+    const fromClasses = classes && classes.length > 0 ? classes.map(c => c.name) : [];
+    const fromStudents = Array.from(new Set(students.map(s => s.classId).filter(Boolean))) as string[];
+    const combined = Array.from(new Set([...fromClasses, ...fromStudents])).sort();
+    return combined;
+  }, [classes, students]);
+
+  // Fast filtered students list for Setor Sampah Modal
+  const filteredStudentsForDeposit = useMemo(() => {
+    return students.filter(s => {
+      if (depositStudentClassFilter && s.classId !== depositStudentClassFilter) return false;
+      if (depositStudentSearch.trim()) {
+        const q = depositStudentSearch.toLowerCase().trim();
+        const matchName = s.name.toLowerCase().includes(q);
+        const matchNisn = s.nisn?.toLowerCase().includes(q);
+        if (!matchName && !matchNisn) return false;
+      }
+      return true;
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [students, depositStudentClassFilter, depositStudentSearch]);
 
   // Category Modal
   const [editingCategory, setEditingCategory] = useState<EcoWasteCategory | null>(null);
@@ -209,6 +238,7 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
   const filteredDeposits = useMemo(() => {
     return deposits.filter(d => {
       if (depositStatusFilter !== 'all' && d.status !== depositStatusFilter) return false;
+      if (depositClassFilter !== 'all' && d.classId !== depositClassFilter) return false;
       if (depositSearch.trim()) {
         const query = depositSearch.toLowerCase();
         const matchName = d.studentName?.toLowerCase().includes(query);
@@ -218,7 +248,7 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
       }
       return true;
     }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  }, [deposits, depositStatusFilter, depositSearch]);
+  }, [deposits, depositStatusFilter, depositClassFilter, depositSearch]);
 
   // Handlers
   const handleApproveDeposit = async (dep: EcoWasteDeposit) => {
@@ -623,6 +653,18 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
                   className="bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
                 />
               </div>
+
+              {/* Class Filter */}
+              <select
+                value={depositClassFilter}
+                onChange={e => setDepositClassFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              >
+                <option value="all">Semua Kelas ({availableClassNames.length} Kelas)</option>
+                {availableClassNames.map(cls => (
+                  <option key={cls} value={cls}>Kelas {cls}</option>
+                ))}
+              </select>
 
               {/* Status Filter */}
               <select
@@ -1316,16 +1358,25 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
 
       {/* MODAL: CATAT SETORAN SAMPAH LANGSUNG */}
       {isAddingDeposit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-slate-100 space-y-4 animate-scaleUp">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl border border-slate-100 space-y-4 animate-scaleUp my-8">
             <div className="flex items-center justify-between pb-2 border-b">
-              <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
-                <Recycle className="w-4 h-4 text-emerald-600" />
-                <span>Catat Penyerahan Sampah Siswa</span>
-              </h3>
+              <div>
+                <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
+                  <Recycle className="w-4 h-4 text-emerald-600" />
+                  <span>Catat Setor Sampah Siswa (ECo-Tiket)</span>
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Filter kelas atau cari nama siswa untuk mencatat penyerahan sampah dengan cepat.
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => setIsAddingDeposit(false)}
+                onClick={() => {
+                  setIsAddingDeposit(false);
+                  setDepositStudentSearch('');
+                  setDepositStudentClassFilter('');
+                }}
                 className="text-slate-400 hover:text-slate-600 p-1"
               >
                 ✕
@@ -1333,22 +1384,146 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
             </div>
 
             <form onSubmit={handleCreateDirectDeposit} className="space-y-3.5">
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Pilih Siswa</label>
-                <select
-                  required
-                  value={depositForm.studentId}
-                  onChange={e => setDepositForm(prev => ({ ...prev, studentId: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                >
-                  <option value="">-- Pilih Siswa --</option>
-                  {students.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.classId || 'Kelas'})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* AREA PILIH SISWA DENGAN FILTER KELAS & CARI NAMA */}
+              {depositForm.studentId ? (
+                (() => {
+                  const selectedStudent = students.find(s => s.id === depositForm.studentId);
+                  const currentPts = selectedStudent ? (studentPointsMap.get(selectedStudent.id) || 0) : 0;
+                  return (
+                    <div className="p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 flex items-center justify-between gap-3 shadow-xs">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white font-black flex items-center justify-center text-sm shadow-xs shrink-0">
+                          {selectedStudent?.name.charAt(0) || 'S'}
+                        </div>
+                        <div className="truncate">
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-slate-900 text-xs sm:text-sm truncate">
+                              {selectedStudent?.name || 'Siswa Terpilih'}
+                            </span>
+                            <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full border border-emerald-300 shrink-0">
+                              Kelas {selectedStudent?.classId || '-'}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-600 font-mono mt-0.5">
+                            NISN: {selectedStudent?.nisn || '-'} &bull; Saldo: <strong className="text-emerald-700 font-bold">{currentPts} Poin ECo</strong>
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDepositForm(prev => ({ ...prev, studentId: '' }))}
+                        className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer"
+                      >
+                        Ganti Siswa
+                      </button>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="space-y-2.5 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Cari &amp; Filter Siswa Penyetor</span>
+                    </label>
+                    <span className="text-[10px] text-slate-500 font-bold">
+                      {filteredStudentsForDeposit.length} siswa ditemukan
+                    </span>
+                  </div>
+
+                  {/* Filter Kelas & Input Cari Nama Cepat */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <div className="sm:col-span-5">
+                      <select
+                        value={depositStudentClassFilter}
+                        onChange={e => setDepositStudentClassFilter(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-xs"
+                      >
+                        <option value="">Semua Kelas ({availableClassNames.length})</option>
+                        {availableClassNames.map(cls => (
+                          <option key={cls} value={cls}>Kelas {cls}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-7 relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Ketik nama siswa / NISN..."
+                        value={depositStudentSearch}
+                        onChange={e => setDepositStudentSearch(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-7 py-1.5 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
+                      />
+                      {depositStudentSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setDepositStudentSearch('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quick-Pick Clickable List */}
+                  <div className="max-h-40 overflow-y-auto divide-y divide-slate-100 bg-white rounded-xl border border-slate-200 shadow-inner">
+                    {filteredStudentsForDeposit.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400 font-medium">
+                        Tidak ada siswa yang cocok dengan filter kelas atau pencarian ini.
+                      </div>
+                    ) : (
+                      filteredStudentsForDeposit.slice(0, 20).map(s => {
+                        const pts = studentPointsMap.get(s.id) || 0;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setDepositForm(prev => ({ ...prev, studentId: s.id }))}
+                            className="w-full px-3 py-2 text-left hover:bg-emerald-50/80 transition-colors flex items-center justify-between gap-2 group cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-6 h-6 rounded-lg bg-slate-100 text-slate-600 group-hover:bg-emerald-200 group-hover:text-emerald-900 text-[10px] font-black flex items-center justify-center shrink-0">
+                                {s.name.charAt(0)}
+                              </span>
+                              <div className="truncate">
+                                <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-950 truncate">{s.name}</p>
+                                <p className="text-[9.5px] text-slate-400 font-mono">NISN: {s.nisn || '-'}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded group-hover:bg-emerald-100 group-hover:text-emerald-800">
+                                {s.classId || 'Kelas'}
+                              </span>
+                              <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                {pts} Pts
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Fallback Dropdown */}
+                  <div>
+                    <select
+                      required
+                      value={depositForm.studentId}
+                      onChange={e => setDepositForm(prev => ({ ...prev, studentId: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                    >
+                      <option value="">-- Atau Pilih Langsung dari Dropdown ({filteredStudentsForDeposit.length} Siswa) --</option>
+                      {filteredStudentsForDeposit.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.classId || 'Kelas'}) - NISN: {s.nisn || '-'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">Jenis Sampah</label>
@@ -1648,7 +1823,9 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
             dateStr: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
             headmasterName,
             headmasterNip,
-            schoolName
+            schoolName,
+            schoolLogo: getEffectiveSchoolLogo(),
+            logoLeftUrl: getEffectiveRegionalLogo()
           }}
         />
       )}

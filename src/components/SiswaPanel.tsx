@@ -70,6 +70,7 @@ import { EcoCertificateModal } from './eco/EcoCertificateModal';
 import { fileToBase64, convertGoogleDriveLink } from '../utils/imageHelper';
 import { printCertificate, printTablePDF } from '../utils/printHelper';
 import { useDownload } from '../context/DownloadContext';
+import { getEffectiveSchoolLogo, getEffectiveRegionalLogo } from '../utils/schoolLogoHelper';
 
 // LOGIKA PENGHEMATAN KUOTA: Mengompresi ukuran gambar di sisi klien (browser siswa) menjadi maksimal 100 KB sebelum diupload
 export function compressImageBase64(canvas: HTMLCanvasElement, maxKb: number = 100): string {
@@ -2232,17 +2233,35 @@ export default function SiswaPanel({
               <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-amber-600" />
               <div className="absolute bottom-2 right-2 w-6 h-6 border-b-2 border-r-2 border-amber-600" />
 
-              <div className="text-[10px] uppercase font-extrabold text-amber-900 tracking-widest">
-                PEMERINTAH PROVINSI DKI JAKARTA &bull; SMP NEGERI 50 JAKARTA
+              <div className="flex items-center justify-between gap-3 border-b border-amber-300/60 pb-3">
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <img 
+                    src={localStorage.getItem('siakad_logo_left') || '/logo-dki.png'} 
+                    alt="Logo Pemprov" 
+                    className="max-w-full max-h-full object-contain drop-shadow-xs" 
+                    onError={(e: any) => e.target.src = '/logo-dki.png'}
+                  />
+                </div>
+                <div className="text-center flex-1">
+                  <div className="text-[10px] uppercase font-extrabold text-amber-900 tracking-widest">
+                    {schoolName || localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA'}
+                  </div>
+                  <h2 className="font-serif font-black text-lg md:text-xl text-amber-900 tracking-wide mt-0.5">
+                    SERTIFIKAT DIGITAL PRESTASI
+                  </h2>
+                  <p className="font-mono text-[10px] font-bold text-amber-800 tracking-wider">
+                    NO: CERT/{selectedCertForPreview.id.toUpperCase()}/{selectedCertForPreview.date.replace(/-/g, '')}
+                  </p>
+                </div>
+                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                  <img 
+                    src={schoolLogo || getEffectiveSchoolLogo()} 
+                    alt="Logo Sekolah" 
+                    className="max-w-full max-h-full object-contain drop-shadow-xs" 
+                    onError={(e: any) => e.target.src = getEffectiveSchoolLogo()}
+                  />
+                </div>
               </div>
-              
-              <h2 className="font-serif font-black text-xl md:text-2xl text-amber-900 tracking-wide">
-                SERTIFIKAT DIGITAL PRESTASI
-              </h2>
-
-              <p className="font-mono text-[11px] font-bold text-amber-800 tracking-wider">
-                NO: CERT/{selectedCertForPreview.id.toUpperCase()}/{selectedCertForPreview.date.replace(/-/g, '')}
-              </p>
 
               <p className="text-xs text-slate-600 italic pt-1">
                 Diberikan dengan rasa bangga dan apresiasi setinggi-tingginya kepada:
@@ -2363,7 +2382,9 @@ export default function SiswaPanel({
             totalDepositsCount: myVerifiedDeposits.length,
             dateStr: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
             headmasterName,
-            schoolName
+            schoolName,
+            schoolLogo: schoolLogo || getEffectiveSchoolLogo(),
+            logoLeftUrl: localStorage.getItem('siakad_logo_left') || getEffectiveRegionalLogo()
           }}
         />
       )}

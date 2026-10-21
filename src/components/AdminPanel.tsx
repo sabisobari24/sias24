@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig, EcoWasteCategory, EcoWasteDeposit, EcoReward, EcoRedemption, EcoConfig } from '../types';
-import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown, Leaf, Recycle, Crown } from 'lucide-react';
+import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown, Leaf, Recycle, Crown, Printer } from 'lucide-react';
 import { downloadExcel, parseExcel } from '../utils/excelExport';
-import { printHTML, printTablePDF } from '../utils/printHelper';
+import { printHTML, printTablePDF, printCertificate } from '../utils/printHelper';
 import { useDownload } from '../context/DownloadContext';
 import { getSchoolClassName } from '../utils/classUtils';
 import ConfirmModal from './ConfirmModal';
@@ -17,6 +17,7 @@ import { printBatchStudentCards } from '../utils/qrHelper';
 import { syncCollection, saveDocument } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import { compressImageFile } from '../utils/imageHelper';
+import { getEffectiveSchoolLogo, getEffectiveRegionalLogo, saveSchoolCardLogo } from '../utils/schoolLogoHelper';
 
 interface AdminPanelProps {
   students: Student[];
@@ -293,15 +294,113 @@ export default function AdminPanel({
   const [certNonAcademicBgUrl, setCertNonAcademicBgUrl] = useState(() => localStorage.getItem('siakad_cert_non_academic_bg_url') || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop');
   const [previewCertType, setPreviewCertType] = useState<'akademik' | 'non_akademik'>('akademik');
 
-  const [certBgUrl, setCertBgUrl] = useState(() => localStorage.getItem('siakad_cert_bg_url') || 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1000&auto=format&fit=crop');
-  const [certLogoLeft, setCertLogoLeft] = useState(() => localStorage.getItem('siakad_cert_logo_left') || `${window.location.origin}/logo-dki.png`);
-  const [certLogoRight, setCertLogoRight] = useState(() => localStorage.getItem('siakad_cert_logo_right') || `${window.location.origin}/logo.png`);
+  const [certLogoAutoSync, setCertLogoAutoSync] = useState<boolean>(() => {
+    const saved = localStorage.getItem('siakad_cert_logo_autosync');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  const [certLogoLeft, setCertLogoLeft] = useState(() => {
+    return localStorage.getItem('siakad_cert_logo_left') || getEffectiveRegionalLogo();
+  });
+
+  const [certLogoRight, setCertLogoRight] = useState(() => {
+    const effective = getEffectiveSchoolLogo();
+    const saved = localStorage.getItem('siakad_cert_logo_right');
+    const autoSync = localStorage.getItem('siakad_cert_logo_autosync') !== 'false';
+    if (autoSync || !saved || saved === '/logo.png' || saved.includes('/logo.png')) {
+      return effective;
+    }
+    return saved;
+  });
+
+  // Additional styling & appearance states
+  const [certBgOpacity, setCertBgOpacity] = useState<number>(() => {
+    const saved = localStorage.getItem('siakad_cert_bg_opacity');
+    return saved ? Number(saved) : 35;
+  });
+  const [certFrameStyle, setCertFrameStyle] = useState<'double-gold' | 'ornate-corners' | 'emerald-modern' | 'royal-dark' | 'minimal-clean'>(() => {
+    return (localStorage.getItem('siakad_cert_frame_style') as any) || 'double-gold';
+  });
+  const [certWatermarkStyle, setCertWatermarkStyle] = useState<'school-crest' | 'adiwiyata' | 'tut-wuri' | 'none'>(() => {
+    return (localStorage.getItem('siakad_cert_watermark') as any) || 'school-crest';
+  });
+  const [certFontFamily, setCertFontFamily] = useState<'serif' | 'sans' | 'formal'>(() => {
+    return (localStorage.getItem('siakad_cert_font_family') as any) || 'serif';
+  });
+  const [certSchoolHeader, setCertSchoolHeader] = useState(() => localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA');
+  const [certSubHeader, setCertSubHeader] = useState(() => localStorage.getItem('siakad_kop_province') || 'PEMERINTAH PROVINSI DKI JAKARTA • DINAS PENDIDIKAN');
+  const [certShowStamp, setCertShowStamp] = useState<boolean>(() => {
+    const saved = localStorage.getItem('siakad_cert_show_stamp');
+    return saved !== null ? saved === 'true' : true;
+  });
+
   const [certNumFormat, setCertNumFormat] = useState(() => localStorage.getItem('siakad_cert_num_format') || '50/SERT/{CAT}/{YEAR}/{ID}');
   const [certLeftTitle, setCertLeftTitle] = useState(() => localStorage.getItem('siakad_cert_left_title') || 'Pembina / Pelatih Ekstrakurikuler');
   const [certLeftName, setCertLeftName] = useState(() => localStorage.getItem('siakad_cert_left_name') || 'Budi Santoso, S.Pd.');
   const [certRightTitle, setCertRightTitle] = useState(() => localStorage.getItem('siakad_cert_right_title') || 'Kepala SMP Negeri 50 Jakarta');
   const [certRightName, setCertRightName] = useState(() => localStorage.getItem('siakad_cert_right_name') || headmasterName || 'Dra. Hj. Endah Purwani, M.M.');
   const [certRightNip, setCertRightNip] = useState(() => localStorage.getItem('siakad_cert_right_nip') || '196711261991032004');
+
+  // Reactively auto-sync logo whenever siakad_logo_updated fires or official school logo changes
+  useEffect(() => {
+    const handleLogoUpdate = () => {
+      const effective = getEffectiveSchoolLogo();
+      if (certLogoAutoSync) {
+        setCertLogoRight(effective);
+      }
+      const effectiveLeft = getEffectiveRegionalLogo();
+      setCertLogoLeft(effectiveLeft);
+    };
+
+    window.addEventListener('siakad_logo_updated', handleLogoUpdate);
+    return () => window.removeEventListener('siakad_logo_updated', handleLogoUpdate);
+  }, [certLogoAutoSync]);
+
+  useEffect(() => {
+    if (certLogoAutoSync) {
+      const effective = getEffectiveSchoolLogo();
+      if (effective && effective !== certLogoRight) {
+        setCertLogoRight(effective);
+      }
+    }
+  }, [logoRightInput, headmasterLogoRight, certLogoAutoSync]);
+
+  // Handler for custom background file upload
+  const handleUploadCertBg = async (e: React.ChangeEvent<HTMLInputElement>, target: 'akademik' | 'non_akademik') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImageFile(file, 1600, 0.85);
+      if (target === 'akademik') {
+        setCertAcademicBgUrl(compressed);
+        safeLocalStorageSet('siakad_cert_academic_bg_url', compressed);
+      } else {
+        setCertNonAcademicBgUrl(compressed);
+        safeLocalStorageSet('siakad_cert_non_academic_bg_url', compressed);
+      }
+      setSuccessMsg(`Background sertifikat ${target} berhasil diunggah!`);
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      alert('Gagal mengunggah file background. Pastikan format gambar JPG/PNG valid.');
+    }
+  };
+
+  // Handler for custom logo upload in certificate studio
+  const handleUploadCertLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImageFile(file, 512, 0.9);
+      setCertLogoRight(compressed);
+      safeLocalStorageSet('siakad_cert_logo_right', compressed);
+      // Also update school logo so the whole app stays unified
+      saveSchoolCardLogo(compressed);
+      setSuccessMsg('Logo sertifikat & sekolah berhasil diperbarui dan disinkronkan!');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      alert('Gagal mengunggah logo.');
+    }
+  };
 
   const handleSaveCertificateSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -311,6 +410,14 @@ export default function AdminPanel({
       nonAcademicBgUrl: certNonAcademicBgUrl,
       logoLeftUrl: certLogoLeft,
       logoRightUrl: certLogoRight,
+      logoAutoSync: certLogoAutoSync,
+      bgOpacity: certBgOpacity,
+      frameStyle: certFrameStyle,
+      watermarkStyle: certWatermarkStyle,
+      fontFamily: certFontFamily,
+      schoolHeader: certSchoolHeader,
+      subHeader: certSubHeader,
+      showStamp: certShowStamp,
       certNumberFormat: certNumFormat,
       leftSignTitle: certLeftTitle,
       leftSignName: certLeftName,
@@ -324,6 +431,13 @@ export default function AdminPanel({
     safeLocalStorageSet('siakad_cert_non_academic_bg_url', certNonAcademicBgUrl);
     safeLocalStorageSet('siakad_cert_logo_left', certLogoLeft);
     safeLocalStorageSet('siakad_cert_logo_right', certLogoRight);
+    safeLocalStorageSet('siakad_cert_logo_autosync', certLogoAutoSync ? 'true' : 'false');
+    safeLocalStorageSet('siakad_cert_bg_opacity', String(certBgOpacity));
+    safeLocalStorageSet('siakad_cert_frame_style', certFrameStyle);
+    safeLocalStorageSet('siakad_cert_watermark', certWatermarkStyle);
+    safeLocalStorageSet('siakad_cert_font_family', certFontFamily);
+    safeLocalStorageSet('siakad_kop_school_title', certSchoolHeader);
+    safeLocalStorageSet('siakad_cert_show_stamp', certShowStamp ? 'true' : 'false');
     safeLocalStorageSet('siakad_cert_num_format', certNumFormat);
     safeLocalStorageSet('siakad_cert_left_title', certLeftTitle);
     safeLocalStorageSet('siakad_cert_left_name', certLeftName);
@@ -337,7 +451,7 @@ export default function AdminPanel({
       console.error('Failed to sync certificate config to Firebase:', err);
     }
 
-    setSuccessMsg('Pengaturan Tampilan Sertifikat Digital berhasil disimpan dan tersinkronisasi!');
+    setSuccessMsg('Pengaturan Tampilan Sertifikat Digital & Background berhasil disimpan dan tersinkronisasi!');
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
@@ -4758,196 +4872,490 @@ export default function AdminPanel({
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Form Settings Left Column */}
-              <div className="lg:col-span-7 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
-                <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2 pb-3 border-b">
-                  <Sliders className="w-4 h-4 text-amber-500" />
-                  Form Konfigurasi Desain &amp; Legalitas Sertifikat
-                </h4>
+              <div className="lg:col-span-7 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-amber-500" />
+                    <span>Studio Kustomisasi Tampilan &amp; Legalitas Sertifikat</span>
+                  </h4>
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full">
+                    Akses Penuh Admin
+                  </span>
+                </div>
 
-                <form onSubmit={handleSaveCertificateSettings} className="space-y-4">
-                  {/* Background Selector Academic */}
-                  <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200/80 space-y-2">
-                    <label className="block text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                      <Award className="w-4 h-4 text-amber-600" />
-                      1. Background Frame Sertifikat AKADEMIK (OSN, Cerdas Cermat, Lomba Karya Tulis)
-                    </label>
-                    <input
-                      type="text"
-                      value={certAcademicBgUrl}
-                      onChange={(e) => setCertAcademicBgUrl(e.target.value)}
-                      placeholder="https://... URL background sertifikat akademik"
-                      className="w-full px-3 py-2 rounded-xl border border-amber-200 text-xs bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                    />
-                    <div className="flex items-center gap-2 pt-0.5 text-[11px]">
-                      <span className="text-amber-800 font-medium">Preset Cepat:</span>
+                <form onSubmit={handleSaveCertificateSettings} className="space-y-5">
+                  {/* BAGIAN 1: SINKRONISASI LOGO OTOMATIS */}
+                  <div className="p-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-2xl border border-blue-200/80 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-indigo-600" />
+                        <span className="text-xs font-black text-indigo-950">1. Sinkronisasi Logo Sekolah &amp; Instansi</span>
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer bg-white px-2.5 py-1 rounded-xl border border-indigo-200 shadow-2xs">
+                        <input
+                          type="checkbox"
+                          checked={certLogoAutoSync}
+                          onChange={e => {
+                            const val = e.target.checked;
+                            setCertLogoAutoSync(val);
+                            if (val) {
+                              setCertLogoRight(getEffectiveSchoolLogo());
+                              safeLocalStorageSet('siakad_cert_logo_autosync', 'true');
+                            } else {
+                              safeLocalStorageSet('siakad_cert_logo_autosync', 'false');
+                            }
+                          }}
+                          className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                        />
+                        <span className="text-[11px] font-bold text-indigo-900">
+                          {certLogoAutoSync ? '✅ Logo Update Otomatis' : 'Mode Kustom'}
+                        </span>
+                      </label>
+                    </div>
+
+                    <p className="text-[11px] text-indigo-900/80 leading-relaxed">
+                      {certLogoAutoSync 
+                        ? 'Logo pada sertifikat digital dan piagam akan selalu otomatis mengikuti Logo Resmi Sekolah yang diatur di Kop Surat / Web Profil Sekolah tanpa perlu input ulang.'
+                        : 'Mode manual aktif. Anda dapat memasukkan URL logo khusus tersendiri untuk sertifikat di bawah ini.'}
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      {/* Logo Kiri (Pemprov / Dinas) */}
+                      <div className="bg-white p-3 rounded-xl border border-slate-200/90 space-y-2 shadow-2xs">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[11px] font-bold text-slate-700">Logo Kiri (Dinas/Pemprov)</label>
+                          <img 
+                            src={certLogoLeft} 
+                            alt="Logo Kiri" 
+                            className="w-7 h-7 object-contain rounded border border-slate-100 p-0.5" 
+                            onError={(e: any) => e.target.src = '/logo-dki.png'}
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          value={certLogoLeft}
+                          onChange={(e) => setCertLogoLeft(e.target.value)}
+                          placeholder="/logo-dki.png atau https://..."
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 font-mono"
+                        />
+                      </div>
+
+                      {/* Logo Kanan (Sekolah) */}
+                      <div className="bg-white p-3 rounded-xl border border-slate-200/90 space-y-2 shadow-2xs">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[11px] font-bold text-slate-700">Logo Kanan (Sekolah)</label>
+                          <img 
+                            src={certLogoRight} 
+                            alt="Logo Kanan" 
+                            className="w-7 h-7 object-contain rounded border border-slate-100 p-0.5" 
+                            onError={(e: any) => e.target.src = getEffectiveSchoolLogo()}
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          value={certLogoRight}
+                          onChange={(e) => {
+                            setCertLogoRight(e.target.value);
+                            setCertLogoAutoSync(false);
+                            safeLocalStorageSet('siakad_cert_logo_autosync', 'false');
+                          }}
+                          placeholder="URL logo sekolah..."
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
                       <button
                         type="button"
-                        onClick={() => setCertAcademicBgUrl('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1000&auto=format&fit=crop')}
-                        className="px-2 py-1 bg-amber-100 text-amber-800 font-bold rounded-lg hover:bg-amber-200 cursor-pointer"
+                        onClick={() => {
+                          const eff = getEffectiveSchoolLogo();
+                          setCertLogoRight(eff);
+                          setCertLogoAutoSync(true);
+                          safeLocalStorageSet('siakad_cert_logo_autosync', 'true');
+                          setSuccessMsg('Logo sertifikat disinkronkan ke logo resmi sekolah!');
+                          setTimeout(() => setSuccessMsg(''), 3000);
+                        }}
+                        className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
                       >
-                        Gold Luxe
+                        <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Sinkronkan ke Logo Resmi Sekarang</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setCertAcademicBgUrl('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=1000&auto=format&fit=crop')}
-                        className="px-2 py-1 bg-blue-100 text-blue-800 font-bold rounded-lg hover:bg-blue-200 cursor-pointer"
-                      >
-                        Royal Blue
-                      </button>
+
+                      <label className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Unggah Logo Sekolah Baru</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleUploadCertLogo}
+                          className="hidden"
+                        />
+                      </label>
                     </div>
                   </div>
 
-                  {/* Background Selector Non-Academic */}
-                  <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200/80 space-y-2">
-                    <label className="block text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                      <Award className="w-4 h-4 text-emerald-600" />
-                      2. Background Frame Sertifikat NON-AKADEMIK (Pramuka, Seni, Olahraga, Ekskul)
-                    </label>
-                    <input
-                      type="text"
-                      value={certNonAcademicBgUrl}
-                      onChange={(e) => setCertNonAcademicBgUrl(e.target.value)}
-                      placeholder="https://... URL background sertifikat non-akademik"
-                      className="w-full px-3 py-2 rounded-xl border border-emerald-200 text-xs bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                    />
-                    <div className="flex items-center gap-2 pt-0.5 text-[11px]">
-                      <span className="text-emerald-800 font-medium">Preset Cepat:</span>
-                      <button
-                        type="button"
-                        onClick={() => setCertNonAcademicBgUrl('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop')}
-                        className="px-2 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-lg hover:bg-emerald-200 cursor-pointer"
-                      >
-                        Emerald Classic
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCertNonAcademicBgUrl('https://images.unsplash.com/photo-1579546929662-711aa81148cf?q=80&w=1000&auto=format&fit=crop')}
-                        className="px-2 py-1 bg-purple-100 text-purple-800 font-bold rounded-lg hover:bg-purple-200 cursor-pointer"
-                      >
-                        Ruby Distinction
-                      </button>
+                  {/* BAGIAN 2: KUSTOMISASI BACKGROUND & TEMA SERTIFIKAT */}
+                  <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200/90 space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <Award className="w-4 h-4 text-amber-600" />
+                        <span className="text-xs font-black text-amber-950">2. Desain Background &amp; Tema Tampilan</span>
+                      </div>
+                      <div className="flex items-center gap-1 bg-amber-100/80 p-0.5 rounded-xl text-[11px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewCertType('akademik')}
+                          className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                            previewCertType === 'akademik' ? 'bg-amber-600 text-white shadow-2xs' : 'text-amber-900 hover:bg-amber-200/60'
+                          }`}
+                        >
+                          Sertifikat Akademik
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewCertType('non_akademik')}
+                          className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                            previewCertType === 'non_akademik' ? 'bg-emerald-600 text-white shadow-2xs' : 'text-emerald-950 hover:bg-emerald-100'
+                          }`}
+                        >
+                          Sertifikat Non-Akademik
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Custom Logos */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    {/* Presets Gallery Cepat */}
                     <div className="space-y-1.5">
-                      <label className="block text-xs font-bold text-slate-700">URL Logo Kiri (Pemprov / Dinas)</label>
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[11px] font-bold text-amber-900">
+                          Pilihan Tema &amp; Background Populer (1-Klik Terapkan):
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {[
+                          {
+                            name: '🏆 Gold Royal Luxe',
+                            url: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1000&auto=format&fit=crop',
+                            frame: 'double-gold' as const,
+                            watermark: 'school-crest' as const,
+                            opacity: 35
+                          },
+                          {
+                            name: '👑 Royal Sapphire Blue',
+                            url: 'https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=1000&auto=format&fit=crop',
+                            frame: 'royal-dark' as const,
+                            watermark: 'school-crest' as const,
+                            opacity: 30
+                          },
+                          {
+                            name: '🌿 Emerald Adiwiyata',
+                            url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop',
+                            frame: 'emerald-modern' as const,
+                            watermark: 'adiwiyata' as const,
+                            opacity: 35
+                          },
+                          {
+                            name: '📜 Piagam Klasik Parchment',
+                            url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?q=80&w=1000&auto=format&fit=crop',
+                            frame: 'ornate-corners' as const,
+                            watermark: 'tut-wuri' as const,
+                            opacity: 40
+                          },
+                          {
+                            name: '💎 Ruby Distinction',
+                            url: 'https://images.unsplash.com/photo-1579546929662-711aa81148cf?q=80&w=1000&auto=format&fit=crop',
+                            frame: 'double-gold' as const,
+                            watermark: 'school-crest' as const,
+                            opacity: 30
+                          },
+                          {
+                            name: '✨ Slate Modern Gold',
+                            url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1000&auto=format&fit=crop',
+                            frame: 'double-gold' as const,
+                            watermark: 'school-crest' as const,
+                            opacity: 25
+                          }
+                        ].map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              if (previewCertType === 'akademik') {
+                                setCertAcademicBgUrl(preset.url);
+                              } else {
+                                setCertNonAcademicBgUrl(preset.url);
+                              }
+                              setCertFrameStyle(preset.frame);
+                              setCertWatermarkStyle(preset.watermark);
+                              setCertBgOpacity(preset.opacity);
+                              setSuccessMsg(`Tema "${preset.name}" diterapkan untuk sertifikat ${previewCertType}!`);
+                              setTimeout(() => setSuccessMsg(''), 2500);
+                            }}
+                            className="p-2 bg-white hover:bg-amber-100/60 rounded-xl border border-amber-200 text-left transition-all hover:scale-[1.02] shadow-2xs group cursor-pointer"
+                          >
+                            <span className="text-xs font-bold text-slate-800 block truncate group-hover:text-amber-900">
+                              {preset.name}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">
+                              Frame: {preset.frame}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* URL Background & Unggah File Kustom */}
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[11px] font-bold text-amber-950">
+                          Background Aktif ({previewCertType === 'akademik' ? 'Akademik' : 'Non-Akademik'}):
+                        </label>
+                        <label className="text-[11px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 cursor-pointer bg-white px-2.5 py-1 rounded-lg border border-amber-200 shadow-2xs">
+                          <Upload className="w-3 h-3" />
+                          <span>Unggah Gambar Background (JPG/PNG)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={e => handleUploadCertBg(e, previewCertType)}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+
                       <input
                         type="text"
-                        value={certLogoLeft}
-                        onChange={(e) => setCertLogoLeft(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        value={previewCertType === 'akademik' ? certAcademicBgUrl : certNonAcademicBgUrl}
+                        onChange={(e) => {
+                          if (previewCertType === 'akademik') {
+                            setCertAcademicBgUrl(e.target.value);
+                          } else {
+                            setCertNonAcademicBgUrl(e.target.value);
+                          }
+                        }}
+                        placeholder="https://... URL gambar background sertifikat"
+                        className="w-full px-3 py-2 rounded-xl border border-amber-200 text-xs bg-white focus:ring-2 focus:ring-amber-500 font-mono shadow-2xs"
                       />
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-bold text-slate-700">URL Logo Kanan (Sekolah)</label>
+
+                    {/* Kontrol Opasitas Background */}
+                    <div className="bg-white p-3.5 rounded-xl border border-amber-200/90 space-y-2 shadow-2xs">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                        <span className="flex items-center gap-1.5">
+                          <Sliders className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Tingkat Transparansi / Opasitas Background:</span>
+                        </span>
+                        <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md font-mono font-black text-xs">
+                          {certBgOpacity}%
+                        </span>
+                      </div>
                       <input
-                        type="text"
-                        value={certLogoRight}
-                        onChange={(e) => setCertLogoRight(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        type="range"
+                        min="15"
+                        max="85"
+                        step="5"
+                        value={certBgOpacity}
+                        onChange={(e) => setCertBgOpacity(Number(e.target.value))}
+                        className="w-full accent-amber-600 cursor-pointer"
                       />
+                      <p className="text-[10px] text-slate-400">
+                        Sesuaikan opasitas agar teks nama dan prestasi siswa tetap kontras dan mudah dibaca saat dicetak.
+                      </p>
                     </div>
-                  </div>
 
-                  {/* Format Nomor Sertifikat */}
-                  <div className="space-y-1.5 pt-2">
-                    <label className="block text-xs font-bold text-slate-700">Format Template Nomor Sertifikat</label>
-                    <input
-                      type="text"
-                      value={certNumFormat}
-                      onChange={(e) => setCertNumFormat(e.target.value)}
-                      placeholder="50/SERT/{CAT}/{YEAR}/{ID}"
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                    />
-                    <p className="text-[10px] text-slate-400">Variabel yang didukung: &#123;CAT&#125;, &#123;YEAR&#125;, &#123;ID&#125;</p>
-                  </div>
+                    {/* Pilihan Gaya Bingkai (Border Frame) & Watermark */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Gaya Bingkai (Frame)</label>
+                        <select
+                          value={certFrameStyle}
+                          onChange={(e) => setCertFrameStyle(e.target.value as any)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-2xs"
+                        >
+                          <option value="double-gold">Garis Ganda Emas (Double Gold)</option>
+                          <option value="ornate-corners">Sudut Ornamen Mewah (Ornate Corners)</option>
+                          <option value="emerald-modern">Hijau Zamrud Adiwiyata (Emerald Modern)</option>
+                          <option value="royal-dark">Dark Slate Kontras Tinggi (Royal Dark)</option>
+                          <option value="minimal-clean">Minimalis Bersih (Clean Border)</option>
+                        </select>
+                      </div>
 
-                  {/* Signature Left */}
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                    <h5 className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-amber-600" />
-                      Pengaturan Tanda Tangan Kiri (Pelatih / Pembina / Walas)
-                    </h5>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Pola Watermark Tengah</label>
+                        <select
+                          value={certWatermarkStyle}
+                          onChange={(e) => setCertWatermarkStyle(e.target.value as any)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-2xs"
+                        >
+                          <option value="school-crest">Logo Sekolah Resmi Transparan</option>
+                          <option value="adiwiyata">Daun &amp; Lingkungan Adiwiyata</option>
+                          <option value="tut-wuri">Lambang Pendidikan Kemendikbud</option>
+                          <option value="none">Polos (Tanpa Watermark Tengah)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Tipografi / Font Style */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jabatan / Judul TTD</label>
-                        <input
-                          type="text"
-                          value={certLeftTitle}
-                          onChange={(e) => setCertLeftTitle(e.target.value)}
-                          className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs"
-                        />
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Gaya Huruf (Font)</label>
+                        <select
+                          value={certFontFamily}
+                          onChange={(e) => setCertFontFamily(e.target.value as any)}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-2xs"
+                        >
+                          <option value="serif">Serif Formal Klasik (Georgia / Garamond)</option>
+                          <option value="sans">Sans-Serif Modern (Plus Jakarta Sans)</option>
+                          <option value="formal">Kombinasi Prestasi Elegan (Serif &amp; Sans)</option>
+                        </select>
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Nama Lengkap &amp; Gelar</label>
-                        <input
-                          type="text"
-                          value={certLeftName}
-                          onChange={(e) => setCertLeftName(e.target.value)}
-                          className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs"
-                        />
+
+                      <div className="flex items-center gap-3 pt-6">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={certShowStamp}
+                            onChange={(e) => setCertShowStamp(e.target.checked)}
+                            className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                          />
+                          <span className="text-xs font-bold text-slate-700">Tampilkan Stempel Sah Digital</span>
+                        </label>
                       </div>
                     </div>
                   </div>
 
-                  {/* Signature Right */}
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                    <h5 className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      Pengaturan Tanda Tangan Kanan (Kepala Sekolah)
+                  {/* BAGIAN 3: HEADER, NOMOR & TANDA TANGAN */}
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3.5">
+                    <h5 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b pb-2">
+                      <FileText className="w-4 h-4 text-emerald-600" />
+                      <span>3. Kop Surat, Nomor &amp; Legalitas Tanda Tangan</span>
                     </h5>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jabatan / Judul TTD</label>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Nama Instansi / Sekolah</label>
                         <input
                           type="text"
-                          value={certRightTitle}
-                          onChange={(e) => setCertRightTitle(e.target.value)}
-                          className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs"
+                          value={certSchoolHeader}
+                          onChange={(e) => setCertSchoolHeader(e.target.value)}
+                          placeholder="SMP NEGERI 50 JAKARTA"
+                          className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-bold"
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Nama Lengkap Kepala Sekolah</label>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Format Template Nomor Sertifikat</label>
                         <input
                           type="text"
-                          value={certRightName}
-                          onChange={(e) => setCertRightName(e.target.value)}
-                          className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs"
+                          value={certNumFormat}
+                          onChange={(e) => setCertNumFormat(e.target.value)}
+                          placeholder="50/SERT/{CAT}/{YEAR}/{ID}"
+                          className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-mono"
                         />
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">NIP Kepala Sekolah</label>
-                      <input
-                        type="text"
-                        value={certRightNip}
-                        onChange={(e) => setCertRightNip(e.target.value)}
-                        className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-mono"
-                      />
+
+                    {/* TTD Kiri & TTD Kanan */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      {/* TTD Kiri */}
+                      <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                        <p className="text-[11px] font-bold text-slate-700">Tanda Tangan Kiri (Pembina / Pelatih)</p>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">Jabatan TTD</label>
+                          <input
+                            type="text"
+                            value={certLeftTitle}
+                            onChange={(e) => setCertLeftTitle(e.target.value)}
+                            className="w-full px-2.5 py-1 rounded border border-slate-200 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">Nama &amp; Gelar</label>
+                          <input
+                            type="text"
+                            value={certLeftName}
+                            onChange={(e) => setCertLeftName(e.target.value)}
+                            className="w-full px-2.5 py-1 rounded border border-slate-200 text-xs font-bold"
+                          />
+                        </div>
+                      </div>
+
+                      {/* TTD Kanan */}
+                      <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                        <p className="text-[11px] font-bold text-slate-700">Tanda Tangan Kanan (Kepala Sekolah)</p>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">Jabatan TTD</label>
+                          <input
+                            type="text"
+                            value={certRightTitle}
+                            onChange={(e) => setCertRightTitle(e.target.value)}
+                            className="w-full px-2.5 py-1 rounded border border-slate-200 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">Nama Kepala Sekolah</label>
+                          <input
+                            type="text"
+                            value={certRightName}
+                            onChange={(e) => setCertRightName(e.target.value)}
+                            className="w-full px-2.5 py-1 rounded border border-slate-200 text-xs font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 mb-0.5">NIP</label>
+                          <input
+                            type="text"
+                            value={certRightNip}
+                            onChange={(e) => setCertRightNip(e.target.value)}
+                            className="w-full px-2.5 py-1 rounded border border-slate-200 text-xs font-mono"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <button
-                    type="submit"
-                    className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl shadow-lg shadow-amber-200 hover:bg-amber-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>Simpan &amp; Sinkronkan Tampilan Sertifikat</span>
-                  </button>
+                  <div className="flex items-center gap-3 pt-2">
+                    <button
+                      type="submit"
+                      className="flex-1 py-3 bg-gradient-to-r from-amber-600 to-amber-700 text-white font-black rounded-xl shadow-lg shadow-amber-200 hover:from-amber-700 hover:to-amber-800 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 text-xs sm:text-sm"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Simpan &amp; Sinkronkan Tampilan Sertifikat</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCertAcademicBgUrl('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1000&auto=format&fit=crop');
+                        setCertNonAcademicBgUrl('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop');
+                        setCertBgOpacity(35);
+                        setCertFrameStyle('double-gold');
+                        setCertWatermarkStyle('school-crest');
+                        setCertFontFamily('serif');
+                        setCertLogoRight(getEffectiveSchoolLogo());
+                        setCertLogoLeft(getEffectiveRegionalLogo());
+                        setCertLogoAutoSync(true);
+                        setSuccessMsg('Pengaturan desain sertifikat dikembalikan ke default elegan!');
+                        setTimeout(() => setSuccessMsg(''), 3000);
+                      }}
+                      className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                      title="Kembalikan ke pengaturan awal"
+                    >
+                      Reset Default
+                    </button>
+                  </div>
                 </form>
               </div>
 
               {/* Live Preview Right Column */}
               <div className="lg:col-span-5 space-y-4">
-                <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3">
+                <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3.5 sticky top-20">
                   <div className="flex items-center justify-between pb-2 border-b">
-                    <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <h4 className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
                       <Award className="w-4 h-4 text-amber-500" />
-                      Live Preview Sertifikat Digital
+                      <span>Live Preview Sertifikat Digital</span>
                     </h4>
-                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">Real-time</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">Real-time</span>
+                    </div>
                   </div>
 
                   {/* Preview Type Toggle Tabs */}
@@ -4957,7 +5365,7 @@ export default function AdminPanel({
                       onClick={() => setPreviewCertType('akademik')}
                       className={`py-1.5 rounded-lg transition-all cursor-pointer ${
                         previewCertType === 'akademik'
-                          ? 'bg-amber-600 text-white shadow-xs'
+                          ? 'bg-amber-600 text-white shadow-2xs'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
@@ -4968,7 +5376,7 @@ export default function AdminPanel({
                       onClick={() => setPreviewCertType('non_akademik')}
                       className={`py-1.5 rounded-lg transition-all cursor-pointer ${
                         previewCertType === 'non_akademik'
-                          ? 'bg-emerald-600 text-white shadow-xs'
+                          ? 'bg-emerald-600 text-white shadow-2xs'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
@@ -4977,56 +5385,111 @@ export default function AdminPanel({
                   </div>
 
                   {/* Certificate Digital Visual Card Mock */}
-                  <div className={`relative rounded-2xl overflow-hidden border-4 shadow-xl bg-slate-900 text-white p-6 space-y-4 min-h-[360px] flex flex-col justify-between transition-all ${
-                    previewCertType === 'akademik' ? 'border-amber-400' : 'border-emerald-400'
-                  }`}>
-                    {/* Background Overlay */}
+                  <div className={`relative rounded-2xl overflow-hidden border-4 shadow-xl bg-slate-900 text-white p-5 space-y-3 min-h-[380px] flex flex-col justify-between transition-all ${
+                    previewCertType === 'akademik' 
+                      ? (certFrameStyle === 'emerald-modern' ? 'border-emerald-500' : 'border-amber-400') 
+                      : 'border-emerald-400'
+                  } ${certFontFamily === 'serif' ? 'font-serif' : 'font-sans'}`}>
+                    {/* Background Overlay with user-controlled Opacity */}
                     <div
-                      className="absolute inset-0 opacity-30 bg-cover bg-center pointer-events-none transition-all duration-300"
+                      className="absolute inset-0 bg-cover bg-center pointer-events-none transition-all duration-300"
                       style={{
-                        backgroundImage: `url('${previewCertType === 'akademik' ? certAcademicBgUrl : certNonAcademicBgUrl}')`
+                        backgroundImage: `url('${previewCertType === 'akademik' ? certAcademicBgUrl : certNonAcademicBgUrl}')`,
+                        opacity: certBgOpacity / 100
                       }}
                     />
                     
-                    {/* Inner Gold / Emerald Border Frame */}
-                    <div className={`absolute inset-2 border-2 rounded-xl pointer-events-none ${
-                      previewCertType === 'akademik' ? 'border-amber-300/60' : 'border-emerald-300/60'
-                    }`} />
+                    {/* Inner Gold / Emerald Border Frame according to certFrameStyle */}
+                    {certFrameStyle === 'double-gold' && (
+                      <div className="absolute inset-2 border-2 border-amber-300/70 rounded-xl pointer-events-none">
+                        <div className="absolute inset-1 border border-amber-200/40 rounded-lg" />
+                      </div>
+                    )}
+                    {certFrameStyle === 'ornate-corners' && (
+                      <div className="absolute inset-2 border border-amber-400/80 rounded-xl pointer-events-none">
+                        <div className="absolute top-1 left-1 w-4 h-4 border-t-2 border-l-2 border-amber-300" />
+                        <div className="absolute top-1 right-1 w-4 h-4 border-t-2 border-r-2 border-amber-300" />
+                        <div className="absolute bottom-1 left-1 w-4 h-4 border-b-2 border-l-2 border-amber-300" />
+                        <div className="absolute bottom-1 right-1 w-4 h-4 border-b-2 border-r-2 border-amber-300" />
+                      </div>
+                    )}
+                    {certFrameStyle === 'emerald-modern' && (
+                      <div className="absolute inset-2 border-2 border-emerald-400/80 rounded-xl pointer-events-none" />
+                    )}
+                    {certFrameStyle === 'royal-dark' && (
+                      <div className="absolute inset-2 border-2 border-slate-300/50 rounded-xl pointer-events-none" />
+                    )}
 
-                    <div className="relative z-10 space-y-3">
+                    {/* Central Watermark Symbol or Logo */}
+                    {certWatermarkStyle === 'school-crest' && (
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-36 opacity-10 pointer-events-none select-none flex items-center justify-center">
+                        <img 
+                          src={certLogoRight} 
+                          alt="Watermark" 
+                          className="w-full h-full object-contain filter grayscale" 
+                          onError={(e: any) => e.target.style.display = 'none'} 
+                        />
+                      </div>
+                    )}
+                    {certWatermarkStyle === 'adiwiyata' && (
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-7xl opacity-10 pointer-events-none select-none">
+                        🌿
+                      </div>
+                    )}
+                    {certWatermarkStyle === 'tut-wuri' && (
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-7xl opacity-10 pointer-events-none select-none">
+                        🎓
+                      </div>
+                    )}
+
+                    <div className="relative z-10 space-y-2.5">
                       {/* Top Logos & Title */}
-                      <div className="flex items-center justify-between gap-2 border-b border-white/20 pb-3">
-                        <img src={certLogoLeft} alt="Logo Left" className="w-9 h-9 object-contain" onError={(e: any) => e.target.style.display = 'none'} />
+                      <div className="flex items-center justify-between gap-2 border-b border-white/20 pb-2.5">
+                        <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                          <img 
+                            src={certLogoLeft} 
+                            alt="Logo Left" 
+                            className="max-w-full max-h-full object-contain drop-shadow-xs" 
+                            onError={(e: any) => e.target.src = '/logo-dki.png'} 
+                          />
+                        </div>
                         <div className="text-center flex-1">
-                          <p className="text-[9px] font-bold tracking-widest text-amber-200 uppercase">SMP NEGERI 50 JAKARTA</p>
-                          <h5 className={`text-sm font-extrabold tracking-wider ${previewCertType === 'akademik' ? 'text-amber-300' : 'text-emerald-300'}`}>
+                          <p className="text-[9px] font-bold tracking-widest text-amber-200 uppercase">{certSchoolHeader}</p>
+                          <h5 className={`text-sm font-black tracking-wider ${previewCertType === 'akademik' ? 'text-amber-300' : 'text-emerald-300'}`}>
                             SERTIFIKAT PRESTASI {previewCertType === 'akademik' ? 'AKADEMIK' : 'NON-AKADEMIK'}
                           </h5>
-                          <p className="text-[9px] text-slate-300 font-mono mt-0.5">
+                          <p className="text-[8.5px] text-slate-300 font-mono mt-0.5">
                             {certNumFormat.replace('{CAT}', previewCertType === 'akademik' ? 'AKAD' : 'NONAKAD').replace('{YEAR}', '2026').replace('{ID}', '001')}
                           </p>
                         </div>
-                        <img src={certLogoRight} alt="Logo Right" className="w-9 h-9 object-contain" onError={(e: any) => e.target.style.display = 'none'} />
+                        <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                          <img 
+                            src={certLogoRight} 
+                            alt="Logo Right" 
+                            className="max-w-full max-h-full object-contain drop-shadow-xs" 
+                            onError={(e: any) => e.target.src = getEffectiveSchoolLogo()} 
+                          />
+                        </div>
                       </div>
 
                       {/* Recipient */}
-                      <div className="text-center space-y-1 my-2">
-                        <p className="text-[10px] text-slate-300 italic">Diberikan Kepada:</p>
-                        <p className={`text-base font-extrabold underline ${previewCertType === 'akademik' ? 'text-amber-200 decoration-amber-400' : 'text-emerald-200 decoration-emerald-400'}`}>
+                      <div className="text-center space-y-0.5 my-1.5">
+                        <p className="text-[9.5px] text-slate-300 italic">Diberikan Kepada:</p>
+                        <p className={`text-base font-black underline tracking-wide ${previewCertType === 'akademik' ? 'text-amber-200 decoration-amber-400' : 'text-emerald-200 decoration-emerald-400'}`}>
                           AHMAD RIFAI
                         </p>
-                        <p className="text-[10px] text-slate-300">NISN: 0081234567 &bull; Kelas: VII-A</p>
+                        <p className="text-[9.5px] text-slate-300 font-mono">NISN: 0081234567 &bull; Kelas: VII-A</p>
                       </div>
 
                       {/* Achievement */}
-                      <div className="text-center bg-black/40 backdrop-blur-md p-2.5 rounded-xl border border-white/10 space-y-1">
-                        <p className="text-[9px] text-slate-300 font-bold uppercase">Atas Capaian Prestasi:</p>
-                        <p className="text-xs font-bold text-white">
+                      <div className="text-center bg-black/45 backdrop-blur-md p-2.5 rounded-xl border border-white/10 space-y-1">
+                        <p className="text-[8.5px] text-slate-300 font-bold uppercase tracking-wider">Atas Capaian Prestasi:</p>
+                        <p className="text-xs font-bold text-white leading-tight">
                           {previewCertType === 'akademik'
                             ? '"Juara 1 Lomba Olimpiade Sains Nasional (OSN) Matematika"'
                             : '"Juara 1 FLS2N Festival Seni Tari Tradisional Kategori Daerah"'}
                         </p>
-                        <div className="flex justify-center gap-2 pt-1 text-[9px]">
+                        <div className="flex justify-center gap-2 pt-1 text-[8.5px]">
                           <span className="px-2 py-0.5 bg-white/20 text-white rounded-full font-semibold">Tingkat Kota</span>
                           <span className={`px-2 py-0.5 rounded-full font-bold ${
                             previewCertType === 'akademik' ? 'bg-amber-500/30 text-amber-200' : 'bg-emerald-500/30 text-emerald-200'
@@ -5037,24 +5500,81 @@ export default function AdminPanel({
                       </div>
                     </div>
 
-                    {/* Bottom Signatures */}
-                    <div className="relative z-10 grid grid-cols-2 gap-2 text-center pt-2 border-t border-white/20 text-[9px]">
-                      <div className="space-y-1">
-                        <p className="text-slate-300 font-semibold">{certLeftTitle}</p>
-                        <div className="h-7 flex items-center justify-center">
-                          <span className="text-[10px] font-serif italic text-amber-200/80">[ TTD Digital ]</span>
+                    {/* Bottom Signatures & Stamp */}
+                    <div className="relative z-10 flex items-end justify-between text-center pt-2 border-t border-white/20 text-[8.5px]">
+                      <div className="space-y-0.5 text-center w-28">
+                        <p className="text-slate-300 font-semibold truncate">{certLeftTitle}</p>
+                        <div className="h-6 flex items-center justify-center">
+                          <span className="text-[9px] font-serif italic text-amber-200/90">[ TTD Digital ]</span>
                         </div>
-                        <p className="font-extrabold text-white underline">{certLeftName}</p>
+                        <p className="font-extrabold text-white underline truncate">{certLeftName}</p>
                       </div>
-                      <div className="space-y-1">
-                        <p className="text-slate-300 font-semibold">{certRightTitle}</p>
-                        <div className="h-7 flex items-center justify-center">
-                          <span className="text-[10px] font-serif italic text-amber-200/80">[ TTD Digital ]</span>
+
+                      {certShowStamp && (
+                        <div className="flex flex-col items-center">
+                          <div className="w-8 h-8 rounded-full border border-amber-400/80 bg-amber-400/20 text-amber-300 flex items-center justify-center font-bold text-xs shadow-2xs">
+                            ★
+                          </div>
+                          <span className="text-[7px] text-amber-300 font-bold uppercase mt-0.5">RESMI &amp; SAH</span>
                         </div>
-                        <p className="font-extrabold text-white underline">{certRightName}</p>
-                        <p className="text-[8px] text-slate-400 font-mono">{certRightNip ? `NIP. ${certRightNip}` : ''}</p>
+                      )}
+
+                      <div className="space-y-0.5 text-center w-36">
+                        <p className="text-slate-300 font-semibold truncate">{certRightTitle}</p>
+                        <div className="h-6 flex items-center justify-center">
+                          <span className="text-[9px] font-serif italic text-amber-200/90">[ TTD Digital ]</span>
+                        </div>
+                        <p className="font-extrabold text-white underline truncate">{certRightName}</p>
+                        <p className="text-[7.5px] text-slate-400 font-mono truncate">{certRightNip ? `NIP. ${certRightNip}` : ''}</p>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Tombol Cetak Test Sertifikat A4 */}
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        printCertificate(
+                          {
+                            title: previewCertType === 'akademik' 
+                              ? 'Juara 1 Lomba Olimpiade Sains Nasional (OSN) Matematika' 
+                              : 'Juara 1 FLS2N Festival Seni Tari Tradisional Kategori Daerah',
+                            category: previewCertType === 'akademik' ? 'Akademik' : 'Non-Akademik',
+                            level: 'Tingkat Kota',
+                            rank: 'Juara 1',
+                            date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+                            recordedBy: certLeftName
+                          },
+                          {
+                            name: 'AHMAD RIFAI',
+                            nisn: '0081234567',
+                            classId: 'VII-A'
+                          },
+                          certRightName,
+                          {
+                            academicBgUrl: certAcademicBgUrl,
+                            nonAcademicBgUrl: certNonAcademicBgUrl,
+                            logoLeftUrl: certLogoLeft,
+                            logoRightUrl: certLogoRight,
+                            bgOpacity: certBgOpacity / 100,
+                            frameStyle: certFrameStyle,
+                            watermarkStyle: certWatermarkStyle,
+                            fontFamily: certFontFamily,
+                            schoolHeader: certSchoolHeader,
+                            leftSigTitle: certLeftTitle,
+                            leftSigName: certLeftName,
+                            rightSigTitle: certRightTitle,
+                            rightSigName: certRightName,
+                            rightSigNip: certRightNip
+                          }
+                        );
+                      }}
+                      className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                    >
+                      <Printer className="w-4 h-4 text-amber-400" />
+                      <span>Cetak Uji Coba Pratinjau (PDF Ukuran A4)</span>
+                    </button>
                   </div>
                 </div>
               </div>

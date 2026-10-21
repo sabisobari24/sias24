@@ -1,4 +1,5 @@
 import { CertificateConfig, InventoryLoan } from '../types';
+import { getEffectiveSchoolLogo } from './schoolLogoHelper';
 
 /**
  * Utility to print styled HTML safely in an iframe environment without being blocked by pop-up blockers.
@@ -555,29 +556,53 @@ export const printCertificate = (
   headmasterName: string = 'Dra. Hj. Endah Purwani M.M',
   config?: CertificateConfig
 ) => {
-  const numberTemplate = config?.numberTemplate || 'SER/{TYPE}/{YEAR}/{ID}';
+  // Auto-load saved certificate configuration from localStorage if not passed
+  let savedConfig: any = null;
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('siakad_certificate_config') : null;
+    if (raw) savedConfig = JSON.parse(raw);
+  } catch (e) {
+    savedConfig = null;
+  }
+
+  const numberTemplate = config?.numberTemplate || savedConfig?.certNumberFormat || localStorage.getItem('siakad_cert_num_format') || '50/SERT/{CAT}/{YEAR}/{ID}';
   const yearStr = new Date().getFullYear().toString();
   const idStr = (achievement.id || '001').slice(-4).toUpperCase();
   const typeStr = (achievement.category || 'PRESTASI').toUpperCase();
 
   const certNumber = numberTemplate
+    .replace('{CAT}', typeStr.slice(0, 4))
     .replace('{TYPE}', typeStr)
     .replace('{YEAR}', yearStr)
     .replace('{ID}', idStr);
 
-  const leftSigTitle = config?.leftSigTitle || 'Pembina / Coach Kesiswaan';
-  const leftSigName = config?.leftSigName || achievement.recordedBy || 'Tim Kesiswaan';
+  const leftSigTitle = config?.leftSigTitle || savedConfig?.leftSignTitle || localStorage.getItem('siakad_cert_left_title') || 'Pembina / Coach Kesiswaan';
+  const leftSigName = config?.leftSigName || savedConfig?.leftSignName || localStorage.getItem('siakad_cert_left_name') || achievement.recordedBy || 'Tim Kesiswaan';
 
-  const rightSigTitle = config?.rightSigTitle || 'Kepala SMPN 50 Jakarta';
-  const rightSigName = config?.rightSigName || headmasterName;
+  const rightSigTitle = config?.rightSigTitle || savedConfig?.rightSignTitle || localStorage.getItem('siakad_cert_right_title') || 'Kepala SMPN 50 Jakarta';
+  const rightSigName = config?.rightSigName || savedConfig?.rightSignName || localStorage.getItem('siakad_cert_right_name') || headmasterName;
+  const rightSigNip = config?.rightSigNip || savedConfig?.rightSignNip || localStorage.getItem('siakad_cert_right_nip') || '196711261991032004';
 
-  const logoLeft = config?.logoLeftUrl || '/logo-dki.png';
-  const logoRight = config?.logoRightUrl || '/logo.png';
+  const schoolTitle = config?.schoolHeader || savedConfig?.schoolHeader || localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA';
+
+  const logoLeft = config?.logoLeftUrl || savedConfig?.logoLeftUrl || localStorage.getItem('siakad_cert_logo_left') || '/logo-dki.png';
+  
+  // Real-time automatic synchronization with effective school logo
+  const effectiveSchoolLogo = getEffectiveSchoolLogo();
+  const savedLogoRight = config?.logoRightUrl || savedConfig?.logoRightUrl || localStorage.getItem('siakad_cert_logo_right');
+  const isAutoSync = (savedConfig?.logoAutoSync !== false) && (localStorage.getItem('siakad_cert_logo_autosync') !== 'false');
+  const logoRight = (!savedLogoRight || savedLogoRight === '/logo.png' || savedLogoRight.includes('/logo.png') || isAutoSync)
+    ? effectiveSchoolLogo
+    : (savedLogoRight || effectiveSchoolLogo);
 
   const isAcademic = achievement.category === 'Akademik';
   const bgImage = isAcademic 
-    ? (config?.academicBgUrl || config?.bgUrl || 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1000&auto=format&fit=crop')
-    : (config?.nonAcademicBgUrl || config?.bgUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop');
+    ? (config?.academicBgUrl || savedConfig?.academicBgUrl || savedConfig?.backgroundUrl || localStorage.getItem('siakad_cert_academic_bg_url') || 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1000&auto=format&fit=crop')
+    : (config?.nonAcademicBgUrl || savedConfig?.nonAcademicBgUrl || savedConfig?.backgroundUrl || localStorage.getItem('siakad_cert_non_academic_bg_url') || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop');
+
+  const bgOpacity = config?.bgOpacity ?? savedConfig?.bgOpacity ?? Number(localStorage.getItem('siakad_cert_bg_opacity')) ?? 0.35;
+  const frameStyle = config?.frameStyle || savedConfig?.frameStyle || localStorage.getItem('siakad_cert_frame_style') || 'double-gold';
+  const watermarkStyle = config?.watermarkStyle || savedConfig?.watermarkStyle || localStorage.getItem('siakad_cert_watermark') || 'school-crest';
 
   const primaryBorderColor = isAcademic ? '#d97706' : '#059669';
   const secondaryBorderColor = isAcademic ? '#b45309' : '#047857';
@@ -864,13 +889,13 @@ export const printCertificate = (
             
             <div class="cert-inner-border">
               <div class="header-logos">
-                <img src="${logoLeft}" alt="Logo Kiri" class="logo-img" onerror="this.style.display='none'" />
+                <img src="${logoLeft}" alt="Logo Pemprov" class="logo-img" onerror="this.src='/logo-dki.png'; this.onerror=null;" />
                 <div style="flex:1;">
-                  <div class="school-header">PEMERINTAH PROVINSI DKI JAKARTA &bull; SMP NEGERI 50 JAKARTA</div>
+                  <div class="school-header">${schoolTitle}</div>
                   <div class="cert-title">SERTIFIKAT DIGITAL PRESTASI</div>
                   <div class="cert-no">NO: ${certNumber}</div>
                 </div>
-                <img src="${logoRight}" alt="Logo Kanan" class="logo-img" onerror="this.style.display='none'" />
+                <img src="${logoRight}" alt="Logo Sekolah" class="logo-img" onerror="this.src='${effectiveSchoolLogo}'; this.onerror=null;" />
               </div>
               
               <div class="given-to">Diberikan dengan rasa bangga dan apresiasi setinggi-tingginya kepada:</div>
@@ -904,7 +929,7 @@ export const printCertificate = (
                   <div class="sig-date">Jakarta, ${achievement.date || new Date().toLocaleDateString('id-ID')}</div>
                   <div class="sig-role">${rightSigTitle}</div>
                   <div class="sig-name">${rightSigName}</div>
-                  ${config?.rightSigNip ? `<div class="sig-nip">${config.rightSigNip}</div>` : ''}
+                  ${rightSigNip ? `<div class="sig-nip">NIP. ${rightSigNip}</div>` : ''}
                 </div>
               </div>
             </div>

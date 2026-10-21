@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Printer, Download, Sparkles, Award, ShieldCheck, Leaf } from 'lucide-react';
 import { printEcoAmbassadorCertificate, EcoAmbassadorCertData } from '../../utils/ecoCertificateHelper';
+import { getEffectiveSchoolLogo } from '../../utils/schoolLogoHelper';
 
 interface EcoCertificateModalProps {
   isOpen: boolean;
@@ -16,8 +17,18 @@ export const EcoCertificateModal: React.FC<EcoCertificateModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const effectiveSchoolLogo = getEffectiveSchoolLogo();
+  const schoolLogo = (data.schoolLogo && data.schoolLogo !== '/logo.png') 
+    ? data.schoolLogo 
+    : (localStorage.getItem('siakad_logo_right') || effectiveSchoolLogo);
+  const logoLeft = data.logoLeftUrl || localStorage.getItem('siakad_logo_left') || localStorage.getItem('siakad_cert_logo_left') || '/logo-dki.png';
+
   const handlePrint = () => {
-    printEcoAmbassadorCertificate(data);
+    printEcoAmbassadorCertificate({
+      ...data,
+      schoolLogo,
+      logoLeftUrl: logoLeft
+    });
   };
 
   return (
@@ -78,24 +89,61 @@ export const EcoCertificateModal: React.FC<EcoCertificateModalProps> = ({
             <div className="w-full max-w-3xl aspect-[1.414/1] bg-gradient-to-br from-emerald-50 via-white to-lime-50 rounded-2xl border-8 border-emerald-700 p-6 sm:p-8 flex flex-col justify-between shadow-xl relative overflow-hidden text-slate-900 select-none">
               {/* Decorative Borders */}
               <div className="absolute inset-2 border border-dashed border-emerald-400 rounded-lg pointer-events-none" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-8xl sm:text-9xl text-emerald-500/[0.04] pointer-events-none font-sans font-black select-none">
-                🌿
+              
+              {/* Watermark Logo Sekolah & Daun Adiwiyata */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 sm:w-60 sm:h-60 opacity-6 pointer-events-none select-none flex items-center justify-center">
+                <img
+                  src={schoolLogo}
+                  alt="Watermark"
+                  className="w-full h-full object-contain filter grayscale"
+                  onError={(e: any) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
               </div>
 
-              {/* Certificate Header */}
-              <div className="text-center relative z-10 space-y-1">
-                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-emerald-800 bg-emerald-100 border border-emerald-300 px-3 py-0.5 rounded-full inline-block">
-                  Program Gerakan Sekolah Adiwiyata SMPN 50 Jakarta
-                </span>
-                <h2 className="text-lg sm:text-2xl font-black text-emerald-950 uppercase tracking-widest mt-1">
-                  Piagam Penghargaan
-                </h2>
-                <p className="text-[11px] sm:text-xs font-bold text-emerald-700 uppercase tracking-wider">
-                  Duta Kebersihan &amp; Lingkungan Hidup
-                </p>
-                <p className="text-[9px] font-mono text-slate-400">
-                  Nomor: {data.certNumber || `050/PIAGAM-ECO/${new Date().getFullYear()}/001`}
-                </p>
+              {/* Certificate Header with Logos */}
+              <div className="relative z-10 mb-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center shrink-0">
+                    <img
+                      src={logoLeft}
+                      alt="Logo Pemprov"
+                      className="max-w-full max-h-full object-contain drop-shadow-xs"
+                      onError={(e: any) => {
+                        if (e.target.src !== `${window.location.origin}/logo-dki.png`) {
+                          e.target.src = '/logo-dki.png';
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="text-center flex-1 space-y-0.5">
+                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-emerald-800 bg-emerald-100 border border-emerald-300 px-3 py-0.5 rounded-full inline-block">
+                      Program Gerakan Sekolah Adiwiyata &bull; {data.schoolName || 'SMP NEGERI 50 JAKARTA'}
+                    </span>
+                    <h2 className="text-lg sm:text-2xl font-black text-emerald-950 uppercase tracking-widest mt-0.5">
+                      Piagam Penghargaan
+                    </h2>
+                    <p className="text-[11px] sm:text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                      Duta Kebersihan &amp; Lingkungan Hidup
+                    </p>
+                    <p className="text-[9px] font-mono text-slate-400">
+                      Nomor: {data.certNumber || `050/PIAGAM-ECO/${new Date().getFullYear()}/001`}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center shrink-0">
+                    <img
+                      src={schoolLogo}
+                      alt="Logo Sekolah"
+                      className="max-w-full max-h-full object-contain drop-shadow-xs"
+                      onError={(e: any) => {
+                        if (e.target.src !== effectiveSchoolLogo) {
+                          e.target.src = effectiveSchoolLogo;
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Certificate Body */}

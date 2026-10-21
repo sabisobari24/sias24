@@ -3,6 +3,7 @@
  */
 
 import { Student } from '../types';
+import { getEffectiveSchoolLogo } from './schoolLogoHelper';
 
 export interface EcoAmbassadorCertData {
   studentName: string;
@@ -15,14 +16,22 @@ export interface EcoAmbassadorCertData {
   headmasterNip?: string;
   schoolName?: string;
   certNumber?: string;
+  schoolLogo?: string;
+  logoLeftUrl?: string;
 }
 
 export function printEcoAmbassadorCertificate(data: EcoAmbassadorCertData) {
-  const schoolName = data.schoolName || 'SMP NEGERI 50 JAKARTA';
+  const schoolName = data.schoolName || localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA';
   const headmasterName = data.headmasterName || 'Dra. Hj. Endah Purwani, M.M.';
   const headmasterNip = data.headmasterNip || '196711261991032004';
   const year = new Date().getFullYear();
   const certNumber = data.certNumber || `050/PIAGAM-ECO/${year}/${Math.floor(1000 + Math.random() * 9000)}`;
+
+  const effectiveSchoolLogo = getEffectiveSchoolLogo();
+  const logoLeft = data.logoLeftUrl || localStorage.getItem('siakad_logo_left') || localStorage.getItem('siakad_cert_logo_left') || '/logo-dki.png';
+  const logoRight = (data.schoolLogo && data.schoolLogo !== '/logo.png') 
+    ? data.schoolLogo 
+    : (localStorage.getItem('siakad_logo_right') || effectiveSchoolLogo);
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -89,30 +98,50 @@ export function printEcoAmbassadorCertificate(data: EcoAmbassadorCertData) {
           .corner-br { bottom: 9mm; right: 9mm; border-left: none; border-top: none; }
 
           .header {
-            text-align: center;
             position: relative;
             z-index: 10;
+            margin-bottom: 2mm;
           }
 
-          .logo-bar {
+          .header-logo-row {
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: space-between;
             gap: 16px;
-            margin-bottom: 6px;
+          }
+
+          .cert-logo-img {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.08));
+          }
+
+          .header-text-block {
+            text-align: center;
+            flex: 1;
           }
 
           .school-badge {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 800;
             letter-spacing: 2px;
             text-transform: uppercase;
             color: #047857;
             background: #d1fae5;
-            padding: 4px 16px;
+            padding: 3px 14px;
             border-radius: 9999px;
             display: inline-block;
             border: 1px solid #a7f3d0;
+          }
+
+          .school-name-text {
+            font-size: 11pt;
+            font-weight: 900;
+            letter-spacing: 2.5px;
+            color: #064e3b;
+            text-transform: uppercase;
+            margin-top: 2px;
           }
 
           .title-main {
@@ -304,14 +333,23 @@ export function printEcoAmbassadorCertificate(data: EcoAmbassadorCertData) {
           <div class="inner-corner corner-tr"></div>
           <div class="inner-corner corner-bl"></div>
           <div class="inner-corner corner-br"></div>
-          <div class="watermark">🌿</div>
+          <div class="watermark">
+            <img src="${logoRight}" style="width: 130mm; height: 130mm; object-fit: contain; opacity: 0.04; filter: grayscale(100%);" onerror="this.style.display='none'" />
+          </div>
 
-          <!-- HEADER -->
+          <!-- HEADER WITH LOGOS -->
           <div class="header">
-            <div class="school-badge">Gerakan Siswa Peduli Lingkungan &amp; Bank Sampah Sekolah</div>
-            <h1 class="title-main">Piagam Penghargaan</h1>
-            <p class="title-sub">Duta Kebersihan &amp; Lingkungan Hidup</p>
-            <div class="cert-num">Nomor: ${certNumber}</div>
+            <div class="header-logo-row">
+              <img src="${logoLeft}" class="cert-logo-img" alt="Logo Pemprov" onerror="this.src='/logo-dki.png'; this.onerror=null;" />
+              <div class="header-text-block">
+                <div class="school-badge">Gerakan Siswa Peduli Lingkungan &amp; Bank Sampah Sekolah</div>
+                <div class="school-name-text">${schoolName}</div>
+                <h1 class="title-main">Piagam Penghargaan</h1>
+                <p class="title-sub">Duta Kebersihan &amp; Lingkungan Hidup</p>
+                <div class="cert-num">Nomor: ${certNumber}</div>
+              </div>
+              <img src="${logoRight}" class="cert-logo-img" alt="Logo Sekolah" onerror="this.src='${effectiveSchoolLogo}'; this.onerror=null;" />
+            </div>
           </div>
 
           <!-- BODY / RECIPIENT -->
