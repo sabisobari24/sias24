@@ -363,7 +363,7 @@ export default function AdminPanel({
         setCertLogoRight(effective);
       }
     }
-  }, [logoRightInput, headmasterLogoRight, certLogoAutoSync]);
+  }, [headmasterLogoRight, certLogoAutoSync]);
 
   // Handler for custom background file upload
   const handleUploadCertBg = async (e: React.ChangeEvent<HTMLInputElement>, target: 'akademik' | 'non_akademik') => {
@@ -451,6 +451,7 @@ export default function AdminPanel({
       console.error('Failed to sync certificate config to Firebase:', err);
     }
 
+    window.dispatchEvent(new CustomEvent('siakad_logo_updated', { detail: { logo: certLogoRight } }));
     setSuccessMsg('Pengaturan Tampilan Sertifikat Digital & Background berhasil disimpan dan tersinkronisasi!');
     setTimeout(() => setSuccessMsg(''), 4000);
   };

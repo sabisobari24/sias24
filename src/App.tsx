@@ -1025,12 +1025,19 @@ export default function App({ initialMode }: AppProps = {}) {
 
       if (settings.logoLeft) {
         safeLocalStorageSet('siakad_logo_left', settings.logoLeft);
+        if (localStorage.getItem('siakad_cert_logo_autosync') !== 'false') {
+          safeLocalStorageSet('siakad_cert_logo_left', settings.logoLeft);
+        }
       } else {
         localStorage.removeItem('siakad_logo_left');
       }
       if (settings.logoRight) {
         safeLocalStorageSet('siakad_logo_right', settings.logoRight);
         setHeadmasterLogoRight(settings.logoRight);
+        if (localStorage.getItem('siakad_cert_logo_autosync') !== 'false') {
+          safeLocalStorageSet('siakad_cert_logo_right', settings.logoRight);
+        }
+        window.dispatchEvent(new CustomEvent('siakad_logo_updated', { detail: { logo: settings.logoRight } }));
       } else {
         localStorage.removeItem('siakad_logo_right');
         setHeadmasterLogoRight('');
@@ -1406,6 +1413,9 @@ export default function App({ initialMode }: AppProps = {}) {
     
     if (finalLogoLeft) {
       safeLocalStorageSet('siakad_logo_left', finalLogoLeft);
+      if (localStorage.getItem('siakad_cert_logo_autosync') !== 'false') {
+        safeLocalStorageSet('siakad_cert_logo_left', finalLogoLeft);
+      }
     } else {
       localStorage.removeItem('siakad_logo_left');
     }
@@ -1414,6 +1424,10 @@ export default function App({ initialMode }: AppProps = {}) {
       safeLocalStorageSet('siakad_logo_right', finalLogoRight);
       setHeadmasterLogoRight(finalLogoRight);
       setWebHomeContent(prev => ({ ...prev, schoolLogo: finalLogoRight }));
+      if (localStorage.getItem('siakad_cert_logo_autosync') !== 'false') {
+        safeLocalStorageSet('siakad_cert_logo_right', finalLogoRight);
+      }
+      window.dispatchEvent(new CustomEvent('siakad_logo_updated', { detail: { logo: finalLogoRight } }));
     } else {
       localStorage.removeItem('siakad_logo_right');
       setHeadmasterLogoRight('');

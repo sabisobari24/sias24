@@ -21,7 +21,8 @@ import {
   Check, 
   Package, 
   AlertTriangle,
-  Crown
+  Crown,
+  Users
 } from 'lucide-react';
 import { 
   Student, 
@@ -188,6 +189,17 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
       .filter(r => r.status === 'Selesai' || r.status === 'Menunggu')
       .reduce((sum, r) => sum + (r.pointsSpent || 0), 0);
   }, [redemptions]);
+
+  // Map of verified student points
+  const studentPointsMap = useMemo(() => {
+    const map = new Map<string, number>();
+    deposits.forEach(d => {
+      if (d.status === 'Diverifikasi') {
+        map.set(d.studentId, (map.get(d.studentId) || 0) + (d.pointsEarned || 0));
+      }
+    });
+    return map;
+  }, [deposits]);
 
   // Leaderboard Calculation
   const leaderboard = useMemo(() => {
@@ -513,7 +525,7 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
               className="flex items-center gap-1.5 bg-white hover:bg-emerald-50 text-emerald-900 border border-white/60 px-4 py-2.5 rounded-2xl text-xs font-black shadow-md transition-all active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4 text-emerald-700" />
-              <span>Catat Setoran Siswa</span>
+              <span>+ Setor Sampah Siswa</span>
             </button>
             <button
               type="button"
@@ -601,7 +613,7 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
       {/* Sub-tabs Navigation */}
       <div className="flex items-center gap-1.5 border-b border-slate-200/80 pb-3 overflow-x-auto">
         {[
-          { id: 'verifikasi', label: `Verifikasi Setoran (${pendingDeposits.length})`, icon: CheckCircle2 },
+          { id: 'verifikasi', label: `Verifikasi & Setor Sampah (${pendingDeposits.length})`, icon: CheckCircle2 },
           { id: 'redemptions', label: 'Penukaran & Penebusan', icon: Gift },
           { id: 'leaderboard', label: 'Duta Kebersihan & Peringkat', icon: Crown },
           { id: 'katalog', label: 'Katalog Sampah', icon: Recycle },
@@ -677,6 +689,16 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
                 <option value="Diverifikasi">Diverifikasi ({verifiedDeposits.length})</option>
                 <option value="Ditolak">Ditolak</option>
               </select>
+
+              {/* Action Button: Setor Sampah Siswa */}
+              <button
+                type="button"
+                onClick={() => setIsAddingDeposit(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Setor Sampah</span>
+              </button>
             </div>
           </div>
 
