@@ -48,7 +48,8 @@ import { WebSectionContent, WebStaff, WebProgram, WebSlide, WebSubject, WebExtra
 import MediaUploadSelector from './MediaUploadSelector';
 import TextFormattingToolbar from './common/TextFormattingToolbar';
 import { getYouTubeEmbedUrl } from '../utils/mediaHelper';
-import { enhanceAndCompressBannerImage } from '../utils/imageHelper';
+import { enhanceAndCompressBannerImage, compressAvatarImage } from '../utils/imageHelper';
+import { safeLocalStorageSet, safeLocalStorageGet } from '../utils/storageHelper';
 import { WebIcon } from './website/WebIcon';
 
 export default function WebContentEditor() {
@@ -253,11 +254,19 @@ export default function WebContentEditor() {
     }
   };
 
-  const handleSaveHeader = () => {
-    handleSaveSection({
+  const handleSaveHeader = async () => {
+    let finalHeadImage = headImage;
+    if (finalHeadImage && finalHeadImage.startsWith('data:image/') && finalHeadImage.length > 35 * 1024) {
+      try {
+        finalHeadImage = await compressAvatarImage(finalHeadImage, 420, 525, 0.78);
+        setHeadImage(finalHeadImage);
+      } catch (_) {}
+    }
+
+    const updatedPayload = {
       headName,
       headRole,
-      headImage,
+      headImage: finalHeadImage,
       headMotto,
       headBorn,
       headSubject,
@@ -266,7 +275,54 @@ export default function WebContentEditor() {
         ? { akreditasi, headerMotto, schoolLogo, vision, missions, visionPillarsTitle, visionPillars, instagram, whatsapp, email } 
         : { headerBgImage, headerTitle, headerSubtitle }
       )
-    });
+    };
+
+    await handleSaveSection(updatedPayload);
+
+    // If saving the home section, also propagate to settings/headmaster, local storage, and broadcast event
+    if (activeSectionId === 'home') {
+      if (finalHeadImage) {
+        safeLocalStorageSet('siakad_headmaster_photo', finalHeadImage);
+      }
+      if (headName) {
+        safeLocalStorageSet('siakad_headmaster_name', headName);
+      }
+
+      // Sync to Firestore 'settings/headmaster'
+      try {
+        await saveDocument('settings', 'headmaster', {
+          name: headName,
+          photo: finalHeadImage,
+          headImage: finalHeadImage,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (err) {
+        console.warn('Could not sync headmaster document in settings:', err);
+      }
+
+      // Synchronize siakad_web_home_content
+      const cachedHomeRaw = safeLocalStorageGet('siakad_web_home_content');
+      let cachedHomeObj: any = {};
+      try {
+        if (cachedHomeRaw) cachedHomeObj = JSON.parse(cachedHomeRaw);
+      } catch (_) {}
+      const mergedHome = { ...cachedHomeObj, ...(activeSection || {}), ...updatedPayload };
+      safeLocalStorageSet('siakad_web_home_content', JSON.stringify(mergedHome));
+
+      // Global broadcast event for instantaneous UI reflection without reload
+      window.dispatchEvent(new CustomEvent('siakad_headmaster_updated', {
+        detail: {
+          headImage: finalHeadImage,
+          headName,
+          headRole,
+          headMotto,
+          headBorn,
+          headSubject,
+          headHobby
+        }
+      }));
+      window.dispatchEvent(new CustomEvent('siakad_web_content_updated', { detail: mergedHome }));
+    }
   };
 
   // Staff CRUD Operations
@@ -931,8 +987,9 @@ export default function WebContentEditor() {
                 <MediaUploadSelector
                   value={headImage}
                   onChange={setHeadImage}
-                  label="Link/URL Foto Profil (G-Drive atau Upload)"
-                  placeholder="https://lh3.googleusercontent.com/..."
+                  mode="avatar"
+                  label={activeSectionId === 'home' ? "Foto Profil Resmi Kepala Sekolah (Upload File / G-Drive)" : "Foto Profil Resmi Kepala Bidang (Upload / G-Drive)"}
+                  placeholder="https://lh3.googleusercontent.com/... atau klik Upload File"
                 />
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

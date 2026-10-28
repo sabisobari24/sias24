@@ -224,14 +224,46 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
     return () => unsubscribe();
   }, []);
 
+  // Listen for instant custom update events from AdminPanel or WebContentEditor
+  useEffect(() => {
+    const handleHeadmasterUpdate = (e: any) => {
+      const detail = e.detail;
+      if (detail) {
+        setWebContent((prev: any) => ({
+          ...prev,
+          ...(detail.headImage ? { headImage: detail.headImage } : {}),
+          ...(detail.headName ? { headName: detail.headName } : {}),
+          ...(detail.headRole ? { headRole: detail.headRole } : {}),
+          ...(detail.headMotto ? { headMotto: detail.headMotto } : {}),
+          ...(detail.headBorn ? { headBorn: detail.headBorn } : {}),
+          ...(detail.headSubject ? { headSubject: detail.headSubject } : {}),
+          ...(detail.headHobby ? { headHobby: detail.headHobby } : {})
+        }));
+      }
+    };
+
+    const handleWebContentUpdate = (e: any) => {
+      if (e.detail && (e.detail.id === 'home' || !e.detail.id)) {
+        setWebContent((prev: any) => ({ ...prev, ...e.detail }));
+      }
+    };
+
+    window.addEventListener('siakad_headmaster_updated', handleHeadmasterUpdate);
+    window.addEventListener('siakad_web_content_updated', handleWebContentUpdate);
+    return () => {
+      window.removeEventListener('siakad_headmaster_updated', handleHeadmasterUpdate);
+      window.removeEventListener('siakad_web_content_updated', handleWebContentUpdate);
+    };
+  }, []);
+
   const [showTeachersModal, setShowTeachersModal] = useState(false);
   const [searchTeacherQuery, setSearchTeacherQuery] = useState('');
   const [teacherTab, setTeacherTab] = useState<'guru' | 'tendik'>('guru');
   const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
 
   const slides = webContent.slides || [];
-  const headName = webContent.headName || 'Dra. Hj. Endah Purwani M.M';
-  const headImage = webContent.headImage || 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
+  const headName = webContent.headName || localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.';
+  const headImage = webContent.headImage || localStorage.getItem('siakad_headmaster_photo') || 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
   const headMotto = webContent.headMotto || '';
   const headBorn = webContent.headBorn || 'Klaten, 26 November 1967';
   const headSubject = webContent.headSubject || 'Manajemen Pendidikan';
@@ -670,6 +702,12 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
                     src={headImage} 
                     alt={headName}
                     className="w-full h-full object-cover object-top transition-transform duration-500 group-hover/photo:scale-105"
+                    onError={(e) => {
+                      const fallback = 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
+                      if ((e.currentTarget as HTMLImageElement).src !== fallback) {
+                        (e.currentTarget as HTMLImageElement).src = fallback;
+                      }
+                    }}
                   />
                 </div>
                 <div className="absolute -top-2.5 -right-2.5 bg-blue-900 text-amber-300 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-white shadow-lg text-sm font-bold">

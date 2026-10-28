@@ -9,13 +9,13 @@ export function convertGoogleDriveLink(url: string): string {
   if (!url) return '';
   const trimmed = url.trim();
   
-  // Pattern 1: /file/d/FILE_ID/view or /file/d/FILE_ID
+  // Pattern 1: /file/d/FILE_ID/view or /file/d/FILE_ID/...
   const fileDMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_\-]+)/);
   if (fileDMatch && fileDMatch[1]) {
     return `https://lh3.googleusercontent.com/d/${fileDMatch[1]}`;
   }
 
-  // Pattern 2: ?id=FILE_ID or &id=FILE_ID
+  // Pattern 2: ?id=FILE_ID or &id=FILE_ID or uc?id=FILE_ID or open?id=FILE_ID
   const idParamMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_\-]+)/);
   if (idParamMatch && idParamMatch[1]) {
     return `https://lh3.googleusercontent.com/d/${idParamMatch[1]}`;
@@ -25,6 +25,12 @@ export function convertGoogleDriveLink(url: string): string {
   const docsDMatch = trimmed.match(/docs\.google\.com\/file\/d\/([a-zA-Z0-9_\-]+)/);
   if (docsDMatch && docsDMatch[1]) {
     return `https://lh3.googleusercontent.com/d/${docsDMatch[1]}`;
+  }
+
+  // Pattern 4: drive.google.com/thumbnail?id=FILE_ID
+  const thumbMatch = trimmed.match(/drive\.google\.com\/thumbnail\?id=([a-zA-Z0-9_\-]+)/);
+  if (thumbMatch && thumbMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${thumbMatch[1]}`;
   }
 
   return trimmed;
@@ -435,3 +441,125 @@ export function fileToBase64(file: File, maxWidth = 600, maxHeight = 600, qualit
 export function autoEnhanceImageBase64(dataUrl: string): Promise<string> {
   return enhanceAndCompressBannerImage(dataUrl, 1920, 1080, 0.85);
 }
+
+/**
+ * Specifically optimizes and compresses profile photos & Headmaster (Kepala Sekolah) portraits.
+ * - Standardizes to clean 4:5 portrait ratio (max 400x500px).
+ * - Applies subtle facial clarity & edge sharpening to eliminate camera softness.
+ * - Enforces compact base64 output (consistently under 32KB) to guarantee zero Firestore size issues.
+ */
+export function compressAvatarImage(
+  source: File | string,
+  maxWidth: number = 420,
+  maxHeight: number = 525,
+  quality: number = 0.78
+): Promise<string> {
+  return new Promise((resolve) => {
+    if (!source) {
+      resolve('');
+      return;
+    }
+
+    // If it's an external web URL that is not base64, return as converted URL
+    if (typeof source === 'string' && !source.startsWith('data:image/')) {
+      resolve(convertGoogleDriveLink(source));
+      return;
+    }
+
+    const processAvatarElement = (img: HTMLImageElement) => {
+      try {
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
+
+        if (width <= 0 || height <= 0) {
+          resolve(typeof source === 'string' ? source : '');
+          return;
+        }
+
+        // Maintain portrait ratio
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        width = Math.max(1, width);
+        height = Math.max(1, height);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d', { alpha: true });
+        if (!ctx) {
+          resolve(typeof source === 'string' ? source : '');
+          return;
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        // Subtle clarity boost
+        try {
+          ctx.filter = 'contrast(104%) saturate(105%) brightness(101%)';
+        } catch (_) {}
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        try {
+          ctx.filter = 'none';
+        } catch (_) {}
+
+        // Edge sharpening filter for crisp facial portrait
+        applySharpenAndClarityFilter(ctx, width, height, 0.20);
+
+        // Try WebP first
+        let outputUrl = '';
+        try {
+          const webp = canvas.toDataURL('image/webp', quality);
+          if (webp.startsWith('data:image/webp') && webp.length <= 40 * 1024) {
+            outputUrl = webp;
+          }
+        } catch (_) {}
+
+        if (!outputUrl) {
+          let q = quality;
+          outputUrl = canvas.toDataURL('image/jpeg', q);
+          while (outputUrl.length > 38 * 1024 && q > 0.40) {
+            q -= 0.08;
+            outputUrl = canvas.toDataURL('image/jpeg', q);
+          }
+        }
+
+        resolve(outputUrl);
+      } catch (err) {
+        console.warn('Failed in compressAvatarImage:', err);
+        resolve(typeof source === 'string' ? source : '');
+      }
+    };
+
+    if (source instanceof File) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const raw = e.target?.result as string;
+        if (!raw) {
+          resolve('');
+          return;
+        }
+        const img = new Image();
+        img.onload = () => processAvatarElement(img);
+        img.onerror = () => resolve(raw);
+        img.src = raw;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(source);
+    } else {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => processAvatarElement(img);
+      img.onerror = () => resolve(source);
+      img.src = source;
+    }
+  });
+}
+

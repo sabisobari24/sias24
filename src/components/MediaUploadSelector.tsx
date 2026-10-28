@@ -5,7 +5,8 @@ import {
   convertGoogleDriveLink, 
   compressBase64Image, 
   enhanceAndCompressBannerImage,
-  autoEnhanceImageBase64 
+  autoEnhanceImageBase64,
+  compressAvatarImage
 } from '../utils/imageHelper';
 import { WebIcon } from './website/WebIcon';
 
@@ -111,6 +112,12 @@ export default function MediaUploadSelector({
     /slide|banner|cover|background|latar|galeri|unggul/i.test(label)
   );
 
+  // Auto-detect if this field represents an avatar or profile portrait photo
+  const isAvatar = mode === 'avatar' || (
+    label !== undefined &&
+    /profil|kepsek|kepala|waka|staf|guru|foto diri|avatar/i.test(label)
+  );
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -119,7 +126,11 @@ export default function MediaUploadSelector({
     setStatusMessage(null);
     try {
       let b64 = '';
-      if (isBanner) {
+      if (isAvatar) {
+        // High-clarity, compact portrait photo with facial edge-sharpening (optimized <= 35KB)
+        b64 = await compressAvatarImage(file, 420, 525, 0.78);
+        setStatusMessage('Foto profil berhasil diunggah & dioptimalkan (Jernih & Ringan).');
+      } else if (isBanner) {
         // High-definition wide banner with auto-clarity, edge-sharpening, and anti-blur technology (optimized for Firestore)
         b64 = await enhanceAndCompressBannerImage(file, 1280, 720, 0.78);
         setStatusMessage('Foto banner berhasil diunggah (Kualitas HD).');
@@ -145,7 +156,9 @@ export default function MediaUploadSelector({
     const rawUrl = e.target.value;
     const converted = convertGoogleDriveLink(rawUrl);
     if (converted.startsWith('data:image/')) {
-      if (isBanner) {
+      if (isAvatar) {
+        compressAvatarImage(converted, 420, 525, 0.78).then(res => onChange(res));
+      } else if (isBanner) {
         enhanceAndCompressBannerImage(converted, 1280, 720, 0.75).then(res => onChange(res));
       } else {
         compressBase64Image(converted, 640, 640, 0.80).then(res => onChange(res));
@@ -182,6 +195,12 @@ export default function MediaUploadSelector({
             <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100/90 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-200">
               <Sparkles className="w-3 h-3 text-amber-600" />
               <span>Auto HD</span>
+            </span>
+          )}
+          {isAvatar && !isBanner && (
+            <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full flex items-center gap-1 border border-indigo-200">
+              <Sparkles className="w-3 h-3 text-indigo-600" />
+              <span>Format Foto Profil</span>
             </span>
           )}
         </div>
@@ -278,11 +297,13 @@ export default function MediaUploadSelector({
       {value && (
         <div className="flex items-center gap-3 bg-slate-50/70 p-2.5 rounded-2xl border border-slate-200/70 mt-1">
           {type === 'image' || value.startsWith('http') || value.startsWith('data:') ? (
-            <div className={`overflow-hidden border border-slate-200 bg-slate-900 shrink-0 relative rounded-xl ${isBanner ? 'w-20 h-12' : 'w-10 h-10'}`}>
+            <div className={`overflow-hidden border border-slate-200 bg-slate-900 shrink-0 relative ${
+              isBanner ? 'w-20 h-12 rounded-xl' : isAvatar ? 'w-12 h-15 rounded-xl shadow-xs ring-2 ring-indigo-400/20' : 'w-10 h-10 rounded-xl'
+            }`}>
               <img
                 src={value}
                 alt="Preview"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover object-top"
                 style={{ imageRendering: '-webkit-optimize-contrast' }}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
@@ -301,6 +322,11 @@ export default function MediaUploadSelector({
               {isBanner && (
                 <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded-md">
                   HD Jernih
+                </span>
+              )}
+              {isAvatar && (
+                <span className="text-[9px] font-extrabold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded-md">
+                  Profil Pas
                 </span>
               )}
             </div>
