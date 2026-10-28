@@ -21,17 +21,29 @@ export const INITIAL_WEB_CONTENT: WebSectionContent[] = [
       {
         title: 'Pembelajaran Berdiferensiasi & Projek P5',
         desc: 'Implementasi proyek kokurikuler yang menanamkan karakter gotong-royong, bernalar kritis, dan kebinekaan global melalui karya nyata nyata siswa.',
-        icon: '🏆'
+        icon: '🏆',
+        images: [
+          'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz',
+          'https://lh3.googleusercontent.com/d/1BGOhSzVDoAe8hY8yiGLRIPDLNALboHaB'
+        ]
       },
       {
         title: 'Asesmen Berbasis Digital & Chromebook',
         desc: 'Evaluasi hasil belajar berkala yang efisien menggunakan perangkat tablet/Chromebook sekolah dengan umpan balik instan untuk perbaikan mutu.',
-        icon: '💻'
+        icon: '💻',
+        images: [
+          'https://lh3.googleusercontent.com/d/1N43x0W6v8L9yPS5XIHdxu35aaoKmcBg1',
+          'https://lh3.googleusercontent.com/d/13MUhhqu1MBq_g9-ESN4SrTO42P3veKW3'
+        ]
       },
       {
         title: 'Gerakan Literasi Produktif & Numerasi',
         desc: 'Gerakan membaca harian terstruktur, pojok baca kelas aktif, serta kompetisi sains dan matematika interaktif untuk mengasah problem-solving.',
-        icon: '📖'
+        icon: '📖',
+        images: [
+          'https://lh3.googleusercontent.com/d/13MUhhqu1MBq_g9-ESN4SrTO42P3veKW3',
+          'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz'
+        ]
       }
     ],
     slides: [
@@ -243,17 +255,29 @@ export const INITIAL_WEB_CONTENT: WebSectionContent[] = [
       {
         title: 'Duta Karakter & Sekolah Ramah Anak (SRA)',
         desc: 'Kaderisasi perwakilan murid di setiap kelas sebagai pelopor kebaikan, agen anti-perundungan (bullying), serta penggerak komunikasi santun antar-teman.',
-        icon: '🛡️'
+        icon: '🛡️',
+        images: [
+          'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz',
+          'https://lh3.googleusercontent.com/d/1o9T-ZHeuVlfUQirtzKaCt86mxmhna54r'
+        ]
       },
       {
         title: 'Pekan Apresiasi & Gebyar Bakat Siswa',
         desc: 'Panggung berkala bagi murid untuk menampilkan keahlian seni, olahraga, sains sekaligus penyerahan penghargaan resmi atas prestasi eksternal.',
-        icon: '🏆'
+        icon: '🏆',
+        images: [
+          'https://lh3.googleusercontent.com/d/1o9T-ZHeuVlfUQirtzKaCt86mxmhna54r',
+          'https://lh3.googleusercontent.com/d/1BGOhSzVDoAe8hY8yiGLRIPDLNALboHaB'
+        ]
       },
       {
         title: 'LDKS & Sinergi Kepemimpinan OSIS',
         desc: 'Latihan Dasar Kepemimpinan Siswa intensif guna melatih kecakapan manajerial, pemecahan masalah, dan kerja sama tim pengurus organisasi.',
-        icon: '🤝'
+        icon: '🤝',
+        images: [
+          'https://lh3.googleusercontent.com/d/1N43x0W6v8L9yPS5XIHdxu35aaoKmcBg1',
+          'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz'
+        ]
       }
     ],
     slides: [

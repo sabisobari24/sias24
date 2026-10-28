@@ -1945,40 +1945,40 @@ export default function AdminPanel({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <div className="bg-white rounded-xl p-4 border shadow-sm text-center">
-                <span className="text-2xl font-bold text-slate-800 block">{totalStudents}</span>
-                <span className="text-[11px] text-slate-400 font-bold uppercase mt-1 block">Total Siswa</span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 2xl:grid-cols-5 gap-3.5 2xl:gap-5">
+              <div className="bg-white rounded-xl p-4 2xl:p-5 border shadow-sm text-center">
+                <span className="text-2xl 2xl:text-3xl font-bold text-slate-800 block">{totalStudents}</span>
+                <span className="text-[11px] 2xl:text-xs text-slate-400 font-bold uppercase mt-1 block">Total Siswa</span>
               </div>
-              <div className="bg-white rounded-xl p-4 border shadow-sm text-center">
-                <span className="text-2xl font-bold text-slate-800 block">{totalTeachers}</span>
-                <span className="text-[11px] text-slate-400 font-bold uppercase mt-1 block">Total Pendidik</span>
+              <div className="bg-white rounded-xl p-4 2xl:p-5 border shadow-sm text-center">
+                <span className="text-2xl 2xl:text-3xl font-bold text-slate-800 block">{totalTeachers}</span>
+                <span className="text-[11px] 2xl:text-xs text-slate-400 font-bold uppercase mt-1 block">Total Pendidik</span>
               </div>
-              <div className="bg-white rounded-xl p-4 border shadow-sm text-center">
-                <span className="text-2xl font-bold text-slate-800 block">{avgAttendance}%</span>
-                <span className="text-[11px] text-slate-400 font-bold uppercase mt-1 block">Rata Presensi</span>
+              <div className="bg-white rounded-xl p-4 2xl:p-5 border shadow-sm text-center">
+                <span className="text-2xl 2xl:text-3xl font-bold text-slate-800 block">{avgAttendance}%</span>
+                <span className="text-[11px] 2xl:text-xs text-slate-400 font-bold uppercase mt-1 block">Rata Presensi</span>
               </div>
-              <div className="bg-white rounded-xl p-4 border shadow-sm text-center">
-                <span className="text-2xl font-bold text-rose-600 block">{totalViolationsCount}</span>
-                <span className="text-[11px] text-slate-400 font-bold uppercase mt-1 block">Pelanggaran</span>
+              <div className="bg-white rounded-xl p-4 2xl:p-5 border shadow-sm text-center">
+                <span className="text-2xl 2xl:text-3xl font-bold text-rose-600 block">{totalViolationsCount}</span>
+                <span className="text-[11px] 2xl:text-xs text-slate-400 font-bold uppercase mt-1 block">Pelanggaran</span>
               </div>
               <div 
                 onClick={() => setActiveTab('eco-tiket')}
-                className="bg-emerald-50/50 hover:bg-emerald-50 rounded-xl p-4 border border-emerald-100 shadow-sm text-center cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="bg-emerald-50/50 hover:bg-emerald-50 rounded-xl p-4 2xl:p-5 border border-emerald-100 shadow-sm text-center cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
                 title="Buka Panel ECo-Tiket"
               >
                 <div className="flex items-center justify-center gap-1">
                   <Leaf className="w-4 h-4 text-emerald-600" />
-                  <span className="text-2xl font-bold text-emerald-700 block">
+                  <span className="text-2xl 2xl:text-3xl font-bold text-emerald-700 block">
                     {(ecoDeposits || []).filter(d => d.status === 'Diverifikasi').reduce((s, c) => s + (c.pointsEarned || 0), 0)}
                   </span>
                 </div>
-                <span className="text-[11px] text-emerald-600 font-bold uppercase mt-1 block">Poin ECo-Tiket</span>
+                <span className="text-[11px] 2xl:text-xs text-emerald-600 font-bold uppercase mt-1 block">Poin ECo-Tiket</span>
               </div>
             </div>
 
             {/* Quick overview graphs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-2 gap-6 2xl:gap-8">
               <div className="bg-white rounded-xl p-6 border shadow-sm space-y-4">
                 <h3 className="font-bold text-slate-800 text-base">Distribusi Kelas & Siswa</h3>
                 <div className="space-y-3">

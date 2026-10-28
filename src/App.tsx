@@ -353,8 +353,12 @@ export default function App({ initialMode }: AppProps = {}) {
         }
       }
     } catch { /* ignore */ }
-    const { uniqueStudents } = deduplicateStudents(INITIAL_STUDENTS);
-    return uniqueStudents;
+    const isInit = localStorage.getItem('siakad_col_initialized_students') === 'true';
+    if (!isInit) {
+      const { uniqueStudents } = deduplicateStudents(INITIAL_STUDENTS);
+      return uniqueStudents;
+    }
+    return [];
   });
   const [teachers, setTeachers] = useState<Teacher[]>(() => {
     try {
@@ -1339,49 +1343,7 @@ export default function App({ initialMode }: AppProps = {}) {
     };
   }, []);
 
-  const hasReconciledClassIdsRef = useRef(false);
-
-  // Auto-reconcile student class IDs with classes collection (Only once, and only when logged in as admin)
-  useEffect(() => {
-    if (hasReconciledClassIdsRef.current) return;
-    if (activeRole !== 'admin') return;
-    if (students.length === 0 || classes.length === 0) return;
-
-    hasReconciledClassIdsRef.current = true;
-    let classesUpdated = false;
-    let studentsUpdated = false;
-    const currentClasses = [...classes];
-    const updatedStudents = [...students];
-
-    updatedStudents.forEach((student, index) => {
-      const res = normalizeClassId(student.classId, currentClasses);
-
-      if (res.createdClass) {
-        currentClasses.push(res.createdClass);
-        classesUpdated = true;
-        saveDocument('classes', res.createdClass.id, res.createdClass)
-          .catch((err) => console.error('Error auto-creating class:', err));
-      }
-
-      if (res.classId && res.classId !== student.classId) {
-        const updatedStudent = { ...student, classId: res.classId };
-        updatedStudents[index] = updatedStudent;
-        studentsUpdated = true;
-        saveDocument('students', updatedStudent.id, updatedStudent)
-          .catch((err) => console.error('Error auto-reconciling student classId:', err));
-      }
-    });
-
-    if (classesUpdated) {
-      setClasses(currentClasses);
-      safeLocalStorageSet('siakad_classes', JSON.stringify(currentClasses));
-    }
-
-    if (studentsUpdated) {
-      setStudents(updatedStudents);
-      safeLocalStorageSet('siakad_students', JSON.stringify(updatedStudents));
-    }
-  }, [students.length, classes.length, activeRole]);
+  // Database preservation: Students and classes are managed strictly by Admin without auto-mutation
 
   // Update helper that syncs specific table to localStorage and Firebase Firestore
   const syncTable = (key: string, data: any) => {
@@ -1907,7 +1869,7 @@ export default function App({ initialMode }: AppProps = {}) {
 
   const handleAddStudent = (s: Student) => {
     try {
-      const next = [...students.filter((i) => i.id !== s.id), s];
+      const next = [...students.filter((i) => i.id !== s.id && (!s.nisn || i.nisn !== s.nisn)), s];
       setStudents(next);
       safeLocalStorageSet('siakad_students', JSON.stringify(next));
       saveDocument('students', s.id, s)
@@ -1919,8 +1881,11 @@ export default function App({ initialMode }: AppProps = {}) {
 
   const handleUpdateStudent = (s: Student) => {
     try {
-      const exists = students.some((i) => i.id === s.id || (i.nisn && i.nisn === s.nisn));
-      const next = exists
+      const existing = students.find((i) => i.id === s.id || (i.nisn && i.nisn === s.nisn));
+      if (existing && existing.id !== s.id) {
+        deleteDocument('students', existing.id).catch(() => {});
+      }
+      const next = existing
         ? students.map((i) => (i.id === s.id || (i.nisn && i.nisn === s.nisn)) ? { ...i, ...s } : i)
         : [...students, s];
       setStudents(next);
@@ -1958,8 +1923,11 @@ export default function App({ initialMode }: AppProps = {}) {
 
   const handleUpdateTeacher = (t: Teacher) => {
     try {
-      const exists = teachers.some((i) => i.id === t.id || (i.nip && i.nip === t.nip));
-      const next = exists
+      const existing = teachers.find((i) => i.id === t.id || (i.nip && i.nip === t.nip));
+      if (existing && existing.id !== t.id) {
+        deleteDocument('teachers', existing.id).catch(() => {});
+      }
+      const next = existing
         ? teachers.map((i) => (i.id === t.id || (i.nip && i.nip === t.nip)) ? { ...i, ...t } : i)
         : [...teachers, t];
       setTeachers(next);
@@ -2399,7 +2367,7 @@ export default function App({ initialMode }: AppProps = {}) {
   const handleDeleteTeacher = (id: string) => {
     setTeachers((prev) => {
       const next = prev.filter((i) => i.id !== id);
-      localStorage.setItem('siakad_teachers', JSON.stringify(next));
+      safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
       return next;
     });
     deleteDocument('teachers', id)
@@ -2409,7 +2377,7 @@ export default function App({ initialMode }: AppProps = {}) {
   const handleAddClass = (c: SchoolClass) => {
     setClasses((prev) => {
       const next = [...prev.filter((i) => i.id !== c.id), c];
-      localStorage.setItem('siakad_classes', JSON.stringify(next));
+      safeLocalStorageSet('siakad_classes', JSON.stringify(next));
       return next;
     });
     saveDocument('classes', c.id, c)
@@ -2419,7 +2387,7 @@ export default function App({ initialMode }: AppProps = {}) {
   const handleUpdateClass = (updatedClass: SchoolClass) => {
     setClasses((prev) => {
       const next = prev.map((i) => i.id === updatedClass.id ? { ...i, ...updatedClass } : i);
-      localStorage.setItem('siakad_classes', JSON.stringify(next));
+      safeLocalStorageSet('siakad_classes', JSON.stringify(next));
       return next;
     });
     saveDocument('classes', updatedClass.id, updatedClass)
@@ -2429,7 +2397,7 @@ export default function App({ initialMode }: AppProps = {}) {
   const handleDeleteClass = (id: string) => {
     setClasses((prev) => {
       const next = prev.filter((i) => i.id !== id);
-      localStorage.setItem('siakad_classes', JSON.stringify(next));
+      safeLocalStorageSet('siakad_classes', JSON.stringify(next));
       return next;
     });
     deleteDocument('classes', id)
@@ -2873,8 +2841,8 @@ export default function App({ initialMode }: AppProps = {}) {
           /* PUBLIC SCHOOL WEBSITE LAYOUT (index.html) */
           <div key="public-site" className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
             {/* Header / Navigation Bar */}
-            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs px-4 md:px-8 py-3.5">
-              <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs px-4 sm:px-6 md:px-8 2xl:px-12 py-3.5">
+              <div className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                 
                 {/* Logo / Brand */}
                 <button 
@@ -2961,7 +2929,7 @@ export default function App({ initialMode }: AppProps = {}) {
             </header>
 
             {/* Main Content Area */}
-            <main className="max-w-6xl mx-auto w-full px-4 py-8 flex-grow">
+            <main className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto px-4 sm:px-6 md:px-8 2xl:px-12 py-6 md:py-8 flex-grow">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={publicTab}
@@ -3014,8 +2982,8 @@ export default function App({ initialMode }: AppProps = {}) {
             </main>
 
             {/* Public Footer */}
-            <footer className="border-t border-slate-200/80 bg-white py-8 px-4 mt-12 text-xs font-semibold text-slate-400 leading-normal">
-              <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+            <footer className="border-t border-slate-200/80 bg-white py-8 px-4 sm:px-6 md:px-8 2xl:px-12 mt-12 text-xs font-semibold text-slate-400 leading-normal">
+              <div className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="text-center md:text-left space-y-1">
                   <p className="text-slate-700 font-bold text-sm">SMP Negeri 50 Jakarta</p>
                   <p>© 2026. Hak Cipta Dilindungi Undang-Undang.</p>
@@ -3065,8 +3033,8 @@ export default function App({ initialMode }: AppProps = {}) {
           /* PORTAL LOGIN SCREEN (login.html) */
           <div key="portal-login-site" className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
             {/* Dedicated Top Navigation for Login Portal */}
-            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs px-4 md:px-8 py-3.5">
-              <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs px-4 sm:px-6 md:px-8 2xl:px-12 py-3.5">
+              <div className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex items-center justify-between gap-4">
                 <a
                   href="/index.html"
                   onClick={(e) => navigateToLandingPage(e, 'beranda')}
@@ -3099,7 +3067,7 @@ export default function App({ initialMode }: AppProps = {}) {
             </header>
 
             {/* Main Content Area for Login Portal */}
-            <main className="max-w-6xl mx-auto w-full px-4 py-8 flex-grow">
+            <main className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto px-4 sm:px-6 md:px-8 2xl:px-12 py-6 md:py-8 flex-grow">
               <div className="space-y-8">
                       {/* School Hero Brand Header styled for SMPN 50 Jakarta */}
                       <div className="bg-gradient-to-r from-blue-700 via-indigo-800 to-indigo-900 rounded-3xl p-6 md:p-8 text-white shadow-xl shadow-indigo-100 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
@@ -3606,8 +3574,8 @@ export default function App({ initialMode }: AppProps = {}) {
                   </main>
 
             {/* Public Footer */}
-            <footer className="border-t border-slate-200/80 bg-white py-8 px-4 mt-12 text-xs font-semibold text-slate-400 leading-normal">
-              <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+            <footer className="border-t border-slate-200/80 bg-white py-8 px-4 sm:px-6 md:px-8 2xl:px-12 mt-12 text-xs font-semibold text-slate-400 leading-normal">
+              <div className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="text-center md:text-left space-y-1">
                   <p className="text-slate-700 font-bold text-sm">SMP Negeri 50 Jakarta</p>
                   <p>© 2026. Hak Cipta Dilindungi Undang-Undang.</p>
@@ -4269,7 +4237,7 @@ export default function App({ initialMode }: AppProps = {}) {
             {/* Main Content Pane */}
             <main className="flex-1 min-w-0 flex flex-col h-screen overflow-y-auto">
               {/* Top Mobile/Header Nav */}
-              <header className="h-20 bg-white border-b border-slate-200 px-4 md:px-8 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-sm">
+              <header className="h-20 bg-white border-b border-slate-200 px-4 sm:px-6 md:px-8 2xl:px-12 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-sm">
                 <div className="flex items-center gap-3">
                   {/* Desktop Hide/Unhide Toggle Button */}
                   <button
@@ -4554,7 +4522,7 @@ export default function App({ initialMode }: AppProps = {}) {
               </header>
 
               {/* Dynamic Panel Container */}
-              <div className="p-4 md:p-8 flex-1 max-w-7xl w-full mx-auto">
+              <div className="w-full max-w-[1920px] 2xl:max-w-[2160px] mx-auto p-3 sm:p-5 md:p-8 2xl:px-12 2xl:py-8 flex-1">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={(adminTabOverride ? 'override-' + adminTabOverride : activeRole) + (activeUser?.id || '')}

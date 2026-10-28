@@ -270,6 +270,7 @@ export interface WebProgram {
   title: string;
   desc: string;
   icon: string;
+  images?: string[];
 }
 
 export interface WebSlide {

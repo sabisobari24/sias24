@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { syncCollection } from '../../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../../data/initialWebContent';
-import { WebSectionContent } from '../../types';
+import { WebSectionContent, WebProgram } from '../../types';
 import { WebIcon } from './WebIcon';
 
 export default function WebAkademik() {
@@ -46,15 +46,26 @@ export default function WebAkademik() {
     return () => unsubscribe();
   }, []);
 
-  const staff = webContent.staff;
+  const staff = webContent.staff || [];
   const subjects = webContent.subjects || [];
-  const slides = webContent.slides;
+  const rawSlides = webContent.slides || [];
+  const slides = rawSlides.length > 0 ? rawSlides : (INITIAL_WEB_CONTENT.find(c => c.id === 'academic')?.slides || []);
   const popupImages = webContent.popupImages || [];
 
   const [activeSubject, setActiveSubject] = useState<any>(null);
   const [activeStaff, setActiveStaff] = useState<any>(null);
+  const [selectedProgram, setSelectedProgram] = useState<WebProgram | null>(null);
+  const [currentProgramSlide, setCurrentProgramSlide] = useState(0);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentPopupSlide, setCurrentPopupSlide] = useState(0);
+
+  useEffect(() => {
+    if (!slides || slides.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [slides.length]);
 
   const prevSlide = () => {
     setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
@@ -230,14 +241,35 @@ export default function WebAkademik() {
               {webContent.programs.map((prog, idx) => (
                 <div 
                   key={idx}
-                  className="bg-white border border-slate-200/80 rounded-2xl p-5 flex items-start gap-5 hover:border-blue-500/30 transition-all hover:bg-blue-50/10 hover:shadow-lg hover:scale-[1.01] duration-300"
+                  className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col sm:flex-row items-start gap-4 sm:gap-5 hover:border-blue-500/30 transition-all hover:bg-blue-50/10 hover:shadow-lg hover:scale-[1.01] duration-300"
                 >
                   <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
                     <WebIcon name={prog.icon || '🏆'} className="w-6 h-6 text-blue-700" />
                   </div>
-                  <div className="space-y-1">
-                    <h4 className="font-extrabold text-slate-800 text-sm">{prog.title}</h4>
+                  <div className="space-y-2 flex-1 text-left">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <h4 className="font-extrabold text-slate-800 text-sm sm:text-base">{prog.title}</h4>
+                      {prog.images && prog.images.length > 0 && (
+                        <span className="text-[10px] bg-amber-50 text-amber-900 border border-amber-200/80 font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                          <Camera className="w-3 h-3 text-amber-600" />
+                          <span>{prog.images.length} Foto Slider</span>
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500 leading-relaxed font-medium">{prog.desc}</p>
+                    {prog.images && prog.images.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedProgram(prog);
+                          setCurrentProgramSlide(0);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200/80 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs mt-1"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-blue-700" />
+                        <span>Buka Galeri Foto Slider ({prog.images.length} Foto) &rarr;</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -246,36 +278,57 @@ export default function WebAkademik() {
 
           {/* DOKUMENTASI CAROUSEL */}
           <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-sm space-y-4">
-            <h3 className="text-xs font-bold text-blue-800 uppercase tracking-widest flex items-center gap-1.5">
-              <Camera className="w-4 h-4 text-blue-700" />
-              <span>Dokumentasi Pembelajaran &amp; Kurikulum Merdeka</span>
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-blue-800 uppercase tracking-widest flex items-center gap-1.5">
+                <Camera className="w-4 h-4 text-blue-700" />
+                <span>Dokumentasi Pembelajaran &amp; Kurikulum Merdeka</span>
+              </h3>
+              {slides.length > 1 && (
+                <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/60">
+                  {currentSlide + 1} / {slides.length}
+                </span>
+              )}
+            </div>
 
-            <div className="relative rounded-2xl overflow-hidden h-[260px] border border-slate-100 group">
+            <div className="relative rounded-2xl overflow-hidden h-[260px] sm:h-[300px] border border-slate-100 group">
               <div 
                 className="absolute inset-0 bg-cover bg-center transition-all duration-700"
                 style={{ 
-                  backgroundImage: `linear-gradient(to top, rgba(15, 23, 42, 0.95) 0%, rgba(0,0,0,0.2) 60%), url(${slides[currentSlide].image})`
+                  backgroundImage: `linear-gradient(to top, rgba(15, 23, 42, 0.95) 0%, rgba(0,0,0,0.2) 60%), url(${slides[currentSlide]?.image || 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz'})`
                 }}
               />
               
               <button 
                 onClick={prevSlide}
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-slate-900/60 hover:bg-amber-400 text-white hover:text-slate-950 flex items-center justify-center transition-all cursor-pointer border border-white/10 opacity-0 group-hover:opacity-100"
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-slate-900/60 hover:bg-amber-400 text-white hover:text-slate-950 flex items-center justify-center transition-all cursor-pointer border border-white/10 opacity-70 group-hover:opacity-100 z-10"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button 
                 onClick={nextSlide}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-slate-900/60 hover:bg-amber-400 text-white hover:text-slate-950 flex items-center justify-center transition-all cursor-pointer border border-white/10 opacity-0 group-hover:opacity-100"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-slate-900/60 hover:bg-amber-400 text-white hover:text-slate-950 flex items-center justify-center transition-all cursor-pointer border border-white/10 opacity-70 group-hover:opacity-100 z-10"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
 
-              <div className="absolute bottom-3 sm:bottom-5 left-3 sm:left-5 right-3 sm:right-5 text-white pointer-events-none space-y-0.5">
-                <span className="text-[10px] sm:text-xs font-bold text-amber-300 block line-clamp-1">{(slides[currentSlide].title || '').replace(/<[^>]*>/g, '').trim()}</span>
-                <p className="text-[10px] sm:text-xs text-slate-200 leading-normal line-clamp-2">{(slides[currentSlide].desc || '').replace(/<[^>]*>/g, '').trim()}</p>
+              <div className="absolute bottom-3 sm:bottom-5 left-3 sm:left-5 right-14 sm:right-24 text-white pointer-events-none space-y-0.5 z-10">
+                <span className="text-[10px] sm:text-xs font-bold text-amber-300 block line-clamp-1">{(slides[currentSlide]?.title || '').replace(/<[^>]*>/g, '').trim()}</span>
+                <p className="text-[10px] sm:text-xs text-slate-200 leading-normal line-clamp-2">{(slides[currentSlide]?.desc || '').replace(/<[^>]*>/g, '').trim()}</p>
               </div>
+
+              {/* Dots indicators */}
+              {slides.length > 1 && (
+                <div className="absolute bottom-3 sm:bottom-5 right-3 sm:right-5 z-10 flex gap-1.5 items-center">
+                  {slides.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentSlide(idx)}
+                      className={`h-1.5 rounded-full transition-all cursor-pointer ${currentSlide === idx ? 'w-5 bg-amber-400' : 'w-1.5 bg-white/40'}`}
+                      title={`Slide ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -510,6 +563,129 @@ export default function WebAkademik() {
                     <p className="italic text-slate-200 text-xs leading-relaxed">"{activeStaff.motto}"</p>
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* MODAL DETAIL PROGRAM UNGGULAN & SLIDER FOTO */}
+        {selectedProgram && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto"
+            onClick={() => setSelectedProgram(null)}
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-900 border border-slate-800 text-white rounded-3xl p-6 sm:p-7 max-w-2xl w-full shadow-2xl relative space-y-5 my-8"
+            >
+              <button 
+                onClick={() => setSelectedProgram(null)}
+                className="absolute top-5 right-5 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition-all cursor-pointer z-20"
+                title="Tutup"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3 pr-10">
+                <div className="w-12 h-12 rounded-2xl bg-blue-600/30 border border-blue-400/40 text-blue-300 flex items-center justify-center text-xl shrink-0">
+                  <WebIcon name={selectedProgram.icon || '🏆'} className="w-6 h-6 text-blue-300" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">Dokumentasi Program Unggulan</span>
+                  <h3 className="text-lg font-black text-white">{selectedProgram.title}</h3>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-300 leading-relaxed font-medium bg-white/5 p-3.5 rounded-2xl border border-white/5">
+                {selectedProgram.desc}
+              </p>
+
+              {/* SLIDER FOTO PROGRAM */}
+              {(() => {
+                const progImages = selectedProgram.images || [];
+                const validIndex = Math.min(Math.max(0, currentProgramSlide), Math.max(0, progImages.length - 1));
+                if (progImages.length === 0) {
+                  return (
+                    <div className="p-8 text-center bg-white/5 rounded-2xl border border-dashed border-white/10 space-y-1">
+                      <Camera className="w-6 h-6 text-slate-500 mx-auto" />
+                      <p className="text-xs text-slate-400">Belum ada foto slider dokumentasi yang ditambahkan untuk program ini.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-3">
+                    <div className="relative rounded-2xl overflow-hidden h-[240px] sm:h-[340px] border border-white/10 bg-slate-950 group">
+                      <img 
+                        src={progImages[validIndex]} 
+                        alt={`${selectedProgram.title} - Foto ${validIndex + 1}`}
+                        className="w-full h-full object-cover transition-all duration-300"
+                      />
+
+                      {progImages.length > 1 && (
+                        <>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentProgramSlide((prev) => (prev - 1 + progImages.length) % progImages.length);
+                            }}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-slate-950/80 hover:bg-amber-400 hover:text-slate-950 text-white flex items-center justify-center transition-all cursor-pointer border border-white/10 z-10"
+                            title="Foto Sebelumnya"
+                          >
+                            <ChevronLeft className="w-5 h-5" />
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentProgramSlide((prev) => (prev + 1) % progImages.length);
+                            }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-slate-950/80 hover:bg-amber-400 hover:text-slate-950 text-white flex items-center justify-center transition-all cursor-pointer border border-white/10 z-10"
+                            title="Foto Selanjutnya"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+
+                          <div className="absolute bottom-3 right-3 bg-slate-950/85 px-2.5 py-1 rounded-lg text-[10px] font-bold text-amber-300 font-mono border border-white/10 z-10">
+                            {validIndex + 1} / {progImages.length}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Thumbnail navigation */}
+                    {progImages.length > 1 && (
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5">
+                        {progImages.map((img, iIdx) => (
+                          <button
+                            key={iIdx}
+                            type="button"
+                            onClick={() => setCurrentProgramSlide(iIdx)}
+                            className={`w-14 h-11 rounded-xl overflow-hidden shrink-0 border-2 transition-all cursor-pointer ${
+                              validIndex === iIdx ? 'border-amber-400 scale-105 shadow-md' : 'border-white/10 opacity-60 hover:opacity-100'
+                            }`}
+                          >
+                            <img src={img} alt={`Thumb ${iIdx + 1}`} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedProgram(null)}
+                  className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+                >
+                  Tutup Galeri
+                </button>
               </div>
             </motion.div>
           </div>

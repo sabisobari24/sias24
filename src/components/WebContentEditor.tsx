@@ -306,15 +306,28 @@ export default function WebContentEditor() {
   };
 
   // Program CRUD Operations
-  const handleSaveProgram = () => {
+  const handleSaveProgram = async () => {
     if (!activeSection) return;
     const list = [...(activeSection.programs || [])];
     if (editingProgIdx === null) return;
 
+    // Filter and sanitize images
+    const rawImages = (progForm.images || []).filter((img: string) => img && typeof img === 'string' && img.trim() !== '');
+    const cleanImages: string[] = [];
+    for (let img of rawImages) {
+      if (img.startsWith('data:image/') && img.length > 68 * 1024) {
+        try {
+          img = await enhanceAndCompressBannerImage(img, 1280, 720, 0.72);
+        } catch (_) {}
+      }
+      cleanImages.push(img);
+    }
+
     const newProg: WebProgram = {
-      title: progForm.title || '',
-      desc: progForm.desc || '',
-      icon: progForm.icon || '🏆'
+      title: (progForm.title || '').replace(/<[^>]*>/g, '').trim(),
+      desc: (progForm.desc || '').replace(/<[^>]*>/g, '').trim(),
+      icon: progForm.icon || '🏆',
+      images: cleanImages
     };
 
     if (editingProgIdx === -1) {
@@ -1660,9 +1673,9 @@ export default function WebContentEditor() {
                     <button
                       onClick={() => {
                         setEditingProgIdx(-1);
-                        setProgForm({ title: '', desc: '', icon: '🏆' });
+                        setProgForm({ title: '', desc: '', icon: '🏆', images: [] });
                       }}
-                      className="bg-emerald-800 hover:bg-emerald-950 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                      className="bg-emerald-800 hover:bg-emerald-950 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Tambah Program</span>
@@ -1671,9 +1684,10 @@ export default function WebContentEditor() {
                 </div>
 
                 {editingProgIdx !== null ? (
-                  <div className="bg-slate-50/80 border border-slate-100 rounded-3xl p-5 md:p-6 space-y-4">
-                    <h4 className="font-extrabold text-slate-800 text-sm">
-                      {editingProgIdx === -1 ? 'Tambah Program Baru' : 'Edit Program Kerja'}
+                  <div className="bg-slate-50/80 border border-slate-100 rounded-3xl p-5 md:p-6 space-y-5">
+                    <h4 className="font-extrabold text-slate-800 text-sm flex items-center justify-between">
+                      <span>{editingProgIdx === -1 ? 'Tambah Program Baru' : 'Edit Program Kerja Unggulan'}</span>
+                      <span className="text-xs font-normal text-slate-400">Icon, Deskripsi &amp; Slider Foto</span>
                     </h4>
 
                     <div className="space-y-4 text-left">
@@ -1681,7 +1695,7 @@ export default function WebContentEditor() {
                         <MediaUploadSelector
                           value={progForm.icon || ''}
                           onChange={(val) => setProgForm({ ...progForm, icon: val })}
-                          label="Icon Konten (Emoji, Lucide Name, atau Upload Foto)"
+                          label="Icon Konten (Emoji, Lucide Name, atau Upload Foto Utama)"
                           type="icon"
                         />
 
@@ -1692,7 +1706,7 @@ export default function WebContentEditor() {
                             value={progForm.title || ''}
                             onChange={(e) => setProgForm({ ...progForm, title: e.target.value })}
                             className="w-full text-xs font-medium border border-slate-200 rounded-xl px-3.5 py-2.5 bg-white focus:outline-none"
-                            placeholder="Contoh: Digitalisasi Lab TIK"
+                            placeholder="Contoh: Digitalisasi Lab TIK / Duta Karakter Siswa"
                           />
                         </div>
                       </div>
@@ -1707,6 +1721,80 @@ export default function WebContentEditor() {
                           placeholder="Tuliskan penjelasan singkat mengenai program ini..."
                         />
                       </div>
+
+                      {/* GALERI FOTO SLIDER KHUSUS PROGRAM UNGGULAN INI */}
+                      <div className="space-y-3 bg-white p-4 md:p-5 border border-amber-200/80 rounded-2xl shadow-xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-100 pb-3">
+                          <div>
+                            <h5 className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                              <ImageIcon className="w-4 h-4 text-amber-600" />
+                              <span>Galeri Foto Slider Program ({progForm.title || 'Program Unggulan'})</span>
+                            </h5>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              Foto dokumentasi yang tampil berputar dalam slider saat siswa atau pengunjung mengklik program ini. Anda bisa menambahkan lebih dari satu foto (maksimal 10 foto) dari Komputer maupun tautan Google Drive / Direct URL.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const currentImgs = [...(progForm.images || [])];
+                              if (currentImgs.length >= 10) {
+                                alert('Maksimal 10 foto slider per program unggulan.');
+                                return;
+                              }
+                              currentImgs.push('');
+                              setProgForm({ ...progForm, images: currentImgs });
+                            }}
+                            className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 border border-amber-200 transition-colors cursor-pointer shrink-0"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-amber-700" />
+                            <span>Tambah Foto Slider</span>
+                          </button>
+                        </div>
+
+                        {(!progForm.images || progForm.images.length === 0) ? (
+                          <div className="p-4 rounded-xl border border-dashed border-amber-200 bg-amber-50/20 text-center space-y-1.5">
+                            <p className="text-xs font-semibold text-amber-900">Belum ada foto slider khusus untuk program unggulan ini.</p>
+                            <p className="text-[10px] text-slate-500">
+                              Klik tombol <strong>"Tambah Foto Slider"</strong> di atas untuk menambahkan 1 atau beberapa foto slider dokumentasi program.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {progForm.images.map((imgUrl, imgIdx) => (
+                              <div key={imgIdx} className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2 relative">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                    FOTO SLIDER PROGRAM #{imgIdx + 1}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updatedImgs = [...(progForm.images || [])];
+                                      updatedImgs.splice(imgIdx, 1);
+                                      setProgForm({ ...progForm, images: updatedImgs });
+                                    }}
+                                    className="text-rose-500 hover:text-rose-700 text-[10px] font-bold px-2 py-0.5 bg-rose-50 rounded-lg border border-rose-100 transition-colors cursor-pointer"
+                                  >
+                                    Hapus Foto
+                                  </button>
+                                </div>
+
+                                <MediaUploadSelector
+                                  value={imgUrl}
+                                  onChange={(val) => {
+                                    const updatedImgs = [...(progForm.images || [])];
+                                    updatedImgs[imgIdx] = val;
+                                    setProgForm({ ...progForm, images: updatedImgs });
+                                  }}
+                                  label=""
+                                  placeholder="Upload File Komputer atau paste Link Google Drive / Direct URL..."
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex gap-2 justify-end pt-2">
@@ -1718,9 +1806,9 @@ export default function WebContentEditor() {
                       </button>
                       <button
                         onClick={handleSaveProgram}
-                        className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
+                        className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
                       >
-                        Simpan Program
+                        Simpan Program &amp; Slider Foto
                       </button>
                     </div>
                   </div>
@@ -1729,14 +1817,22 @@ export default function WebContentEditor() {
                     {activeSection?.programs?.map((pr, pIdx) => (
                       <div 
                         key={pIdx}
-                        className="border border-slate-200/80 rounded-2xl p-4 flex items-start justify-between gap-4 hover:border-slate-300 transition-all bg-white"
+                        className="border border-slate-200/80 rounded-2xl p-4 flex items-start justify-between gap-4 hover:border-slate-300 transition-all bg-white shadow-xs"
                       >
                         <div className="flex items-start gap-4">
                           <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-xl shrink-0 overflow-hidden">
                             <WebIcon name={pr.icon} className="w-5 h-5 text-slate-800" />
                           </div>
-                          <div className="text-left space-y-0.5">
-                            <h4 className="text-xs font-bold text-slate-800">{pr.title}</h4>
+                          <div className="text-left space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-xs font-bold text-slate-800">{pr.title}</h4>
+                              {pr.images && pr.images.length > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-900 border border-amber-200/80 font-bold px-2 py-0.5 rounded-full">
+                                  <ImageIcon className="w-3 h-3 text-amber-600" />
+                                  <span>{pr.images.length} Foto Slider</span>
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-slate-500 leading-relaxed font-medium">{pr.desc}</p>
                           </div>
                         </div>
@@ -1745,15 +1841,17 @@ export default function WebContentEditor() {
                           <button
                             onClick={() => {
                               setEditingProgIdx(pIdx);
-                              setProgForm(pr);
+                              setProgForm({ ...pr, images: pr.images || [] });
                             }}
                             className="p-1.5 border border-slate-200 hover:border-emerald-600 rounded-lg text-slate-500 hover:text-emerald-700 transition-colors cursor-pointer"
+                            title="Edit Program & Foto Slider"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleDeleteProgram(pIdx)}
                             className="p-1.5 border border-slate-200 hover:border-red-600 rounded-lg text-slate-500 hover:text-red-600 transition-colors cursor-pointer"
+                            title="Hapus Program"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

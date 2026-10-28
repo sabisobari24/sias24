@@ -436,7 +436,7 @@ export function clearDeletedIds(collectionPath: string) {
   safeLocalStorageSet(key, JSON.stringify([]));
 }
 
-// Helper to monitor and sync a collection with automatic quota-limit & offline fallback
+// Helper to monitor and sync a collection in real-time from Firestore (authoritative)
 export function syncCollection<T extends { id: string }>(
   collectionPath: string,
   onUpdate: (data: T[]) => void,
@@ -447,6 +447,7 @@ export function syncCollection<T extends { id: string }>(
   const cacheKey = `siakad_${collectionPath}`;
   const initKey = `siakad_col_initialized_${collectionPath}`;
 
+  // 1. Instantly display cached data from localStorage so UI is non-blocking on first render
   const loadFallback = () => {
     const cached = safeLocalStorageGet(cacheKey);
     const deletedIds = getDeletedIds(collectionPath);
@@ -476,93 +477,48 @@ export function syncCollection<T extends { id: string }>(
         }
       }
     }
-    // Fallback to initial default data if local cache is empty or missing
-    if (initialData && initialData.length > 0) {
+    // Only fall back to initialData display if this client has never seen this collection before
+    const isAlreadyInitialized = safeLocalStorageGet(initKey) === 'true';
+    if (!isAlreadyInitialized && initialData && initialData.length > 0) {
       const filtered = initialData.filter((item) => item && item.id && !deletedIds.has(item.id));
       onUpdate(filtered);
-      try {
-        safeLocalStorageSet(cacheKey, JSON.stringify(filtered));
-      } catch (e) { /* ignore */ }
       return true;
     }
     onUpdate([]);
     return false;
   };
   
-  // 1. Immediately update UI with cached data if available for zero-latency initial render
   loadFallback();
 
-  // 2. Listen for real-time changes across all connected devices and users with offline IndexedDB support
+  // 2. Real-time Firestore Listener: Firestore is the single authoritative source of truth.
   const unsubscribeSnapshot = onSnapshot(colRef, async (snapshot) => {
     notifyFirestoreStatus('online');
-    const isInitialized = safeLocalStorageGet(initKey) === 'true';
+    const isInitializedLocally = safeLocalStorageGet(initKey) === 'true';
     const deletedIds = getDeletedIds(collectionPath);
 
-    // Build server map from Firestore snapshot
-    const serverMap = new Map<string, T>();
+    // Build items strictly from Firestore snapshot
+    const serverItems: T[] = [];
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
       if (data) {
-        const item = { ...(data as T), id: docSnap.id };
         const docId = docSnap.id;
         const internalId = (data as any).id;
 
+        // If tracked as deleted, make sure it is removed from Firestore and skipped
         if (deletedIds.has(docId) || (internalId && deletedIds.has(internalId))) {
           deleteDoc(docSnap.ref).catch(handleQuotaError);
         } else {
-          serverMap.set(item.id, item);
+          serverItems.push({ ...(data as T), id: docSnap.id });
         }
       }
     });
 
-    // Load local cached items (to preserve edits made while offline / reconnecting)
-    let cachedItems: T[] = [];
-    const cached = safeLocalStorageGet(cacheKey);
-    if (cached) {
+    // Check if initial seeding is genuinely needed (only if DB was NEVER initialized anywhere)
+    if (serverItems.length === 0 && !isInitializedLocally && initialData && initialData.length > 0) {
       try {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) cachedItems = parsed;
-      } catch { /* ignore */ }
-    }
-
-    // Merge server documents with local offline edits
-    const mergedMap = new Map<string, T>(serverMap);
-    cachedItems.forEach((localItem) => {
-      if (!localItem || !localItem.id) return;
-      if (deletedIds.has(localItem.id)) {
-        mergedMap.delete(localItem.id);
-        return;
-      }
-
-      if (!mergedMap.has(localItem.id)) {
-        // Local offline creation/edit not yet on server -> preserve & push to Firestore if it has an actual local edit timestamp
-        if ((localItem as any).updatedAt) {
-          mergedMap.set(localItem.id, localItem);
-          const docRef = doc(db, collectionPath, localItem.id);
-          setDoc(docRef, sanitizeData(localItem), { merge: true }).catch(handleQuotaError);
-        }
-      } else {
-        // Doc exists both on server and in local cache. Compare timestamps!
-        const serverItem = mergedMap.get(localItem.id) as any;
-        const localItemAny = localItem as any;
-        const serverTime = serverItem?.updatedAt ? new Date(serverItem.updatedAt).getTime() : 0;
-        const localTime = localItemAny?.updatedAt ? new Date(localItemAny.updatedAt).getTime() : 0;
-
-        // If local item has a newer timestamp or has local edits not yet reflected on server
-        if (localTime > serverTime) {
-          const mergedEdit = { ...serverItem, ...localItem };
-          mergedMap.set(localItem.id, mergedEdit);
-          const docRef = doc(db, collectionPath, localItem.id);
-          setDoc(docRef, sanitizeData(mergedEdit), { merge: true }).catch(handleQuotaError);
-        }
-      }
-    });
-
-    const finalItems = Array.from(mergedMap.values());
-
-    if (finalItems.length === 0) {
-      if (!isInitialized && initialData && initialData.length > 0) {
-        try {
+        const sysInitDoc = await getDoc(doc(db, 'settings', 'system_init'));
+        if (!sysInitDoc.exists()) {
+          // Fresh Firestore setup: Seed baseline once and record system_init so it NEVER re-seeds again
           let batch = writeBatch(db);
           let count = 0;
           for (const item of initialData) {
@@ -579,26 +535,28 @@ export function syncCollection<T extends { id: string }>(
           if (count > 0) {
             await batch.commit();
           }
-        } catch (e) {
-          handleQuotaError(e);
+          await setDoc(doc(db, 'settings', 'system_init'), {
+            initialized: true,
+            initializedAt: new Date().toISOString()
+          }, { merge: true });
+          const validInitial = initialData.filter(i => i && i.id && !deletedIds.has(i.id));
+          safeLocalStorageSet(initKey, 'true');
+          safeLocalStorageSet(cacheKey, JSON.stringify(validInitial));
+          onUpdate(validInitial);
+          return;
         }
-        safeLocalStorageSet(initKey, 'true');
-        const validInitial = initialData.filter(i => i && i.id && !deletedIds.has(i.id));
-        onUpdate(validInitial);
-        safeLocalStorageSet(cacheKey, JSON.stringify(validInitial));
-      } else {
-        safeLocalStorageSet(initKey, 'true');
-        onUpdate([]);
-        safeLocalStorageSet(cacheKey, JSON.stringify([]));
+      } catch (err) {
+        handleQuotaError(err);
       }
-    } else {
-      safeLocalStorageSet(initKey, 'true');
-      onUpdate(finalItems);
-      safeLocalStorageSet(cacheKey, JSON.stringify(finalItems));
     }
+
+    // Server data is 100% authoritative: Update UI state and keep local storage in sync
+    safeLocalStorageSet(initKey, 'true');
+    safeLocalStorageSet(cacheKey, JSON.stringify(serverItems));
+    onUpdate(serverItems);
   }, (error) => {
     handleQuotaError(error);
-    console.warn(`[Firestore Realtime Quota/Network Notice] ${collectionPath} switching to local fallback:`, error.message || error);
+    console.warn(`[Firestore Realtime Notice] ${collectionPath} network issue, maintaining cache:`, error.message || error);
     loadFallback();
   });
 
@@ -1025,7 +983,7 @@ export async function clearAllCollections(collectionsToClear: string[]) {
     }
     // Reset headmaster doc
     const docRef = doc(db, 'settings', 'headmaster');
-    const defaultHeadmaster = { name: 'Drs. H. Mulyadi, M.Pd.', nip: '196805121994031005' };
+    const defaultHeadmaster = { name: 'Dra. Hj. Endah Purwani, M.M.', nip: '196711261991032004' };
     safeLocalStorageSet('siakad_headmaster', JSON.stringify(defaultHeadmaster));
     setDoc(docRef, defaultHeadmaster).catch(handleQuotaError);
   } catch (error) {
