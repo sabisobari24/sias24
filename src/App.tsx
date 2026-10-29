@@ -1046,6 +1046,22 @@ export default function App({ initialMode }: AppProps = {}) {
         localStorage.removeItem('siakad_logo_right');
         setHeadmasterLogoRight('');
       }
+
+      if (settings.photo || settings.headImage) {
+        const photoToSave = settings.photo || settings.headImage || '';
+        safeLocalStorageSet('siakad_headmaster_photo', photoToSave);
+        setWebHomeContent(prev => ({
+          ...(prev || {}),
+          headImage: photoToSave,
+          headName: settings.name
+        }));
+        window.dispatchEvent(new CustomEvent('siakad_headmaster_updated', {
+          detail: {
+            headImage: photoToSave,
+            headName: settings.name
+          }
+        }));
+      }
     }, 'Dra. Hj. Endah Purwani, M.M.');
 
     // Subscribe to CBT PIN configuration in real-time
@@ -1252,6 +1268,13 @@ export default function App({ initialMode }: AppProps = {}) {
         if (!homeDoc.headerMotto) {
           homeDoc.headerMotto = 'Berpacu dalam Prestasi';
         }
+        if (homeDoc.headImage) {
+          safeLocalStorageSet('siakad_headmaster_photo', homeDoc.headImage);
+        }
+        if (homeDoc.headName) {
+          safeLocalStorageSet('siakad_headmaster_name', homeDoc.headName);
+          setHeadmasterName(homeDoc.headName);
+        }
         setWebHomeContent(homeDoc);
         safeLocalStorageSet('siakad_web_home_content', JSON.stringify(homeDoc));
       }
@@ -1365,6 +1388,8 @@ export default function App({ initialMode }: AppProps = {}) {
       addressText?: string;
       contactText?: string;
       docNumber?: string;
+      photo?: string;
+      headImage?: string;
     }
   ) => {
     setHeadmasterName(name);
@@ -1403,6 +1428,7 @@ export default function App({ initialMode }: AppProps = {}) {
     const addressText = extraFields?.addressText !== undefined ? extraFields.addressText : (localStorage.getItem('siakad_kop_address_text') || 'Komplek Kodam Jaya Cililitan II Kramat Jati – Jakarta Timur – Kode Pos : 13510');
     const contactText = extraFields?.contactText !== undefined ? extraFields.contactText : (localStorage.getItem('siakad_kop_contact_text') || 'Telp. (021) 8091734 – Fax (021) 809173 – Email : smpnegeri50@gmail.com, smpn50.jt2@gmail.com');
     const docNumber = extraFields?.docNumber !== undefined ? extraFields.docNumber : (localStorage.getItem('siakad_kop_doc_number') || '');
+    const finalPhoto = extraFields?.photo || extraFields?.headImage || (localStorage.getItem('siakad_headmaster_photo') || '');
 
     safeLocalStorageSet('siakad_headmaster_nip', nip);
     safeLocalStorageSet('siakad_kop_gov_title', govTitle);
@@ -1412,6 +1438,21 @@ export default function App({ initialMode }: AppProps = {}) {
     safeLocalStorageSet('siakad_kop_address_text', addressText);
     safeLocalStorageSet('siakad_kop_contact_text', contactText);
     safeLocalStorageSet('siakad_kop_doc_number', docNumber);
+
+    if (finalPhoto) {
+      safeLocalStorageSet('siakad_headmaster_photo', finalPhoto);
+      setWebHomeContent(prev => ({
+        ...(prev || {}),
+        headImage: finalPhoto,
+        headName: name
+      }));
+      window.dispatchEvent(new CustomEvent('siakad_headmaster_updated', {
+        detail: {
+          headImage: finalPhoto,
+          headName: name
+        }
+      }));
+    }
     
     saveDocument('settings', 'headmaster', { 
       id: 'headmaster',
@@ -1425,8 +1466,20 @@ export default function App({ initialMode }: AppProps = {}) {
       schoolTitle,
       addressText,
       contactText,
-      docNumber
+      docNumber,
+      photo: finalPhoto,
+      headImage: finalPhoto
     }).catch(err => console.error("Error saving headmaster info:", err));
+
+    if (finalPhoto || name) {
+      const existingHome = webHomeContent || {};
+      saveDocument('web_content', 'home', {
+        ...existingHome,
+        id: 'home',
+        headName: name,
+        ...(finalPhoto ? { headImage: finalPhoto } : {})
+      }).catch(err => console.error("Error saving web_content home headmaster photo:", err));
+    }
   };
 
   // --- INTEGRATED DATABASE LOGIC METHODS ---

@@ -149,6 +149,7 @@ service cloud.firestore {
           'staff', 'programs', 'slides', 'subjects', 'extracurriculars',
           'facilities', 'popupImages', 'articles', 'tickers', 'activities',
           'agendas', 'sambutan', 'visi', 'vision', 'missions',
+          'visionPillarsTitle', 'visionPillars',
           'instagram', 'whatsapp', 'email', 'createdAt', 'updatedAt'
         ]) &&
         data.id is string && data.id.size() <= 128 &&
@@ -161,6 +162,8 @@ service cloud.firestore {
         (!('headMotto' in data) || (data.headMotto is string && data.headMotto.size() <= 5000)) &&
         (!('vision' in data) || (data.vision is string && data.vision.size() <= 2000)) &&
         (!('visi' in data) || (data.visi is string && data.visi.size() <= 2000)) &&
+        (!('visionPillarsTitle' in data) || (data.visionPillarsTitle is string && data.visionPillarsTitle.size() <= 500)) &&
+        (!('visionPillars' in data) || (data.visionPillars is list && data.visionPillars.size() <= 10)) &&
         (!('slides' in data) || (data.slides is list && data.slides.size() <= 20));
     }
 
@@ -169,6 +172,7 @@ service cloud.firestore {
         data.keys().hasOnly([
           'id', 'name', 'nip', 'logoLeft', 'logoRight', 'govTitle', 'deptTitle',
           'sudinTitle', 'schoolTitle', 'addressText', 'contactText', 'docNumber',
+          'photo', 'headImage',
           'cardTitle', 'cardSubtitle', 'cardValidity', 'issueDate', 'schoolName',
           'headmasterName', 'headmasterNip', 'presetId', 'bgType', 'customBgImage',
           'showWatermark', 'watermarkOpacity', 'backTitle', 'rules', 'footerNote',
@@ -178,6 +182,8 @@ service cloud.firestore {
         data.id is string && data.id.size() <= 128 &&
         (!('name' in data) || (data.name is string && data.name.size() <= 150)) &&
         (!('nip' in data) || (data.nip is string && data.nip.size() <= 50)) &&
+        (!('photo' in data) || (data.photo is string && data.photo.size() <= 250000)) &&
+        (!('headImage' in data) || (data.headImage is string && data.headImage.size() <= 250000)) &&
         (!('schoolTitle' in data) || (data.schoolTitle is string && data.schoolTitle.size() <= 200)) &&
         (!('addressText' in data) || (data.addressText is string && data.addressText.size() <= 300));
     }

@@ -16,7 +16,8 @@ import { AdminEcoTiketPanel } from './eco/AdminEcoTiketPanel';
 import { printBatchStudentCards } from '../utils/qrHelper';
 import { syncCollection, saveDocument } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
-import { compressImageFile } from '../utils/imageHelper';
+import { compressImageFile, compressAvatarImage } from '../utils/imageHelper';
+import MediaUploadSelector from './MediaUploadSelector';
 import { getEffectiveSchoolLogo, getEffectiveRegionalLogo, saveSchoolCardLogo } from '../utils/schoolLogoHelper';
 
 interface AdminPanelProps {
@@ -506,6 +507,8 @@ export default function AdminPanel({
   // Kop Surat Detail Text States
   const [logoRightInput, setLogoRightInput] = useState<string>(() => headmasterLogoRight || localStorage.getItem('siakad_logo_right') || '');
   const [headmasterNipInput, setHeadmasterNipInput] = useState(() => localStorage.getItem('siakad_headmaster_nip') || '196711261991032004');
+  const [headmasterPhotoInput, setHeadmasterPhotoInput] = useState<string>(() => localStorage.getItem('siakad_headmaster_photo') || webHomeContent?.headImage || 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj');
+  const [kopSaveToast, setKopSaveToast] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (headmasterLogoRight !== undefined) {
@@ -514,6 +517,23 @@ export default function AdminPanel({
       setLogoRightInput(localStorage.getItem('siakad_logo_right') || '');
     }
   }, [headmasterLogoRight]);
+
+  React.useEffect(() => {
+    if (webHomeContent?.headImage) {
+      setHeadmasterPhotoInput(webHomeContent.headImage);
+    }
+  }, [webHomeContent?.headImage]);
+
+  React.useEffect(() => {
+    const handlePhotoUpdated = (e: any) => {
+      if (e.detail?.headImage) {
+        setHeadmasterPhotoInput(e.detail.headImage);
+      }
+    };
+    window.addEventListener('siakad_headmaster_updated', handlePhotoUpdated);
+    return () => window.removeEventListener('siakad_headmaster_updated', handlePhotoUpdated);
+  }, []);
+
   const [govTitleInput, setGovTitleInput] = useState(() => localStorage.getItem('siakad_kop_gov_title') || 'PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA');
   const [deptTitleInput, setDeptTitleInput] = useState(() => localStorage.getItem('siakad_kop_dept_title') || 'DINAS PENDIDIKAN PROVINSI DKI JAKARTA');
   const [sudinTitleInput, setSudinTitleInput] = useState(() => localStorage.getItem('siakad_kop_sudin_title') || 'SUDIN PENDIDIKAN WILAYAH II KOTA ADMINISTRASI JAKARTA TIMUR');
@@ -3647,7 +3667,9 @@ export default function AdminPanel({
                       sudinTitle: sudinTitleInput,
                       schoolTitle: schoolTitleInput,
                       addressText: addressTextInput,
-                      contactText: contactTextInput
+                      contactText: contactTextInput,
+                      photo: headmasterPhotoInput,
+                      headImage: headmasterPhotoInput
                     })}
                     className="w-full px-3 py-1.5 text-xs border rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-800"
                     placeholder="Dra. Hj. Endah Purwani, M.M."
@@ -3666,6 +3688,59 @@ export default function AdminPanel({
                   />
                 </div>
 
+                {/* Foto Resmi Kepala Sekolah */}
+                <div className="md:col-span-2 bg-gradient-to-r from-amber-50/80 via-indigo-50/50 to-blue-50/80 p-4 rounded-2xl border border-amber-200/80 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200/60 pb-2.5">
+                    <div>
+                      <label className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-amber-700" />
+                        <span>Foto Profil Resmi Kepala Sekolah (Halaman Utama &amp; Profil Web)</span>
+                      </label>
+                      <p className="text-[11px] text-slate-600 mt-0.5">
+                        Foto ini langsung tampil di halaman depan (Beranda) Website Sekolah dan profil pimpinan. Dukung upload foto langsung dari perangkat (Auto-HD) atau tautan Google Drive / Direct URL.
+                      </p>
+                    </div>
+                    {headmasterPhotoInput && (
+                      <div className="flex items-center gap-2.5 shrink-0 bg-white px-3 py-1.5 rounded-xl border border-amber-200 shadow-2xs">
+                        <span className="text-[10px] font-bold text-slate-500">Pratinjau Foto:</span>
+                        <div className="w-10 h-12 rounded-lg bg-slate-100 border border-amber-300 overflow-hidden shadow-inner">
+                          <img 
+                            src={headmasterPhotoInput} 
+                            alt="Pratinjau Kepala Sekolah" 
+                            className="w-full h-full object-cover object-top"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <MediaUploadSelector
+                    value={headmasterPhotoInput}
+                    onChange={(val) => {
+                      setHeadmasterPhotoInput(val);
+                      // Auto-sync immediately
+                      onUpdateHeadmasterName(headmasterName, undefined, logoRightInput || undefined, {
+                        nip: headmasterNipInput,
+                        govTitle: govTitleInput,
+                        deptTitle: deptTitleInput,
+                        sudinTitle: sudinTitleInput,
+                        schoolTitle: schoolTitleInput,
+                        addressText: addressTextInput,
+                        contactText: contactTextInput,
+                        docNumber: docNumberInput,
+                        photo: val,
+                        headImage: val
+                      });
+                    }}
+                    mode="avatar"
+                    label=""
+                    placeholder="https://lh3.googleusercontent.com/... atau klik tombol Upload File"
+                  />
+                </div>
+
                 {/* Nomor Dokumen / Surat */}
                 <div className="md:col-span-2 bg-purple-50/50 p-3 rounded-xl border border-purple-100">
                   <label className="block text-[10px] font-bold text-purple-900 uppercase tracking-wider mb-1">Pengaturan Nomor Dokumen / Surat (Opsional)</label>
@@ -3677,6 +3752,55 @@ export default function AdminPanel({
                     placeholder="Contoh: 421.3/001/SMPN50/2026 atau kosongkan jika tidak digunakan"
                   />
                   <p className="text-[10px] text-purple-700 mt-1">Admin bisa mengatur nomor surat resmi untuk setiap laporan cetak PDF, atau mengosongkannya agar tidak menampilkan baris nomor dokumen.</p>
+                </div>
+
+                {/* Tombol Simpan Kop Surat & Profil Kepala Sekolah */}
+                <div className="md:col-span-2 pt-2">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                    {kopSaveToast ? (
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3.5 py-2 rounded-xl border border-emerald-200">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>{kopSaveToast}</span>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-400">
+                        Pastikan seluruh data penandatangan, NIP, kop surat, dan foto kepala sekolah sudah sesuai sebelum disimpan.
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        let finalPhoto = headmasterPhotoInput;
+                        if (finalPhoto && finalPhoto.startsWith('data:image/') && finalPhoto.length > 35 * 1024) {
+                          try {
+                            finalPhoto = await compressAvatarImage(finalPhoto, 420, 525, 0.78);
+                            setHeadmasterPhotoInput(finalPhoto);
+                          } catch (_) {}
+                        }
+
+                        onUpdateHeadmasterName(headmasterName, undefined, logoRightInput || undefined, {
+                          nip: headmasterNipInput,
+                          govTitle: govTitleInput,
+                          deptTitle: deptTitleInput,
+                          sudinTitle: sudinTitleInput,
+                          schoolTitle: schoolTitleInput,
+                          addressText: addressTextInput,
+                          contactText: contactTextInput,
+                          docNumber: docNumberInput,
+                          photo: finalPhoto,
+                          headImage: finalPhoto
+                        });
+
+                        setKopSaveToast('Pengaturan Kop Surat & Profil Kepala Sekolah Berhasil Disimpan!');
+                        setTimeout(() => setKopSaveToast(null), 3500);
+                      }}
+                      className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white text-xs font-extrabold rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all shrink-0"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Simpan Pengaturan Kop Surat &amp; Profil Kepala Sekolah</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 

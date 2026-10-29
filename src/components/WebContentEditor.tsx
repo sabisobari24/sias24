@@ -190,9 +190,9 @@ export default function WebContentEditor() {
         activeSection.id === 'kesiswaan' ? 'Membina Kedisiplinan Positif, Melatih Kepemimpinan, dan Melejitkan Prestasi Non-Akademik.' :
         activeSection.id === 'sarpras' ? 'Mewujudkan Infrastruktur Sekolah yang Modern, Nyaman, Bersih, Sehat, dan Berwawasan Lingkungan.' : ''
       ));
-      setHeadName(activeSection.headName || '');
-      setHeadRole(activeSection.headRole || '');
-      setHeadImage(activeSection.headImage || '');
+      setHeadName(activeSection.headName || (activeSection.id === 'home' ? (safeLocalStorageGet('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.') : ''));
+      setHeadRole(activeSection.headRole || (activeSection.id === 'home' ? 'Kepala Sekolah' : ''));
+      setHeadImage(activeSection.headImage || (activeSection.id === 'home' ? (safeLocalStorageGet('siakad_headmaster_photo') || 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj') : ''));
       setHeadMotto(activeSection.headMotto || '');
       setHeadBorn(activeSection.headBorn || '');
       setHeadSubject(activeSection.headSubject || '');
@@ -291,6 +291,7 @@ export default function WebContentEditor() {
       // Sync to Firestore 'settings/headmaster'
       try {
         await saveDocument('settings', 'headmaster', {
+          id: 'headmaster',
           name: headName,
           photo: finalHeadImage,
           headImage: finalHeadImage,

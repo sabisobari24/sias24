@@ -262,8 +262,15 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
   const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
 
   const slides = webContent.slides || [];
-  const headName = webContent.headName || localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.';
-  const headImage = webContent.headImage || localStorage.getItem('siakad_headmaster_photo') || 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
+  const localHeadPhoto = typeof window !== 'undefined' ? (localStorage.getItem('siakad_headmaster_photo') || '') : '';
+  const localHeadName = typeof window !== 'undefined' ? (localStorage.getItem('siakad_headmaster_name') || '') : '';
+  const DEFAULT_HEAD_PHOTO = 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
+
+  const headName = webContent.headName || localHeadName || 'Dra. Hj. Endah Purwani, M.M.';
+  const headImage = (webContent.headImage && webContent.headImage !== DEFAULT_HEAD_PHOTO)
+    ? webContent.headImage
+    : (localHeadPhoto || webContent.headImage || DEFAULT_HEAD_PHOTO);
+
   const headMotto = webContent.headMotto || '';
   const headBorn = webContent.headBorn || 'Klaten, 26 November 1967';
   const headSubject = webContent.headSubject || 'Manajemen Pendidikan';

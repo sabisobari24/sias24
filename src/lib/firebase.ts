@@ -577,6 +577,8 @@ export interface KopSuratSettings {
   addressText?: string;
   contactText?: string;
   docNumber?: string;
+  photo?: string;
+  headImage?: string;
 }
 
 // Single-document settings sync helper
@@ -585,6 +587,7 @@ export function syncHeadmaster(onUpdate: (settings: KopSuratSettings) => void, d
   return onSnapshot(docRef, async (snapshot) => {
     notifyFirestoreStatus('online');
     if (!snapshot.exists()) {
+      const defaultPhoto = safeLocalStorageGet('siakad_headmaster_photo') || 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
       const defaults: KopSuratSettings = {
         name: defaultName,
         nip: '196711261991032004',
@@ -597,6 +600,8 @@ export function syncHeadmaster(onUpdate: (settings: KopSuratSettings) => void, d
         addressText: 'Komplek Kodam Jaya Cililitan II Kramat Jati – Jakarta Timur – Kode Pos : 13510',
         contactText: 'Telp. (021) 8091734 – Fax (021) 809173 – Email : smpnegeri50@gmail.com, smpn50.jt2@gmail.com',
         docNumber: '',
+        photo: defaultPhoto,
+        headImage: defaultPhoto
       };
       try {
         await setDoc(docRef, defaults);
@@ -606,6 +611,7 @@ export function syncHeadmaster(onUpdate: (settings: KopSuratSettings) => void, d
       onUpdate(defaults);
     } else {
       const data = snapshot.data();
+      const currentPhoto = data.photo || data.headImage || safeLocalStorageGet('siakad_headmaster_photo') || 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
       onUpdate({
         name: data.name || defaultName,
         nip: data.nip || '196711261991032004',
@@ -618,12 +624,15 @@ export function syncHeadmaster(onUpdate: (settings: KopSuratSettings) => void, d
         addressText: data.addressText || 'Komplek Kodam Jaya Cililitan II Kramat Jati – Jakarta Timur – Kode Pos : 13510',
         contactText: data.contactText || 'Telp. (021) 8091734 – Fax (021) 809173 – Email : smpnegeri50@gmail.com, smpn50.jt2@gmail.com',
         docNumber: data.docNumber || '',
+        photo: currentPhoto,
+        headImage: currentPhoto
       });
     }
   }, (error) => {
     console.warn('Error syncing headmaster (using local cache / default fallback):', error.message || error);
     const cachedName = safeLocalStorageGet('siakad_headmaster_name') || defaultName;
     const cachedNip = safeLocalStorageGet('siakad_headmaster_nip') || '196711261991032004';
+    const cachedPhoto = safeLocalStorageGet('siakad_headmaster_photo') || 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
     onUpdate({
       name: cachedName,
       nip: cachedNip,
@@ -636,6 +645,8 @@ export function syncHeadmaster(onUpdate: (settings: KopSuratSettings) => void, d
       addressText: 'Komplek Kodam Jaya Cililitan II Kramat Jati – Jakarta Timur – Kode Pos : 13510',
       contactText: 'Telp. (021) 8091734 – Fax (021) 809173 – Email : smpnegeri50@gmail.com, smpn50.jt2@gmail.com',
       docNumber: '',
+      photo: cachedPhoto,
+      headImage: cachedPhoto
     });
   });
 }
