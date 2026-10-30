@@ -57,7 +57,7 @@ import {
 } from 'lucide-react';
 import { useDownload } from './context/DownloadContext';
 
-import { getDoc, getDocs, collection, doc, setDoc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { getDoc, getDocs, collection, doc, setDoc, writeBatch, deleteDoc, query, where } from 'firebase/firestore';
 import { normalizeClassId, getSchoolClassName } from './utils/classUtils';
 import { safeLocalStorageSet, safeLocalStorageGet } from './utils/storageHelper';
 import { signInWithGoogle, signOutUser } from './lib/firebase';
@@ -343,13 +343,16 @@ export default function App({ initialMode }: AppProps = {}) {
       const saved = localStorage.getItem('siakad_students');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const { uniqueStudents, removedIds } = deduplicateStudents(parsed);
-          if (removedIds.length > 0) {
-            removedIds.forEach((id) => deleteDocument('students', id).catch(() => {}));
-            safeLocalStorageSet('siakad_students', JSON.stringify(uniqueStudents));
+        if (Array.isArray(parsed)) {
+          if (parsed.length > 0) {
+            const { uniqueStudents, removedIds } = deduplicateStudents(parsed);
+            if (removedIds.length > 0) {
+              removedIds.forEach((id) => deleteDocument('students', id).catch(() => {}));
+              safeLocalStorageSet('siakad_students', JSON.stringify(uniqueStudents));
+            }
+            return uniqueStudents;
           }
-          return uniqueStudents;
+          return [];
         }
       }
     } catch { /* ignore */ }
@@ -1963,13 +1966,103 @@ export default function App({ initialMode }: AppProps = {}) {
     }
   };
 
-  const handleDeleteStudent = (id: string) => {
+  const handleDeleteStudent = async (id: string) => {
     try {
-      const next = students.filter((i) => i.id !== id);
+      const targetStudent = students.find((i) => i.id === id);
+      const targetNisn = targetStudent?.nisn ? targetStudent.nisn.trim() : '';
+      const targetPhone = targetStudent?.phone ? targetStudent.phone.trim() : '';
+      const targetParentPhone = targetStudent?.parentPhone ? targetStudent.parentPhone.trim() : '';
+
+      // 1. Immediately update state and localStorage for students
+      const next = students.filter((i) => i.id !== id && (!targetNisn || i.nisn !== targetNisn));
       setStudents(next);
       safeLocalStorageSet('siakad_students', JSON.stringify(next));
-      deleteDocument('students', id)
-        .catch((err) => console.error("Error deleting student:", err));
+
+      // 2. Track deleted ID in cache
+      trackDeletedId('students', id);
+
+      // 3. Delete document from Firestore 'students' collection by document ID
+      deleteDocument('students', id).catch((err) => console.error("Error deleting student by id:", err));
+
+      // 4. Query Firestore 'students' by NISN to purge any duplicate or alternate-ID documents
+      if (targetNisn) {
+        try {
+          const qStudents = query(collection(db, 'students'), where('nisn', '==', targetNisn));
+          const snapStudents = await getDocs(qStudents);
+          if (!snapStudents.empty) {
+            const batch = writeBatch(db);
+            snapStudents.docs.forEach((docSnap) => {
+              trackDeletedId('students', docSnap.id);
+              batch.delete(docSnap.ref);
+            });
+            await batch.commit();
+          }
+        } catch (e) {
+          console.warn("Notice deleting student by NISN from Firestore:", e);
+        }
+      }
+
+      // 5. Clean up any lingering pending registrations (both in state and in Firestore)
+      if (targetNisn || targetPhone || targetParentPhone) {
+        setPendingRegistrations((prev) => {
+          const filtered = prev.filter((p) => {
+            const matchNisn = targetNisn && (p.nipOrNisnOrNik === targetNisn || p.studentNisnOrName === targetNisn);
+            const matchPhone = (targetPhone && p.phone === targetPhone) || (targetParentPhone && p.phone === targetParentPhone);
+            return !matchNisn && !matchPhone;
+          });
+          safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(filtered));
+          return filtered;
+        });
+
+        try {
+          const batch = writeBatch(db);
+          let hasPending = false;
+
+          if (targetNisn) {
+            const q1 = query(collection(db, 'pending_registrations'), where('nipOrNisnOrNik', '==', targetNisn));
+            const snap1 = await getDocs(q1);
+            snap1.docs.forEach((d) => {
+              trackDeletedId('pending_registrations', d.id);
+              batch.delete(d.ref);
+              hasPending = true;
+            });
+
+            const q2 = query(collection(db, 'pending_registrations'), where('studentNisnOrName', '==', targetNisn));
+            const snap2 = await getDocs(q2);
+            snap2.docs.forEach((d) => {
+              trackDeletedId('pending_registrations', d.id);
+              batch.delete(d.ref);
+              hasPending = true;
+            });
+          }
+
+          if (targetPhone) {
+            const q3 = query(collection(db, 'pending_registrations'), where('phone', '==', targetPhone));
+            const snap3 = await getDocs(q3);
+            snap3.docs.forEach((d) => {
+              trackDeletedId('pending_registrations', d.id);
+              batch.delete(d.ref);
+              hasPending = true;
+            });
+          }
+
+          if (targetParentPhone && targetParentPhone !== targetPhone) {
+            const q4 = query(collection(db, 'pending_registrations'), where('phone', '==', targetParentPhone));
+            const snap4 = await getDocs(q4);
+            snap4.docs.forEach((d) => {
+              trackDeletedId('pending_registrations', d.id);
+              batch.delete(d.ref);
+              hasPending = true;
+            });
+          }
+
+          if (hasPending) {
+            await batch.commit();
+          }
+        } catch (e) {
+          console.warn("Notice cleaning pending registrations for deleted student:", e);
+        }
+      }
     } catch (err) {
       console.error("Error deleting student:", err);
     }
@@ -2165,24 +2258,44 @@ export default function App({ initialMode }: AppProps = {}) {
       studentNisnOrName: regData.studentNisnOrName ? sanitizeSecurityInput(regData.studentNisnOrName) : ''
     };
 
-    // Check duplicate Phone Number across all user collections
+    // Check duplicate Phone Number across active students, teachers, and unverified pending registrations
     if (sanitizedRegData.phone && sanitizedRegData.phone.trim()) {
       const inputPhone = sanitizedRegData.phone.trim();
       const phoneExistsStudent = students.some((s) => (s.phone && s.phone.trim() === inputPhone) || (s.parentPhone && s.parentPhone.trim() === inputPhone));
       const phoneExistsTeacher = teachers.some((t) => (t as any).phone && (t as any).phone.trim() === inputPhone);
-      const phoneExistsPending = pendingRegistrations.some((p) => p.phone && p.phone.trim() === inputPhone);
+      const phoneExistsPending = pendingRegistrations.some((p) => p.phone && p.phone.trim() === inputPhone && p.status !== 'ditolak');
       if (phoneExistsStudent || phoneExistsTeacher || phoneExistsPending) {
-        throw new Error('NISN atau Nomor Telpon sudah terdaftar.');
+        throw new Error('Nomor Telepon sudah terdaftar. Silakan gunakan nomor telepon lain.');
       }
     }
 
-    // Check duplicate NISN
-    const nisnToCheck = sanitizedRegData.role === 'siswa' ? sanitizedRegData.nipOrNisnOrNik?.trim() : sanitizedRegData.role === 'orang_tua' ? sanitizedRegData.studentNisnOrName?.trim() : '';
-    if (nisnToCheck) {
-      const nisnExistsStudent = students.some((s) => s.nisn && s.nisn.trim() === nisnToCheck);
-      const nisnExistsPending = pendingRegistrations.some((p) => (p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === nisnToCheck) || (p.studentNisnOrName && p.studentNisnOrName.trim() === nisnToCheck));
-      if (sanitizedRegData.role === 'siswa' && (nisnExistsStudent || nisnExistsPending)) {
-        throw new Error('NISN atau Nomor Telpon sudah terdaftar.');
+    // Check duplicate NISN (Only for role 'siswa')
+    if (sanitizedRegData.role === 'siswa') {
+      const nisnToCheck = sanitizedRegData.nipOrNisnOrNik?.trim();
+      if (nisnToCheck) {
+        const nisnExistsStudent = students.some((s) => s.nisn && s.nisn.trim() === nisnToCheck);
+        if (nisnExistsStudent) {
+          throw new Error(`NISN ${nisnToCheck} sudah terdaftar sebagai Siswa aktif.`);
+        }
+        const nisnExistsPending = pendingRegistrations.some((p) => p.role === 'siswa' && p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === nisnToCheck && p.status !== 'ditolak');
+        if (nisnExistsPending) {
+          throw new Error(`NISN ${nisnToCheck} sudah diajukan dan sedang menunggu verifikasi Admin.`);
+        }
+      }
+    }
+
+    // Check duplicate NIP for Guru
+    if (sanitizedRegData.role === 'guru') {
+      const nipToCheck = sanitizedRegData.nipOrNisnOrNik?.trim();
+      if (nipToCheck) {
+        const nipExistsTeacher = teachers.some((t) => t.nip && t.nip.trim() === nipToCheck);
+        if (nipExistsTeacher) {
+          throw new Error(`NIP ${nipToCheck} sudah terdaftar sebagai Tenaga Pendidik aktif.`);
+        }
+        const nipExistsPending = pendingRegistrations.some((p) => (p.role === 'guru' || p.role === 'pelatih') && p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === nipToCheck && p.status !== 'ditolak');
+        if (nipExistsPending) {
+          throw new Error(`NIP ${nipToCheck} sudah diajukan dan sedang menunggu verifikasi Admin.`);
+        }
       }
     }
 

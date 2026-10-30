@@ -223,14 +223,14 @@ service cloud.firestore {
     match /web_content/{contentId} {
       allow get, list: if true;
       allow create, update: if isValidId(contentId) && isValidWebContent(incoming());
-      allow delete: if isValidId(contentId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(contentId);
     }
 
     // 2. School Settings & Configurations (Kop Surat, Logo, Design)
     match /settings/{settingId} {
       allow get, list: if true;
       allow create, update: if isValidId(settingId) && isValidSettings(incoming());
-      allow delete: if isValidId(settingId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(settingId);
     }
 
     // 3. User Self-Registration (Pending registrations)
@@ -244,204 +244,204 @@ service cloud.firestore {
     match /students/{studentId} {
       allow get, list: if true;
       allow create, update: if isValidId(studentId) && isValidStudent(incoming());
-      allow delete: if isValidId(studentId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(studentId);
     }
 
     // 5. Teachers & Staff Collection
     match /teachers/{teacherId} {
       allow get, list: if true;
       allow create, update: if isValidId(teacherId) && isValidTeacher(incoming());
-      allow delete: if isValidId(teacherId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(teacherId);
     }
 
     // 6. Classes Collection
     match /classes/{classId} {
       allow get, list: if true;
       allow create, update: if isValidId(classId) && isValidClass(incoming());
-      allow delete: if isValidId(classId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(classId);
     }
 
     // 7. Attendance Collection
     match /attendance/{attId} {
       allow get, list: if true;
       allow create, update: if isValidId(attId) && isValidAttendance(incoming());
-      allow delete: if isValidId(attId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(attId);
     }
 
     // 8. Student Violations
     match /violations/{violId} {
       allow get, list: if true;
       allow create, update: if isValidId(violId) && isValidViolation(incoming());
-      allow delete: if isValidId(violId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(violId);
     }
 
     // 9. Violation Types
     match /violation_types/{typeId} {
       allow get, list: if true;
       allow create, update: if isValidId(typeId) && isValidViolationType(incoming());
-      allow delete: if isValidId(typeId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(typeId);
     }
 
     // 10. Counselor Notes, Homeroom Notes, Parent Messages
     match /counselor_notes/{noteId} {
       allow get, list: if true;
       allow create, update: if isValidId(noteId) && incoming().id is string;
-      allow delete: if isValidId(noteId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(noteId);
     }
 
     match /homeroom_notes/{noteId} {
       allow get, list: if true;
       allow create, update: if isValidId(noteId) && incoming().id is string;
-      allow delete: if isValidId(noteId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(noteId);
     }
 
     match /parent_messages/{msgId} {
       allow get, list: if true;
       allow create, update: if isValidId(msgId) && incoming().id is string;
-      allow delete: if isValidId(msgId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(msgId);
     }
 
     // 11. Exams & CBT Configurations
     match /exam_schedules/{examId} {
       allow get, list: if true;
       allow create, update: if isValidId(examId) && incoming().id is string;
-      allow delete: if isValidId(examId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(examId);
     }
 
     match /exam_grades/{gradeId} {
       allow get, list: if true;
       allow create, update: if isValidId(gradeId) && incoming().id is string && incoming().score is number;
-      allow delete: if isValidId(gradeId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(gradeId);
     }
 
     match /cbt_config/{configId} {
       allow get: if true;
       allow list: if true;
-      allow create, update, delete: if isValidId(configId) && (isAdmin() || isSignedIn());
+      allow create, update, delete: if isValidId(configId);
     }
 
     match /student_submissions/{subId} {
       allow get, list: if true;
       allow create, update: if isValidId(subId) && incoming().id is string;
-      allow delete: if isValidId(subId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(subId);
     }
 
     match /question_banks/{bankId} {
       allow get, list: if true;
       allow create, update: if isValidId(bankId) && isValidQuestionBank(incoming());
-      allow delete: if isValidId(bankId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(bankId);
     }
 
     // 12. Journals & Schedules
     match /teaching_journals/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id) && incoming().id is string;
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /bimbingan_journals/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id) && incoming().id is string;
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /bimbingan_schedules/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id) && incoming().id is string;
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     // 13. Achievements & E-Learning
     match /student_achievements/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id) && incoming().id is string;
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /elearning_materials/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id) && incoming().id is string;
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /elearning_progress/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id) && incoming().id is string;
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     // 14. Administrative / Tendik
     match /pemberkasan_schedules/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /nomor_surat/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /inventory_items/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /inventory_loans/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /bos_bop_reports/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /absent_teachers/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /important_events/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     // ECo-Tiket (Bank Sampah & Penebusan Pelanggaran / Duta Kebersihan)
     match /eco_waste_categories/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /eco_deposits/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /eco_rewards/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /eco_redemptions/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /eco_config/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     // 15. Aggregated Realtime Containers
@@ -449,21 +449,21 @@ service cloud.firestore {
       allow get: if true;
       allow list: if true;
       allow create, update: if isValidId(id) && isValidAggregatedContainer(incoming());
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /aggregated_activities/{id} {
       allow get: if true;
       allow list: if true;
       allow create, update: if isValidId(id) && isValidAggregatedContainer(incoming());
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     match /aggregated_messages/{id} {
       allow get: if true;
       allow list: if true;
       allow create, update: if isValidId(id) && isValidAggregatedContainer(incoming());
-      allow delete: if isValidId(id) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(id);
     }
 
     // 16. User Static Profiles
@@ -471,14 +471,14 @@ service cloud.firestore {
       allow get: if true;
       allow list: if true;
       allow create, update: if isValidId(userId);
-      allow delete: if isValidId(userId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(userId);
     }
 
     // 17. System Diagnostics (Pemeriksaan Integritas & Uji Mandiri Database)
     match /system_diagnostics/{testId} {
       allow get, list: if true;
       allow create, update: if isValidId(testId);
-      allow delete: if isValidId(testId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(testId);
     }
 
     // 18. Admins Reference Collection (Hanya Admin yang berwenang)

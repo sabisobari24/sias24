@@ -95,9 +95,9 @@ export default function RegisterModal({
     if (inputPhone) {
       const phoneExistsStudent = students.some((s) => (s.phone && s.phone.trim() === inputPhone) || (s.parentPhone && s.parentPhone.trim() === inputPhone));
       const phoneExistsTeacher = teachers.some((t) => (t as any).phone && (t as any).phone.trim() === inputPhone);
-      const phoneExistsPending = pendingRegistrations.some((p) => p.phone && p.phone.trim() === inputPhone);
+      const phoneExistsPending = pendingRegistrations.some((p) => p.phone && p.phone.trim() === inputPhone && p.status !== 'ditolak');
       if (phoneExistsStudent || phoneExistsTeacher || phoneExistsPending) {
-        setErrorMsg('Pendaftaran ditolak: NISN atau Nomor Telpon sudah terdaftar.');
+        setErrorMsg('Nomor Telepon sudah terdaftar. Silakan gunakan nomor telepon lain.');
         return;
       }
     }
@@ -116,9 +116,13 @@ export default function RegisterModal({
         }
         // Ensure NISN is unique across all students and pending registrations
         const alreadyExistsStudent = students.some((s) => s.nisn && s.nisn.trim() === trimmedCode);
-        const alreadyPendingStudent = pendingRegistrations.some((p) => p.role === 'siswa' && p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === trimmedCode);
-        if (alreadyExistsStudent || alreadyPendingStudent) {
-          setErrorMsg('Pendaftaran ditolak: NISN atau Nomor Telpon sudah terdaftar.');
+        const alreadyPendingStudent = pendingRegistrations.some((p) => p.role === 'siswa' && p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === trimmedCode && p.status !== 'ditolak');
+        if (alreadyExistsStudent) {
+          setErrorMsg(`NISN ${trimmedCode} sudah terdaftar sebagai Siswa aktif.`);
+          return;
+        }
+        if (alreadyPendingStudent) {
+          setErrorMsg(`NISN ${trimmedCode} sudah diajukan dan sedang menunggu verifikasi Admin.`);
           return;
         }
       } else if (role === 'guru') {
@@ -128,7 +132,7 @@ export default function RegisterModal({
           setErrorMsg(`Gagal: NIP/NIK ${trimmedCode} sudah terdaftar dalam sistem oleh Pendidik/Tendik lain. Satu NIP hanya dapat digunakan oleh 1 akun.`);
           return;
         }
-        const alreadyPendingTeacher = pendingRegistrations.some((p) => (p.role === 'guru' || p.role === 'pelatih') && p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === trimmedCode);
+        const alreadyPendingTeacher = pendingRegistrations.some((p) => (p.role === 'guru' || p.role === 'pelatih') && p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === trimmedCode && p.status !== 'ditolak');
         if (alreadyPendingTeacher) {
           setErrorMsg(`Gagal: NIP/NIK ${trimmedCode} sudah mendaftar dan sedang menunggu validasi Admin. Tidak dapat melakukan pendaftaran ganda.`);
           return;
@@ -179,12 +183,12 @@ export default function RegisterModal({
       }
       // Ensure only one parent account can be registered per student NISN
       if (matchedStudent.parentPhone || matchedStudent.parentName || matchedStudent.parentNik) {
-        setErrorMsg('Pendaftaran ditolak: NISN atau Nomor Telpon sudah terdaftar.');
+        setErrorMsg('Pendaftaran ditolak: Akun Orang Tua untuk siswa ini sudah terdaftar.');
         return;
       }
-      const alreadyPendingOrtu = pendingRegistrations.some((p) => p.role === 'orang_tua' && p.studentNisnOrName?.trim() === targetNisn);
+      const alreadyPendingOrtu = pendingRegistrations.some((p) => p.role === 'orang_tua' && p.studentNisnOrName?.trim() === targetNisn && p.status !== 'ditolak');
       if (alreadyPendingOrtu) {
-        setErrorMsg('Pendaftaran ditolak: NISN atau Nomor Telpon sudah terdaftar.');
+        setErrorMsg('Pendaftaran ditolak: Pengajuan akun Orang Tua untuk siswa ini sedang menunggu verifikasi Admin.');
         return;
       }
     }
@@ -231,7 +235,9 @@ export default function RegisterModal({
     } catch (err: any) {
       console.error(err);
       const errorDetails = err?.message || err?.toString() || 'Unknown error';
-      setErrorMsg(`Gagal mengirim pendaftaran ke database (${errorDetails}). Periksa jaringan internet Anda, nonaktifkan Adblocker / Brave Shields, atau hubungi Admin.`);
+      setErrorMsg(errorDetails.includes('Pendaftaran') || errorDetails.includes('NISN') || errorDetails.includes('Nomor') || errorDetails.includes('NIP')
+        ? errorDetails
+        : `Gagal mengirim pendaftaran ke database (${errorDetails}). Periksa koneksi internet Anda atau hubungi Admin.`);
     } finally {
       setIsSubmitting(false);
     }
