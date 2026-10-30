@@ -1151,6 +1151,18 @@ export default function App({ initialMode }: AppProps = {}) {
     // Unblock any registrations that may have been trapped by previous stale deleted IDs
     clearDeletedIds('pending_registrations');
 
+    const handleLocalRegCreated = (e: any) => {
+      if (e?.detail) {
+        setPendingRegistrations((prev) => {
+          if (prev.some((p) => p.id === e.detail.id)) return prev;
+          const next = [e.detail, ...prev];
+          safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(next));
+          return next;
+        });
+      }
+    };
+    window.addEventListener('siakad_registration_created', handleLocalRegCreated);
+
     const unsubRegistrations = syncCollection<PendingRegistration>('pending_registrations', (data) => {
       const validData = data.filter((item) => {
         if (!item || typeof item !== 'object') return false;
@@ -1345,6 +1357,7 @@ export default function App({ initialMode }: AppProps = {}) {
       unsubInventory();
       unsubBosBop();
       unsubRegistrations();
+      window.removeEventListener('siakad_registration_created', handleLocalRegCreated);
       unsubExamSchedules();
       unsubExamGrades();
       unsubAbsentTeachers();
@@ -2176,20 +2189,44 @@ export default function App({ initialMode }: AppProps = {}) {
     const newReg: PendingRegistration = {
       ...sanitizedRegData,
       id: 'reg-' + Date.now(),
-      createdAt: new Date().toLocaleDateString('id-ID')
+      createdAt: new Date().toLocaleDateString('id-ID'),
+      status: 'menunggu'
     };
 
     setPendingRegistrations((prev) => {
       const next = [...prev.filter((i) => i.id !== newReg.id), newReg];
-      localStorage.setItem('siakad_pending_registrations', JSON.stringify(next));
+      safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(next));
       return next;
     });
 
     try {
       await saveDocument('pending_registrations', newReg.id, newReg);
+      window.dispatchEvent(new CustomEvent('siakad_registration_created', { detail: newReg }));
     } catch (err) {
       console.error("Error saving pending registration:", err);
       throw err;
+    }
+  };
+
+  const handleRefreshRegistrations = async (): Promise<number> => {
+    try {
+      clearDeletedIds('pending_registrations');
+      const snap = await getDocs(collection(db, 'pending_registrations'));
+      const items: PendingRegistration[] = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() as PendingRegistration;
+        if (data && data.role && (data.name || data.nipOrNisnOrNik || data.phone)) {
+          items.push({ ...data, id: docSnap.id });
+        }
+      });
+      // Sort newest first
+      items.sort((a, b) => (b.id || '').localeCompare(a.id || ''));
+      setPendingRegistrations(items);
+      safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(items));
+      return items.length;
+    } catch (e) {
+      console.warn("Error refreshing pending registrations:", e);
+      return pendingRegistrations.length;
     }
   };
 
@@ -4889,6 +4926,7 @@ export default function App({ initialMode }: AppProps = {}) {
                             onRejectRegistration={handleRejectRegistration}
                             onApproveAllRegistrations={handleApproveAllRegistrations}
                             onClearAllPendingRegistrations={handleClearAllPendingRegistrations}
+                            onRefreshRegistrations={handleRefreshRegistrations}
                             dbStatus={dbStatus}
                             dbLatency={dbLatency}
                             lastSyncTime={lastSyncTime}

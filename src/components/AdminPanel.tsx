@@ -65,6 +65,7 @@ interface AdminPanelProps {
   onRejectRegistration?: (id: string) => void;
   onApproveAllRegistrations?: () => void;
   onClearAllPendingRegistrations?: () => void;
+  onRefreshRegistrations?: () => Promise<number | void>;
   dbStatus?: 'online' | 'offline' | 'high_latency';
   dbLatency?: number;
   lastSyncTime?: number;
@@ -132,6 +133,7 @@ export default function AdminPanel({
   onRejectRegistration,
   onApproveAllRegistrations,
   onClearAllPendingRegistrations,
+  onRefreshRegistrations,
   studentAchievements = [],
   onAddStudentAchievement,
   onDeleteStudentAchievement,
@@ -178,6 +180,23 @@ export default function AdminPanel({
   const [isBatchCardModalOpen, setIsBatchCardModalOpen] = useState(false);
   const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
   const [isBatchPrintingCards, setIsBatchPrintingCards] = useState(false);
+  const [isRefreshingReg, setIsRefreshingReg] = useState(false);
+
+  const handleRefreshRegistrationsClick = async () => {
+    if (isRefreshingReg) return;
+    setIsRefreshingReg(true);
+    try {
+      if (onRefreshRegistrations) {
+        const count = await onRefreshRegistrations();
+        setSuccessMsg(`Data pendaftaran berhasil disegarkan. ${typeof count === 'number' ? `${count} akun dalam antrean.` : ''}`);
+        setTimeout(() => setSuccessMsg(''), 3500);
+      }
+    } catch (e) {
+      console.warn("Gagal menyegarkan antrean pendaftaran:", e);
+    } finally {
+      setIsRefreshingReg(false);
+    }
+  };
 
   // School Time & Late Penalty States
   const [localSchoolStartTime, setLocalSchoolStartTime] = useState(schoolTimeConfig.schoolStartTime || '07:00');
@@ -4437,8 +4456,21 @@ export default function AdminPanel({
                   Semua pendaftaran akun baru oleh Guru, Siswa, dan Orang Tua wajib melalui proses validasi ini sebelum mereka dapat login ke sistem.
                 </p>
               </div>
-              <div className="bg-indigo-600/10 text-indigo-700 text-xs px-3 py-1.5 rounded-xl border border-indigo-200 font-bold">
-                Total Menunggu: {pendingRegistrations.length} Akun
+              <div className="flex items-center gap-2">
+                <div className="bg-indigo-600/10 text-indigo-700 text-xs px-3 py-1.5 rounded-xl border border-indigo-200 font-bold">
+                  Total Menunggu: {pendingRegistrations.length} Akun
+                </div>
+                {onRefreshRegistrations && (
+                  <button
+                    type="button"
+                    onClick={handleRefreshRegistrationsClick}
+                    disabled={isRefreshingReg}
+                    className="p-1.5 bg-white hover:bg-indigo-50 text-indigo-700 rounded-xl border border-indigo-200 transition-all cursor-pointer shadow-2xs"
+                    title="Segarkan antrean pendaftaran dari database server"
+                  >
+                    <RefreshCw className={`w-4 h-4 text-indigo-600 ${isRefreshingReg ? 'animate-spin' : ''}`} />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -4451,9 +4483,22 @@ export default function AdminPanel({
                   <div className="space-y-1">
                     <h4 className="text-sm font-bold text-slate-800">Tidak Ada Pendaftaran Menunggu</h4>
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      Seluruh pengajuan registrasi mandiri akun baru telah diproses. Antrean pendaftaran bersih.
+                      Seluruh pengajuan registrasi mandiri akun baru telah diproses atau antrean bersih.
                     </p>
                   </div>
+                  {onRefreshRegistrations && (
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={handleRefreshRegistrationsClick}
+                        disabled={isRefreshingReg}
+                        className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isRefreshingReg ? 'animate-spin' : ''}`} />
+                        <span>{isRefreshingReg ? 'Menyinkronkan...' : 'Segarkan Data dari Server'}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -4462,6 +4507,18 @@ export default function AdminPanel({
                       Daftar Pengajuan Registrasi ({pendingRegistrations.length})
                     </h4>
                     <div className="flex flex-wrap items-center gap-2 self-stretch sm:self-auto">
+                      {onRefreshRegistrations && (
+                        <button
+                          type="button"
+                          onClick={handleRefreshRegistrationsClick}
+                          disabled={isRefreshingReg}
+                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs justify-center"
+                          title="Segarkan antrean pendaftaran"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isRefreshingReg ? 'animate-spin' : ''}`} />
+                          <span>{isRefreshingReg ? 'Memuat...' : 'Segarkan'}</span>
+                        </button>
+                      )}
                       {onClearAllPendingRegistrations && (
                         <button
                           type="button"
@@ -4525,6 +4582,11 @@ export default function AdminPanel({
                                 Guru
                               </span>
                             )}
+                            {reg.role === 'pelatih' && (
+                              <span className="bg-purple-50 text-purple-800 border border-purple-200 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                                Pelatih Ekskul
+                              </span>
+                            )}
                             {reg.role === 'siswa' && (
                               <span className="bg-blue-50 text-blue-800 border border-blue-200 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
                                 Siswa
@@ -4541,12 +4603,19 @@ export default function AdminPanel({
                           <div className="text-xs space-y-1.5 border-t border-slate-100/70 pt-3">
                             <div className="flex justify-between items-center text-slate-500">
                               <span>
-                                {reg.role === 'guru' ? 'NIP Pegawai:' : reg.role === 'siswa' ? 'NISN Siswa:' : 'NIK Orang Tua:'}
+                                {reg.role === 'guru' ? 'NIP Pegawai:' : reg.role === 'pelatih' ? 'Kontak / NIP Pelatih:' : reg.role === 'siswa' ? 'NISN Siswa:' : 'NIK Orang Tua:'}
                               </span>
                               <span className="font-bold text-slate-800 font-mono text-[11px] bg-white border border-slate-100 px-1.5 py-0.5 rounded-lg">
                                 {reg.nipOrNisnOrNik || '-'}
                               </span>
                             </div>
+
+                            {reg.role === 'pelatih' && reg.studentNisnOrName && (
+                              <div className="p-2.5 bg-purple-50/50 border border-purple-100 rounded-xl space-y-0.5 mt-1.5">
+                                <span className="block text-[9px] font-black text-purple-700 uppercase tracking-wide">Ekstrakurikuler yang Diampu:</span>
+                                <span className="text-slate-800 font-bold text-xs">{reg.studentNisnOrName}</span>
+                              </div>
+                            )}
 
                             {reg.role === 'siswa' && reg.classId && (
                               <div className="flex justify-between items-center text-slate-500">

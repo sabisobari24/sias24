@@ -264,6 +264,8 @@ export interface PendingRegistration {
   studentNisnOrName?: string; // for parent to map to student, or for coach to specify exclusive ekskul
   password?: string; // chosen password
   createdAt: string;
+  status?: string;
+  updatedAt?: string;
 }
 
 export interface WebProgram {
