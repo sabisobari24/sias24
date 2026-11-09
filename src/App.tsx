@@ -53,7 +53,8 @@ import {
   FileSpreadsheet,
   ChevronDown,
   Leaf,
-  Recycle
+  Recycle,
+  DoorOpen
 } from 'lucide-react';
 import { useDownload } from './context/DownloadContext';
 
@@ -101,7 +102,9 @@ import {
   EcoWasteDeposit,
   EcoReward,
   EcoRedemption,
-  EcoConfig
+  EcoConfig,
+  StudentPermitLog,
+  StudentPermitType
 } from './types';
 
 import {
@@ -636,6 +639,14 @@ export default function App({ initialMode }: AppProps = {}) {
     } catch { return INITIAL_ECO_CONFIG; }
   });
 
+  // Student Permits State (Toilet, Keluar Kelas, Pulang Cepat, Investigasi Insiden)
+  const [studentPermits, setStudentPermits] = useState<StudentPermitLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('siakad_student_permits');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
   // Active Session State
   const [activeRole, setActiveRole] = useState<UserRole | null>(() => {
     const savedRole = localStorage.getItem('siakad_active_role');
@@ -747,7 +758,7 @@ export default function App({ initialMode }: AppProps = {}) {
   // Public website tab state
   const [publicTab, setPublicTab] = useState<'beranda' | 'akademik' | 'kesiswaan' | 'sarpras' | 'berita' | 'portal'>('beranda');
 
-  const [adminTabOverride, setAdminTabOverride] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | null>(null);
+  const [adminTabOverride, setAdminTabOverride] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | null>(null);
 
   const [siswaTab, setSiswaTab] = useState<'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | 'elearning' | 'eco-tiket'>('profil');
   const [orangTuaTab, setOrangTuaTab] = useState<'profil' | 'absensi' | 'pelanggaran' | 'catatan' | 'komunikasi'>('profil');
@@ -755,7 +766,7 @@ export default function App({ initialMode }: AppProps = {}) {
   const [waliKelasTab, setWaliKelasTab] = useState<'beranda' | 'catatan' | 'ekskul' | 'prestasi' | 'pesan'>('beranda');
   const [bkTab, setBkTab] = useState<'beranda' | 'bimbingan' | 'jurnal' | 'jadwal' | 'pesan' | 'prestasi'>('beranda');
   const [guruWaliTab, setGuruWaliTab] = useState<'beranda' | 'bimbingan' | 'bimbingan-bk' | 'bakat-minat' | 'pesan'>('beranda');
-  const [piketTab, setPiketTab] = useState<'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri'>('pintu-depan');
+  const [piketTab, setPiketTab] = useState<'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa'>('pintu-depan');
   const [tendikTab, setTendikTab] = useState<'ringkasan' | 'pemberkasan' | 'kjp' | 'nomor-surat' | 'inventaris' | 'peminjaman-barang' | 'bos-bop'>('ringkasan');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
@@ -1322,6 +1333,11 @@ export default function App({ initialMode }: AppProps = {}) {
       }
     }, [INITIAL_ECO_CONFIG]);
 
+    const unsubPermits = syncCollection<StudentPermitLog>('student_permits', (data) => {
+      setStudentPermits(data);
+      safeLocalStorageSet('siakad_student_permits', JSON.stringify(data));
+    }, []);
+
     // Active session headmaster migration
     try {
       const savedUser = localStorage.getItem('siakad_active_user');
@@ -1378,6 +1394,7 @@ export default function App({ initialMode }: AppProps = {}) {
       unsubEcoDeposits();
       unsubEcoRedemptions();
       unsubEcoConfig();
+      unsubPermits();
       clearTimeout(timer);
     };
   }, []);
@@ -1744,14 +1761,29 @@ export default function App({ initialMode }: AppProps = {}) {
   // Violations
   const handleAddViolation = (v: Omit<StudentViolation, 'id'>) => {
     const id = `sv-${Date.now()}`;
-    const newV = { ...v, id };
+    const newV: StudentViolation = { ...v, id };
     setViolations((prev) => {
       const next = [...prev.filter((i) => i.id !== id), newV];
-      localStorage.setItem('siakad_violations', JSON.stringify(next));
+      safeLocalStorageSet('siakad_violations', JSON.stringify(next));
       return next;
     });
     saveDocument('violations', id, newV)
       .catch((err) => console.error("Error adding violation:", err));
+    window.dispatchEvent(new CustomEvent('siakad_violations_updated', { detail: newV }));
+  };
+
+  const handleDeleteViolation = (id: string) => {
+    setViolations((prev) => {
+      const next = prev.filter((i) => i.id !== id);
+      safeLocalStorageSet('siakad_violations', JSON.stringify(next));
+      return next;
+    });
+    if (id) {
+      trackDeletedId('violations', id);
+      deleteDocument('violations', id)
+        .catch((err) => console.error("Error deleting violation:", err));
+      window.dispatchEvent(new CustomEvent('siakad_violations_updated', { detail: { id, deleted: true } }));
+    }
   };
 
   // Counselor notes
@@ -2748,7 +2780,7 @@ export default function App({ initialMode }: AppProps = {}) {
 
     // Reduce points on existing student violation records
     let remainingToDeduct = pointsToRedeem;
-    const studentVList = violations.filter(v => v.studentId === activeUser.id);
+    const studentVList = violations.filter(v => v.studentId === activeUser.id || (activeUser.nisn && v.studentId === activeUser.nisn));
     const updatedViolations = [...violations];
 
     for (const v of studentVList) {
@@ -2759,6 +2791,7 @@ export default function App({ initialMode }: AppProps = {}) {
       if (v.points <= remainingToDeduct) {
         remainingToDeduct -= v.points;
         updatedViolations.splice(vIdx, 1);
+        trackDeletedId('violations', v.id);
         deleteDocument('violations', v.id).catch(() => {});
       } else {
         const newPts = v.points - remainingToDeduct;
@@ -2770,6 +2803,7 @@ export default function App({ initialMode }: AppProps = {}) {
     }
     setViolations(updatedViolations);
     safeLocalStorageSet('siakad_violations', JSON.stringify(updatedViolations));
+    window.dispatchEvent(new CustomEvent('siakad_violations_updated', { detail: { redeemed: true } }));
   };
 
   const handleAddEcoCategory = async (cat: Omit<EcoWasteCategory, 'id'>) => {
@@ -2846,6 +2880,79 @@ export default function App({ initialMode }: AppProps = {}) {
     setEcoConfig(cfg);
     safeLocalStorageSet('siakad_eco_config', JSON.stringify(cfg));
     saveDocument('eco_config', cfg.id || 'global_eco_config', cfg).catch(() => {});
+  };
+
+  // Student Permits Handlers (Toilet, Keluar Kelas, Pulang Cepat)
+  const handleAddStudentPermit = async (permit: Omit<StudentPermitLog, 'id'>) => {
+    const id = 'prm-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+    const newPermit: StudentPermitLog = {
+      ...permit,
+      id,
+      createdAt: new Date().toISOString()
+    };
+    setStudentPermits(prev => {
+      const next = [newPermit, ...prev];
+      safeLocalStorageSet('siakad_student_permits', JSON.stringify(next));
+      return next;
+    });
+    try {
+      await saveDocument('student_permits', id, newPermit);
+    } catch (err) {
+      console.error('Error saving student permit:', err);
+    }
+  };
+
+  const handleReturnStudentPermit = async (permitId: string, timeIn?: string, notes?: string) => {
+    const returnTime = timeIn || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace('.', ':');
+    let updatedPermit: StudentPermitLog | null = null;
+    setStudentPermits(prev => {
+      const next = prev.map(p => {
+        if (p.id === permitId) {
+          let duration = 0;
+          try {
+            const [outH, outM] = p.timeOut.split(':').map(Number);
+            const [inH, inM] = returnTime.split(':').map(Number);
+            if (!isNaN(outH) && !isNaN(outM) && !isNaN(inH) && !isNaN(inM)) {
+              duration = Math.max(1, (inH * 60 + inM) - (outH * 60 + outM));
+            }
+          } catch {
+            duration = 5;
+          }
+          updatedPermit = {
+            ...p,
+            timeIn: returnTime,
+            durationMinutes: duration,
+            status: 'kembali' as const,
+            notes: notes !== undefined ? notes : p.notes
+          };
+          return updatedPermit;
+        }
+        return p;
+      });
+      safeLocalStorageSet('siakad_student_permits', JSON.stringify(next));
+      return next;
+    });
+
+    if (updatedPermit) {
+      try {
+        await saveDocument('student_permits', permitId, updatedPermit);
+      } catch (err) {
+        console.error('Error updating returned student permit:', err);
+      }
+    }
+  };
+
+  const handleDeleteStudentPermit = async (permitId: string) => {
+    setStudentPermits(prev => {
+      const next = prev.filter(p => p.id !== permitId);
+      safeLocalStorageSet('siakad_student_permits', JSON.stringify(next));
+      return next;
+    });
+    try {
+      await deleteDocument('student_permits', permitId);
+    } catch (err) {
+      console.error('Error deleting student permit:', err);
+    }
   };
 
   // Database Reset to fresh seed
@@ -3996,7 +4103,7 @@ export default function App({ initialMode }: AppProps = {}) {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between px-1">
                       <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Menu Administrasi</h3>
-                      <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full border border-purple-100">11 Menu</span>
+                      <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full border border-purple-100">12 Menu</span>
                     </div>
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       <button
@@ -4008,7 +4115,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <TrendingUp className="w-4 h-4 shrink-0" />
-                        <span className="truncate">Statistik</span>
+                        <span className="truncate">Statistik &amp; Ringkasan</span>
                       </button>
 
                       <button
@@ -4136,6 +4243,25 @@ export default function App({ initialMode }: AppProps = {}) {
                       >
                         <Leaf className="w-4 h-4 shrink-0 text-emerald-500" />
                         <span className="truncate">ECo-Tiket &amp; Sampah</span>
+                      </button>
+
+                      <button
+                        onClick={() => setAdminTabOverride('izin-siswa')}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          adminTabOverride === 'izin-siswa'
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-md shadow-amber-100'
+                            : 'bg-transparent text-slate-600 border-transparent hover:bg-slate-50 hover:text-slate-900 cursor-pointer'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <DoorOpen className="w-4 h-4 shrink-0 text-amber-500" />
+                          <span className="truncate">Izin Siswa &amp; Toilet</span>
+                        </div>
+                        {studentPermits.filter(p => p.status === 'keluar').length > 0 && (
+                          <span className="bg-amber-500 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0 animate-pulse">
+                            {studentPermits.filter(p => p.status === 'keluar').length} Luar
+                          </span>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -4292,6 +4418,7 @@ export default function App({ initialMode }: AppProps = {}) {
                     <h3 className="px-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Menu Piket</h3>
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
+                        { id: 'izin-siswa', label: 'Izin Siswa & Toilet', icon: DoorOpen, badgeCount: studentPermits.filter(p => p.status === 'keluar').length },
                         { id: 'pintu-depan', label: 'Gerbang Sekolah', icon: School },
                         { id: 'absensi-piket', label: 'Presensi Siswa', icon: Calendar },
                         { id: 'guru-absen', label: 'Pendidik Izin', icon: Users },
@@ -4301,14 +4428,21 @@ export default function App({ initialMode }: AppProps = {}) {
                         <button
                           key={tab.id}
                           onClick={() => setPiketTab(tab.id as any)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
                             piketTab === tab.id
                               ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-100'
                               : 'bg-transparent text-slate-600 border-transparent hover:bg-slate-50 hover:text-slate-900 cursor-pointer'
                           }`}
                         >
-                          <tab.icon className="w-4 h-4 shrink-0" />
-                          <span className="truncate">{tab.label}</span>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <tab.icon className="w-4 h-4 shrink-0" />
+                            <span className="truncate">{tab.label}</span>
+                          </div>
+                          {tab.badgeCount !== undefined && tab.badgeCount > 0 && (
+                            <span className="bg-amber-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0 animate-pulse">
+                              {tab.badgeCount}
+                            </span>
+                          )}
                         </button>
                       ))}
                     </div>
@@ -4479,18 +4613,80 @@ export default function App({ initialMode }: AppProps = {}) {
 
 
                   <div>
-                    <h1 className="text-base md:text-lg font-bold text-slate-800 tracking-tight leading-none">
-                      {activeRole === 'admin' && 'Panel Kontrol Administrator'}
-                      {activeRole === 'guru' && 'Portal Pengajaran & Absensi'}
-                      {activeRole === 'wali_kelas' && 'Dashboard Manajemen Kelas'}
-                      {activeRole === 'bk' && 'Portal Bimbingan Konseling'}
-                      {activeRole === 'piket' && 'Piket Gerbang & Kehadiran'}
+                    <h1 className="text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-none">
+                      {activeRole === 'admin' && (
+                        adminTabOverride === 'siswa' ? 'Data Siswa & Rombel' :
+                        adminTabOverride === 'guru' ? 'Data Guru & Tenaga Kependidikan' :
+                        adminTabOverride === 'database-settings' ? 'Kelas & Pengaturan Database' :
+                        adminTabOverride === 'setting-cbt' ? 'Jadwal & Pengaturan CBT' :
+                        adminTabOverride === 'validasi-akun' ? 'Validasi Akun Baru' :
+                        adminTabOverride === 'kelola-web' ? 'Kelola Konten Website' :
+                        adminTabOverride === 'prestasi' ? 'Prestasi Siswa' :
+                        adminTabOverride === 'setting-sertifikat' ? 'Pengaturan Sertifikat Digital' :
+                        adminTabOverride === 'setting-kartu-pelajar' ? 'Pengaturan Kartu Pelajar' :
+                        adminTabOverride === 'eco-tiket' ? 'ECo-Tiket & Sampah' :
+                        adminTabOverride === 'izin-siswa' ? 'Izin Siswa & Toilet' :
+                        'Panel Kontrol Administrator'
+                      )}
+                      {activeRole === 'guru' && (
+                        guruTab === 'presensi' ? 'Presensi Kelas Siswa' :
+                        guruTab === 'elearning' ? 'E-Learning & Bahan Ajar' :
+                        guruTab === 'pelanggaran' ? 'Catatan Pelanggaran Siswa' :
+                        guruTab === 'riwayat' ? 'Riwayat Siswa & Bimbingan' :
+                        guruTab === 'verifikasi-mandiri' ? 'Verifikasi Presensi Mandiri' :
+                        guruTab === 'jurnal-harian' ? 'Jurnal Mengajar Guru' :
+                        guruTab === 'jadwal-ujian' ? 'Jadwal Ujian Sekolah' :
+                        guruTab === 'bank-soal' ? 'Bank Soal Ujian' :
+                        guruTab === 'guru-wali-view' ? 'Pendampingan Siswa Binaan' :
+                        'Portal Pengajaran & Absensi'
+                      )}
+                      {activeRole === 'wali_kelas' && (
+                        waliKelasTab === 'beranda' ? 'Dashboard Wali Kelas' :
+                        waliKelasTab === 'catatan' ? 'Jurnal Binaan Siswa' :
+                        waliKelasTab === 'ekskul' ? 'Ekstrakurikuler Siswa' :
+                        waliKelasTab === 'prestasi' ? 'Prestasi Kelas' :
+                        waliKelasTab === 'pesan' ? 'Pesan & Komunikasi Ortu' :
+                        'Dashboard Manajemen Kelas'
+                      )}
+                      {activeRole === 'bk' && (
+                        bkTab === 'beranda' ? 'Konseling Siswa' :
+                        bkTab === 'bimbingan' ? 'Bimbingan Siswa' :
+                        bkTab === 'jurnal' ? 'Jurnal Bimbingan Konseling' :
+                        bkTab === 'jadwal' ? 'Jadwal Bimbingan' :
+                        bkTab === 'pesan' ? 'Pesan Orang Tua' :
+                        'Portal Bimbingan Konseling'
+                      )}
+                      {activeRole === 'piket' && (
+                        piketTab === 'izin-siswa' ? 'Izin Siswa & Toilet' :
+                        piketTab === 'pintu-depan' ? 'Piket Gerbang Sekolah' :
+                        piketTab === 'absensi-piket' ? 'Presensi Siswa Piket' :
+                        piketTab === 'guru-absen' ? 'Pendidik Izin & Pengganti' :
+                        piketTab === 'kejadian-piket' ? 'Jurnal Kejadian Hari Ini' :
+                        piketTab === 'verifikasi-mandiri' ? 'Verifikasi Presensi Siswa' :
+                        'Piket Gerbang & Kehadiran'
+                      )}
                       {activeRole === 'siswa' && 'Dashboard Perkembangan Siswa'}
                       {activeRole === 'orang_tua' && 'Portal Wali Orang Tua'}
                       {activeRole === 'guru_wali' && 'Portal Pendampingan Guru Wali'}
                     </h1>
                     <p className="text-[11px] text-slate-400 mt-1 hidden sm:block">
-                      SMPN 50 JAKARTA &bull; Basis data sinkron terpadu
+                      SMPN 50 JAKARTA &bull; {
+                        activeRole === 'admin' ? (
+                          adminTabOverride === 'izin-siswa' ? 'Pusat Monitoring Izin Keluar, Toilet & Track Record Siswa' :
+                          adminTabOverride === 'eco-tiket' ? 'Pusat Setor Sampah, Tabungan & Poin Lingkungan' :
+                          adminTabOverride === 'setting-kartu-pelajar' ? 'Pusat Desain & Cetak Massal QR Kartu Pelajar' :
+                          adminTabOverride === 'setting-sertifikat' ? 'Pusat Validasi & Desain E-Sertifikat' :
+                          adminTabOverride === 'kelola-web' ? 'Manajemen Publikasi, Berita & Profil Sekolah' :
+                          adminTabOverride === 'prestasi' ? 'Daftar Portofolio Prestasi Akademik & Non-Akademik' :
+                          adminTabOverride === 'validasi-akun' ? 'Persetujuan Pendaftaran Akun Guru & Siswa Baru' :
+                          adminTabOverride === 'setting-cbt' ? 'Jadwal Sesi Ujian Komputer Berbasis Web' :
+                          adminTabOverride === 'database-settings' ? 'Struktur Rombel, Mata Pelajaran & Backup Data' :
+                          adminTabOverride === 'guru' ? 'Master Data Tenaga Pendidik & Akses SIAS' :
+                          adminTabOverride === 'siswa' ? 'Master Data Siswa & Distribusi Kelas' :
+                          'Basis data sinkron terpadu'
+                        ) : activeRole === 'piket' && piketTab === 'izin-siswa' ? 'Pusat Monitoring Izin Keluar, Toilet & Track Record Siswa' :
+                        'Basis data sinkron terpadu'
+                      }
                     </p>
                   </div>
                 </div>
@@ -4637,11 +4833,8 @@ export default function App({ initialMode }: AppProps = {}) {
                         title="Menu Unduh & Ekspor Laporan"
                       >
                         <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                        <span className="hidden sm:inline font-bold">Unduh</span>
-                        <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 px-1.5 py-0.2 rounded-full border border-emerald-200 dark:border-emerald-800">
-                          {downloadActions.length}
-                        </span>
-                        <ChevronDown className="w-3 h-3 text-slate-400" />
+                        <span className="font-bold">Unduh</span>
+                        <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isDownloadMenuOpen ? 'rotate-180' : ''}`} />
                       </button>
 
                       <AnimatePresence>
@@ -4803,6 +4996,12 @@ export default function App({ initialMode }: AppProps = {}) {
                         onDeleteEcoReward={handleDeleteEcoReward}
                         onUpdateEcoRedemptionStatus={handleUpdateEcoRedemptionStatus}
                         onUpdateEcoConfig={handleUpdateEcoConfig}
+                        permits={studentPermits}
+                        onAddPermit={handleAddStudentPermit}
+                        onReturnPermit={handleReturnStudentPermit}
+                        onDeletePermit={handleDeleteStudentPermit}
+                        onAddViolation={handleAddViolation}
+                        onDeleteViolation={handleDeleteViolation}
                       />
                     ) : (
                       <>
@@ -4993,6 +5192,12 @@ export default function App({ initialMode }: AppProps = {}) {
                             onDeleteImportantEvent={handleDeleteImportantEvent}
                             onVerifyAttendance={handleVerifyAttendance}
                             headmasterName={headmasterName}
+                            permits={studentPermits}
+                            onAddPermit={handleAddStudentPermit}
+                            onReturnPermit={handleReturnStudentPermit}
+                            onDeletePermit={handleDeleteStudentPermit}
+                            ecoCategories={ecoCategories}
+                            onAddEcoDeposit={handleAddEcoDeposit}
                           />
                         )}
 
@@ -5064,6 +5269,12 @@ export default function App({ initialMode }: AppProps = {}) {
                             onDeleteEcoReward={handleDeleteEcoReward}
                             onUpdateEcoRedemptionStatus={handleUpdateEcoRedemptionStatus}
                             onUpdateEcoConfig={handleUpdateEcoConfig}
+                            permits={studentPermits}
+                            onAddPermit={handleAddStudentPermit}
+                            onReturnPermit={handleReturnStudentPermit}
+                            onDeletePermit={handleDeleteStudentPermit}
+                            onAddViolation={handleAddViolation}
+                            onDeleteViolation={handleDeleteViolation}
                             onSwitchRole={(role, userObj) => {
                               setActiveRole(role as UserRole);
                               if (userObj) {
@@ -5221,6 +5432,7 @@ export default function App({ initialMode }: AppProps = {}) {
             { id: 'ringkasan', label: 'Statistik', icon: TrendingUp },
             { id: 'siswa', label: 'Data Siswa', icon: Users },
             { id: 'guru', label: 'Data Guru', icon: Shield },
+            { id: 'izin-siswa', label: 'Izin Siswa & Toilet', icon: DoorOpen },
             { id: 'eco-tiket', label: 'ECo-Tiket', icon: Leaf },
             { id: 'database-settings', label: 'Kelas & DB', icon: Database },
             { id: 'setting-cbt', label: 'Jadwal CBT', icon: FileCheck },
@@ -5268,6 +5480,7 @@ export default function App({ initialMode }: AppProps = {}) {
             { id: 'pesan', label: 'Pesan Orang Tua', icon: MessageSquare }
           ] :
           activeRole === 'piket' ? [
+            { id: 'izin-siswa', label: 'Izin Siswa & Toilet', icon: DoorOpen },
             { id: 'pintu-depan', label: 'Pintu Depan', icon: School },
             { id: 'absensi-piket', label: 'Absensi Siswa', icon: Calendar },
             { id: 'guru-absen', label: 'Guru Piket/Izin', icon: Users },

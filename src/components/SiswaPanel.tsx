@@ -661,11 +661,11 @@ export default function SiswaPanel({
   const hadirPercentage = totalDays > 0 ? Math.round((hadirCount / totalDays) * 100) : 0;
 
   // Filter notes
-  const studentCounselorNotes = counselorNotes.filter((n) => n.studentId === student.id);
-  const studentHomeroomNotes = homeroomNotes.filter((n) => n.studentId === student.id);
+  const studentCounselorNotes = counselorNotes.filter((n) => n.studentId === student.id || (student.nisn && n.studentId === student.nisn));
+  const studentHomeroomNotes = homeroomNotes.filter((n) => n.studentId === student.id || (student.nisn && n.studentId === student.nisn));
 
   // Filter violations
-  const studentViolations = violations.filter((v) => v.studentId === student.id);
+  const studentViolations = violations.filter((v) => v.studentId === student.id || (student.nisn && v.studentId === student.nisn));
   const totalViolationPoints = studentViolations.reduce((acc, curr) => acc + curr.points, 0);
 
   // Achievements
@@ -726,10 +726,10 @@ export default function SiswaPanel({
   const { setDownloadActions, clearDownloadActions } = useDownload();
 
   // Eco-Tiket Calculations for this student
-  const myEcoDeposits = (ecoDeposits || []).filter(d => d.studentId === student.id);
+  const myEcoDeposits = (ecoDeposits || []).filter(d => d.studentId === student.id || (student.nisn && d.studentId === student.nisn));
   const myVerifiedDeposits = myEcoDeposits.filter(d => d.status === 'Diverifikasi');
   const totalEarnedEcoPoints = myVerifiedDeposits.reduce((sum, d) => sum + (d.pointsEarned || 0), 0);
-  const myEcoRedemptions = (ecoRedemptions || []).filter(r => r.studentId === student.id);
+  const myEcoRedemptions = (ecoRedemptions || []).filter(r => r.studentId === student.id || (student.nisn && r.studentId === student.nisn));
   const totalSpentEcoPoints = myEcoRedemptions
     .filter(r => r.status === 'Selesai' || r.status === 'Menunggu')
     .reduce((sum, r) => sum + (r.pointsSpent || 0), 0);
@@ -757,8 +757,8 @@ export default function SiswaPanel({
       }
     });
 
-    return topStudentId === student.id || (totalEarnedEcoPoints >= highestPoints && totalEarnedEcoPoints > 0);
-  }, [ecoDeposits, student.id, totalEarnedEcoPoints, ecoConfig?.ambassadorMinPoints]);
+    return topStudentId === student.id || (student.nisn && topStudentId === student.nisn) || (totalEarnedEcoPoints >= highestPoints && totalEarnedEcoPoints > 0);
+  }, [ecoDeposits, student.id, student.nisn, totalEarnedEcoPoints, ecoConfig?.ambassadorMinPoints]);
 
   useEffect(() => {
     setDownloadActions(getSiswaDownloadConfig());

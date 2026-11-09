@@ -66,12 +66,12 @@ export default function OrangTuaPanel({
 
   const hadirPercentage = totalDays > 0 ? Math.round((hadirCount / totalDays) * 100) : 100;
 
-  const studentViolations = violations.filter((v) => v.studentId === student.id);
+  const studentViolations = violations.filter((v) => v.studentId === student.id || (student.nisn && v.studentId === student.nisn));
   const totalViolationPoints = studentViolations.reduce((sum, v) => sum + v.points, 0);
 
-  const studentCounselorNotes = counselorNotes.filter((c) => c.studentId === student.id);
-  const studentHomeroomNotes = homeroomNotes.filter((h) => h.studentId === student.id);
-  const studentMessages = parentMessages.filter((m) => m.studentId === student.id);
+  const studentCounselorNotes = counselorNotes.filter((c) => c.studentId === student.id || (student.nisn && c.studentId === student.nisn));
+  const studentHomeroomNotes = homeroomNotes.filter((h) => h.studentId === student.id || (student.nisn && h.studentId === student.nisn));
+  const studentMessages = parentMessages.filter((m) => m.studentId === student.id || (student.nisn && m.studentId === student.nisn));
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();

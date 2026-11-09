@@ -229,7 +229,7 @@ export default function BKPanel({
   const handleExportKedisiplinanBK = (format: 'excel' | 'pdf') => {
     const headers = ["Tanggal", "Nama Siswa", "Kelas", "Jenis Pelanggaran", "Poin", "Catatan", "Pencatat"];
     const rows = violations.map(v => {
-      const s = students.find(std => std.id === v.studentId);
+      const s = students.find(std => std.id === v.studentId || (std.nisn && std.nisn === v.studentId));
       const type = violationTypes.find(vt => vt.id === v.violationTypeId);
       return [
         v.date,
@@ -455,7 +455,7 @@ export default function BKPanel({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-1">
                 {filteredStudents.map((s) => {
                   const sClass = classes.find((c) => c.id === s.classId);
-                  const sViolations = violations.filter((v) => v.studentId === s.id);
+                  const sViolations = violations.filter((v) => v.studentId === s.id || (s.nisn && v.studentId === s.nisn));
                   const sPoints = sViolations.reduce((sum, v) => sum + v.points, 0);
                   const sNotes = counselorNotes.filter((n) => n.studentId === s.id);
 
@@ -501,7 +501,7 @@ export default function BKPanel({
               </h4>
               <div className="divide-y text-xs text-slate-600">
                 {violations.slice().reverse().map((v) => {
-                  const student = students.find((s) => s.id === v.studentId);
+                  const student = students.find((s) => s.id === v.studentId || (s.nisn && s.nisn === v.studentId));
                   const type = violationTypes.find((vt) => vt.id === v.violationTypeId);
                   return (
                     <div key={v.id} className="py-2.5 flex justify-between items-start">

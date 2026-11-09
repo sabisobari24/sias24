@@ -392,7 +392,7 @@ export default function GuruWaliPanel({
             <div className="bg-white rounded-xl p-4 border shadow-xs space-y-1">
               <span className="text-[10px] text-rose-500 font-bold uppercase tracking-wider block">Pelanggaran Binaan</span>
               <p className="text-2xl font-bold text-rose-600">
-                {violations.filter(v => myStudents.some(s => s.id === v.studentId)).length} Kejadian
+                {violations.filter(v => myStudents.some(s => s.id === v.studentId || (s.nisn && s.nisn === v.studentId))).length} Kejadian
               </p>
             </div>
           </div>
@@ -437,7 +437,7 @@ export default function GuruWaliPanel({
                     ) : (
                       filteredStudents.map((s) => {
                         const totalPoints = violations
-                          .filter(v => v.studentId === s.id)
+                          .filter(v => v.studentId === s.id || (s.nisn && v.studentId === s.nisn))
                           .reduce((sum, v) => sum + v.points, 0);
                         return (
                           <tr key={s.id} className="hover:bg-slate-50/50">

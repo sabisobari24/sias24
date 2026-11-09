@@ -132,7 +132,7 @@ export default function WaliKelasPanel({
   const totalHadir = classAttendances.filter((a) => a.status === 'Hadir').length;
   const attendanceRate = totalAttendanceDays > 0 ? Math.round((totalHadir / totalAttendanceDays) * 100) : 100;
 
-  const classViolations = violations.filter((v) => classStudentIds.includes(v.studentId));
+  const classViolations = violations.filter((v) => classStudentIds.includes(v.studentId) || classStudents.some(s => s.nisn && s.nisn === v.studentId));
   const classPoints = classViolations.reduce((sum, v) => sum + v.points, 0);
 
   // Handle write note
@@ -481,7 +481,7 @@ export default function WaliKelasPanel({
                 <div>
                   <p className="text-xs text-slate-400 font-bold uppercase">Siswa Perlu Perhatian</p>
                   <p className="text-2xl font-bold text-slate-800">
-                    {classStudents.filter((s) => violations.filter(v => v.studentId === s.id).reduce((sum, v) => sum + v.points, 0) > 15).length} Siswa
+                    {classStudents.filter((s) => violations.filter(v => v.studentId === s.id || (s.nisn && v.studentId === s.nisn)).reduce((sum, v) => sum + v.points, 0) > 15).length} Siswa
                   </p>
                 </div>
               </div>
@@ -521,7 +521,7 @@ export default function WaliKelasPanel({
                   {classStudents.map((s) => {
                     const sAttendance = attendance.filter((a) => a.studentId === s.id);
                     const sHadir = sAttendance.filter((a) => a.status === 'Hadir').length;
-                    const sViolations = violations.filter((v) => v.studentId === s.id);
+                    const sViolations = violations.filter((v) => v.studentId === s.id || (s.nisn && v.studentId === s.nisn));
                     const sPoints = sViolations.reduce((sum, v) => sum + v.points, 0);
                     const sNotes = homeroomNotes.filter((n) => n.studentId === s.id);
 

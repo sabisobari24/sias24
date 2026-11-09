@@ -7,7 +7,11 @@ import {
   StudentViolation,
   Teacher,
   AbsentTeacher,
-  ImportantEvent
+  ImportantEvent,
+  StudentPermitLog,
+  StudentPermitType,
+  EcoWasteCategory,
+  EcoWasteDeposit
 } from '../types';
 import {
   Clock,
@@ -24,7 +28,8 @@ import {
   AlertCircle,
   FileSpreadsheet,
   Download,
-  Zap
+  Zap,
+  DoorOpen
 } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF, printHTML } from '../utils/printHelper';
@@ -33,6 +38,7 @@ import ConfirmModal from './ConfirmModal';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import ExportDateFilterModal from './ExportDateFilterModal';
 import AttendanceQrScannerModal from './common/AttendanceQrScannerModal';
+import StudentPermitMonitoringPanel from './common/StudentPermitMonitoringPanel';
 
 interface PiketPanelProps {
   teacher: Teacher;
@@ -54,8 +60,16 @@ interface PiketPanelProps {
   onAddImportantEvent: (e: Omit<ImportantEvent, 'id'>) => void;
   onDeleteImportantEvent: (id: string) => void;
   headmasterName: string;
-  activeTabOverride?: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | null;
-  onTabChange?: (tab: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri') => void;
+  activeTabOverride?: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa' | null;
+  onTabChange?: (tab: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa') => void;
+
+  // Student Permits (Toilet, Keluar Kelas, Pulang Cepat) & ECo-Tiket
+  permits?: StudentPermitLog[];
+  onAddPermit?: (p: Omit<StudentPermitLog, 'id'>) => Promise<void> | void;
+  onReturnPermit?: (permitId: string, timeIn?: string, notes?: string) => Promise<void> | void;
+  onDeletePermit?: (permitId: string) => Promise<void> | void;
+  ecoCategories?: EcoWasteCategory[];
+  onAddEcoDeposit?: (d: Omit<EcoWasteDeposit, 'id'>) => Promise<void> | void;
 }
 
 export default function PiketPanel({
@@ -78,12 +92,18 @@ export default function PiketPanel({
   headmasterName,
   activeTabOverride,
   onTabChange,
+  permits = [],
+  onAddPermit,
+  onReturnPermit,
+  onDeletePermit,
+  ecoCategories = [],
+  onAddEcoDeposit,
 }: PiketPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri'>('pintu-depan');
+  const [internalActiveTab, setInternalActiveTab] = useState<'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa'>('pintu-depan');
   const [verifyDateFilter, setVerifyDateFilter] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [previewPhotoRecord, setPreviewPhotoRecord] = useState<Attendance | null>(null);
   const activeTab = activeTabOverride ? activeTabOverride : internalActiveTab;
-  const setActiveTab = (tab: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri') => {
+  const setActiveTab = (tab: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa') => {
     setInternalActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
@@ -595,6 +615,25 @@ export default function PiketPanel({
         <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full md:w-auto relative">
           <button
             type="button"
+            onClick={() => setActiveTab('izin-siswa')}
+            className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer ${
+              activeTab === 'izin-siswa'
+                ? 'bg-amber-400 text-slate-950 ring-2 ring-white'
+                : 'bg-emerald-950/40 hover:bg-emerald-950/60 text-white border border-emerald-400/40'
+            }`}
+            title="Buku Kendali Izin Siswa, Toilet & Pulang Cepat"
+          >
+            <DoorOpen className="w-4 h-4 text-amber-300" />
+            <span>Izin Siswa & Toilet</span>
+            {permits.filter(p => p.status === 'keluar').length > 0 && (
+              <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full ml-1 animate-pulse">
+                {permits.filter(p => p.status === 'keluar').length} Di Luar
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
             onClick={() => setIsScannerModalOpen(true)}
             className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer"
             title="Buka Pos Scanner QR / Barcode Absensi Siswa"
@@ -700,6 +739,24 @@ export default function PiketPanel({
         <div className="flex-1 w-full space-y-6">
           {/* Tab Contents */}
           <div className="w-full">
+        {/* Tab Izin Siswa & Toilet (Buku Kendali & Pos QR Kartu Pelajar) */}
+        {activeTab === 'izin-siswa' && (
+          <StudentPermitMonitoringPanel
+            permits={permits}
+            students={students}
+            classes={classes}
+            currentOfficer={teacher.name}
+            headmasterName={headmasterName}
+            onAddPermit={onAddPermit || (() => {})}
+            onReturnPermit={onReturnPermit || (() => {})}
+            onDeletePermit={onDeletePermit || (() => {})}
+            onAddViolation={onAddViolation}
+            violationTypes={violationTypes}
+            ecoCategories={ecoCategories}
+            onAddEcoDeposit={onAddEcoDeposit}
+          />
+        )}
+
         {/* Tab 1: Pintu Gerbang */}
         {activeTab === 'pintu-depan' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

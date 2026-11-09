@@ -98,9 +98,12 @@
         "reporterId": { "type": "string", "maxLength": 128 },
         "reporterRole": { "type": "string", "maxLength": 50 },
         "points": { "type": "number" },
-        "notes": { "type": "string", "maxLength": 500 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "recordedBy": { "type": "string", "maxLength": 150 },
         "status": { "type": "string", "maxLength": 50 },
-        "penalty": { "type": "string", "maxLength": 300 }
+        "penalty": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
       },
       "required": ["id", "studentId", "violationTypeId", "points"]
     },
@@ -113,7 +116,9 @@
         "name": { "type": "string", "maxLength": 200 },
         "points": { "type": "number" },
         "category": { "type": "string", "maxLength": 100 },
-        "description": { "type": "string", "maxLength": 500 }
+        "description": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
       },
       "required": ["id", "name", "points"]
     },
@@ -298,6 +303,30 @@
     "/aggregated_messages/{chatId}": {
       "schema": "AggregatedRealtimeContainer",
       "description": "Pesan teragregasi"
+    },
+    "/eco_categories/{id}": {
+      "schema": "EcoWasteCategory",
+      "description": "Kategori jenis sampah program ECo-Tiket Adiwiyata"
+    },
+    "/eco_deposits/{id}": {
+      "schema": "EcoWasteDeposit",
+      "description": "Catatan setoran sampah siswa dengan poin lingkungan"
+    },
+    "/eco_rewards/{id}": {
+      "schema": "EcoReward",
+      "description": "Katalog hadiah ramah lingkungan yang dapat ditukar poin"
+    },
+    "/eco_redemptions/{id}": {
+      "schema": "EcoRedemption",
+      "description": "Riwayat penukaran hadiah dan penebusan poin pelanggaran"
+    },
+    "/eco_config/{id}": {
+      "schema": "EcoConfig",
+      "description": "Konfigurasi aturan rasio poin tebus pelanggaran dan Duta Kebersihan"
+    },
+    "/student_permits/{id}": {
+      "schema": "StudentPermitLog",
+      "description": "Buku kendali izin siswa, toilet, keluar kelas dan pulang cepat"
     }
   }
 }

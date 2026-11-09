@@ -93,12 +93,12 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
 
   // Student's specific deposits & redemptions
   const myDeposits = useMemo(() => {
-    return deposits.filter(d => d.studentId === student.id);
-  }, [deposits, student.id]);
+    return deposits.filter(d => d.studentId === student.id || (student.nisn && d.studentId === student.nisn));
+  }, [deposits, student.id, student.nisn]);
 
   const myRedemptions = useMemo(() => {
-    return redemptions.filter(r => r.studentId === student.id);
-  }, [redemptions, student.id]);
+    return redemptions.filter(r => r.studentId === student.id || (student.nisn && r.studentId === student.nisn));
+  }, [redemptions, student.id, student.nisn]);
 
   // Points calculation
   const totalEarnedPoints = useMemo(() => {
@@ -117,8 +117,8 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
 
   // Student's violation points
   const myViolations = useMemo(() => {
-    return violations.filter(v => v.studentId === student.id);
-  }, [violations, student.id]);
+    return violations.filter(v => v.studentId === student.id || (student.nisn && v.studentId === student.nisn));
+  }, [violations, student.id, student.nisn]);
 
   const currentViolationPoints = Math.max(
     0,
@@ -129,6 +129,7 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
   const leaderboard = useMemo(() => {
     // Map of studentId -> total verified points
     const pointsMap = new Map<string, { totalPoints: number; count: number; name: string; classId: string }>();
+    const nisnToIdMap = new Map<string, string>();
 
     // Seed all known students so leaderboard is complete
     allStudents.forEach(s => {
@@ -138,12 +139,16 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
         name: s.name,
         classId: s.classId || '-'
       });
+      if (s.nisn) {
+        nisnToIdMap.set(s.nisn, s.id);
+      }
     });
 
     // Sum deposits
     deposits.forEach(d => {
       if (d.status === 'Diverifikasi') {
-        const existing = pointsMap.get(d.studentId) || {
+        const canonicalId = nisnToIdMap.get(d.studentId) || d.studentId;
+        const existing = pointsMap.get(canonicalId) || {
           totalPoints: 0,
           count: 0,
           name: d.studentName,
@@ -152,7 +157,7 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
         existing.totalPoints += (d.pointsEarned || 0);
         existing.count += 1;
         if (!existing.name && d.studentName) existing.name = d.studentName;
-        pointsMap.set(d.studentId, existing);
+        pointsMap.set(canonicalId, existing);
       }
     });
 
@@ -169,9 +174,9 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
 
   // Find my rank
   const myRank = useMemo(() => {
-    const idx = leaderboard.findIndex(item => item.studentId === student.id);
+    const idx = leaderboard.findIndex(item => item.studentId === student.id || (student.nisn && item.studentId === student.nisn));
     return idx >= 0 ? idx + 1 : leaderboard.length + 1;
-  }, [leaderboard, student.id]);
+  }, [leaderboard, student.id, student.nisn]);
 
   // Check if student qualifies as "Duta Kebersihan" (Top 1 with points > 0, or Top 3 with min points)
   const isDutaKebersihan = useMemo(() => {
@@ -762,7 +767,7 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
                     const isRank1 = index === 0;
                     const isRank2 = index === 1;
                     const isRank3 = index === 2;
-                    const isMe = item.studentId === student.id;
+                    const isMe = item.studentId === student.id || (student.nisn && item.studentId === student.nisn);
 
                     return (
                       <tr 

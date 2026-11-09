@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig, EcoWasteCategory, EcoWasteDeposit, EcoReward, EcoRedemption, EcoConfig } from '../types';
-import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown, Leaf, Recycle, Crown, Printer } from 'lucide-react';
+import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig, EcoWasteCategory, EcoWasteDeposit, EcoReward, EcoRedemption, EcoConfig, StudentPermitLog, StudentPermitType } from '../types';
+import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown, Leaf, Recycle, Crown, Printer, DoorOpen } from 'lucide-react';
 import { downloadExcel, parseExcel } from '../utils/excelExport';
 import { printHTML, printTablePDF, printCertificate } from '../utils/printHelper';
 import { useDownload } from '../context/DownloadContext';
@@ -13,6 +13,7 @@ import BatchStudentCardsModal from './common/BatchStudentCardsModal';
 import AttendanceQrScannerModal from './common/AttendanceQrScannerModal';
 import SettingKartuPelajar from './common/SettingKartuPelajar';
 import { AdminEcoTiketPanel } from './eco/AdminEcoTiketPanel';
+import StudentPermitMonitoringPanel from './common/StudentPermitMonitoringPanel';
 import { printBatchStudentCards } from '../utils/qrHelper';
 import { syncCollection, saveDocument } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
@@ -54,8 +55,8 @@ interface AdminPanelProps {
   headmasterName: string;
   headmasterLogoRight?: string;
   onUpdateHeadmasterName: (name: string, logoLeft?: string, logoRight?: string, extraFields?: any) => void;
-  activeTabOverride?: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | null;
-  onTabChange?: (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket') => void;
+  activeTabOverride?: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | null;
+  onTabChange?: (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa') => void;
   onSwitchRole?: (role: 'admin' | 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'guru_wali' | 'tendik', userObj?: Teacher) => void;
   studentAchievements?: StudentAchievement[];
   onAddStudentAchievement?: (ach: Omit<StudentAchievement, 'id'>) => void;
@@ -92,6 +93,14 @@ interface AdminPanelProps {
   onDeleteEcoReward?: (id: string) => Promise<void> | void;
   onUpdateEcoRedemptionStatus?: (id: string, status: 'Selesai' | 'Menunggu' | 'Ditolak', notes?: string) => Promise<void> | void;
   onUpdateEcoConfig?: (config: EcoConfig) => Promise<void> | void;
+
+  // Student Permits (Toilet, Keluar Kelas, Pulang Cepat, Investigasi Insiden)
+  permits?: StudentPermitLog[];
+  onAddPermit?: (p: Omit<StudentPermitLog, 'id'>) => Promise<void> | void;
+  onReturnPermit?: (permitId: string, timeIn?: string, notes?: string) => Promise<void> | void;
+  onDeletePermit?: (permitId: string) => Promise<void> | void;
+  onAddViolation?: (v: Omit<StudentViolation, 'id'>) => void;
+  onDeleteViolation?: (id: string) => void;
 }
 
 export default function AdminPanel({
@@ -164,10 +173,16 @@ export default function AdminPanel({
   onDeleteEcoReward,
   onUpdateEcoRedemptionStatus,
   onUpdateEcoConfig,
+  permits = [],
+  onAddPermit,
+  onReturnPermit,
+  onDeletePermit,
+  onAddViolation,
+  onDeleteViolation,
 }: AdminPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket'>('ringkasan');
+  const [internalActiveTab, setInternalActiveTab] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa'>('ringkasan');
   const activeTab = activeTabOverride ? activeTabOverride : internalActiveTab;
-  const setActiveTab = (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket') => {
+  const setActiveTab = (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa') => {
     setInternalActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
@@ -1647,6 +1662,43 @@ export default function AdminPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
+  const [isBannerDownloadOpen, setIsBannerDownloadOpen] = useState(false);
+
+  const handleExportPermits = (format: 'excel' | 'pdf' = 'excel') => {
+    const permitData = permits || [];
+    const headers = ['No', 'Tanggal', 'Jam Keluar', 'Jam Kembali', 'Durasi', 'NISN', 'Nama Siswa', 'Kelas', 'Jenis Izin', 'Tujuan & Keperluan', 'Status', 'Petugas', 'Keterangan'];
+    const rows = permitData.map((p, idx) => {
+      const stu = students.find(s => s.id === p.studentId);
+      const cls = classes.find(c => c.id === p.classId);
+      const permitLabel = p.type === 'toilet' ? 'Ke Toilet' : p.type === 'pulang_cepat' ? 'Pulang Cepat' : p.type === 'uks' ? 'Ke UKS' : p.type === 'perpustakaan' ? 'Perpustakaan' : p.type === 'keluar_kelas' ? 'Keluar Kelas' : 'Izin Keluar';
+      const statusLabel = p.status === 'kembali' ? 'Sudah Kembali' : p.status === 'izin_pulang' ? 'Izin Pulang' : 'Di Luar';
+      return [
+        (idx + 1).toString(),
+        p.date || '-',
+        p.timeOut || '-',
+        p.timeIn || 'Belum Kembali',
+        p.durationMinutes !== undefined ? `${p.durationMinutes} menit` : '-',
+        stu?.nisn || p.nisn || '-',
+        p.studentName || stu?.name || '-',
+        cls?.name || p.classId || '-',
+        permitLabel,
+        `${p.destination || '-'} (${p.reason || '-'})`,
+        statusLabel,
+        p.approvedBy || '-',
+        p.notes || '-'
+      ];
+    });
+
+    if (format === 'excel') {
+      downloadExcel(`buku_kendali_izin_siswa_${new Date().toISOString().slice(0, 10)}.xlsx`, headers, rows, 'Buku Kendali Izin');
+      setSuccessMsg(`Berhasil mengunduh Log Izin Siswa (${rows.length} riwayat) ke Excel!`);
+    } else {
+      printTablePDF('Buku Kendali Izin Siswa, Toilet & Keamanan Sekolah', headers, rows, headmasterName);
+      setSuccessMsg('Dokumen Log Izin Siswa siap dicetak / disimpan ke PDF!');
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
   const getAdminDownloadConfig = () => {
     switch (activeTab) {
       case 'siswa':
@@ -1681,6 +1733,11 @@ export default function AdminPanel({
           { label: 'Antrean (Excel)', onClick: () => handleExportPendingRegistrations('excel'), type: 'excel' as const },
           { label: 'Antrean (PDF)', onClick: () => handleExportPendingRegistrations('pdf'), type: 'pdf' as const },
         ];
+      case 'izin-siswa':
+        return [
+          { label: 'Buku Kendali Izin (Excel)', onClick: () => handleExportPermits('excel'), type: 'excel' as const },
+          { label: 'Buku Kendali Izin (PDF)', onClick: () => handleExportPermits('pdf'), type: 'pdf' as const },
+        ];
       case 'ringkasan':
       default:
         return [
@@ -1694,43 +1751,120 @@ export default function AdminPanel({
     }
   };
 
+  const getTabBannerInfo = () => {
+    switch (activeTab) {
+      case 'siswa':
+        return {
+          badge: 'Manajemen Data Pokok Pendidikan',
+          title: 'Master Data Siswa & Rombel',
+          desc: 'Kelola data induk peserta didik, penyebaran kelas, kredensial login, dan ekspor data.'
+        };
+      case 'guru':
+        return {
+          badge: 'Manajemen Pendidik & Staf',
+          title: 'Data Guru & Tenaga Kependidikan',
+          desc: 'Kelola direktori dewan guru, penugasan wali kelas, hak akses portal, dan NIP/NUPTK.'
+        };
+      case 'database-settings':
+        return {
+          badge: 'Konfigurasi Sistem & Rombel',
+          title: 'Kelas, Mapel & Pengaturan Database',
+          desc: 'Atur struktur kelas rombongan belajar, master mata pelajaran, dan backup sistem.'
+        };
+      case 'setting-cbt':
+        return {
+          badge: 'Ujian Berbasis Komputer',
+          title: 'Jadwal & Pengaturan Ujian CBT',
+          desc: 'Kelola jadwal sesi ujian, token akses, bank soal, dan sinkronisasi nilai CBT.'
+        };
+      case 'validasi-akun':
+        return {
+          badge: 'Pintu Masuk Registrasi Mandiri',
+          title: 'Validasi & Persetujuan Akun Baru',
+          desc: 'Verifikasi pendaftaran mandiri akun siswa dan guru sebelum diberikan hak akses ke SIAS.'
+        };
+      case 'prestasi':
+        return {
+          badge: 'Portofolio & Rekor Siswa',
+          title: 'Bank Prestasi & Penghargaan Siswa',
+          desc: 'Pencatatan capaian prestasi akademik dan non-akademik siswa tingkat kota, provinsi, hingga nasional.'
+        };
+      case 'ringkasan':
+      default:
+        return {
+          badge: 'Super Administrator & Kepala Sekolah',
+          title: 'Panel Kontrol Pusat Administrasi',
+          desc: 'Kelola semua entitas data sekolah, wali kelas, guru, siswa, dan konfigurasi database.'
+        };
+    }
+  };
+
   const { setDownloadActions, clearDownloadActions } = useDownload();
 
   useEffect(() => {
+    setIsBannerDownloadOpen(false);
     setDownloadActions(getAdminDownloadConfig());
     return () => clearDownloadActions();
   }, [activeTab]);
 
   return (
     <div className="space-y-6">
-      {/* Admin Header */}
-      <div className="bg-gradient-to-r from-purple-700 to-indigo-800 rounded-2xl p-6 text-white shadow-md">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <div>
-            <p className="text-purple-100 text-xs font-semibold uppercase tracking-wider">Super Administrator & Kepala Sekolah</p>
-            <h1 className="text-2xl font-bold">Panel Kontrol Pusat Administrasi</h1>
-            <p className="text-purple-100 text-sm">Kelola semua entitas data sekolah, wali kelas, guru, siswa, dan konfigurasi database.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {getAdminDownloadConfig().map((btn, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={btn.onClick}
-                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
-                title={btn.label}
-              >
-                {btn.type === 'excel' ? (
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                ) : (
-                  <FileText className="w-3.5 h-3.5 text-purple-600" />
+      {/* Admin Header: Only shown for standard tabs without their own dedicated banner modules */}
+      {!['izin-siswa', 'eco-tiket', 'setting-kartu-pelajar', 'setting-sertifikat', 'kelola-web'].includes(activeTab) && (
+        <div className="bg-gradient-to-r from-purple-700 to-indigo-800 rounded-2xl p-6 text-white shadow-md">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <p className="text-purple-100 text-xs font-semibold uppercase tracking-wider">{getTabBannerInfo().badge}</p>
+              <h1 className="text-2xl font-bold">{getTabBannerInfo().title}</h1>
+              <p className="text-purple-100 text-sm mt-0.5">{getTabBannerInfo().desc}</p>
+            </div>
+            {getAdminDownloadConfig().length > 0 && (
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsBannerDownloadOpen(!isBannerDownloadOpen)}
+                  className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/90 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer active:scale-95"
+                >
+                  <Download className="w-4 h-4 text-emerald-600" />
+                  <span>Unduh Data &amp; Laporan</span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isBannerDownloadOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isBannerDownloadOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsBannerDownloadOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-40 text-slate-800 text-xs font-medium">
+                      <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                        <span>Pilihan Unduh</span>
+                        <span className="text-indigo-600 capitalize">{activeTab.replace('-', ' ')}</span>
+                      </div>
+                      <div className="py-1 space-y-1">
+                        {getAdminDownloadConfig().map((btn, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              btn.onClick();
+                              setIsBannerDownloadOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-700 hover:text-indigo-600"
+                          >
+                            {btn.type === 'excel' ? (
+                              <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                            ) : (
+                              <FileText className="w-4 h-4 text-purple-600 shrink-0" />
+                            )}
+                            <span>{btn.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
                 )}
-                <span>{btn.label}</span>
-              </button>
-            ))}
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       {successMsg && (
         <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 p-4 rounded-xl flex items-center gap-2 font-medium">
@@ -5809,6 +5943,24 @@ export default function AdminPanel({
             onDeleteReward={onDeleteEcoReward}
             onUpdateRedemptionStatus={onUpdateEcoRedemptionStatus}
             onUpdateConfig={onUpdateEcoConfig}
+          />
+        )}
+
+        {/* Tab Izin Siswa, Toilet & Investigasi Insiden Kerusakan Fasilitas */}
+        {activeTab === 'izin-siswa' && (
+          <StudentPermitMonitoringPanel
+            permits={permits}
+            students={students}
+            classes={classes}
+            currentOfficer="Admin Sekolah"
+            headmasterName={headmasterName}
+            onAddPermit={onAddPermit || (() => {})}
+            onReturnPermit={onReturnPermit || (() => {})}
+            onDeletePermit={onDeletePermit || (() => {})}
+            onAddViolation={onAddViolation}
+            violationTypes={violationTypes}
+            ecoCategories={ecoCategories}
+            onAddEcoDeposit={onAddEcoDeposit}
           />
         )}
 

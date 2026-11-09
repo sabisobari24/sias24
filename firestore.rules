@@ -98,24 +98,32 @@ service cloud.firestore {
 
     function isValidViolation(data) {
       return data.keys().hasAll(['id', 'studentId', 'violationTypeId', 'points']) &&
-        data.keys().hasOnly(['id', 'studentId', 'violationTypeId', 'date', 'reporterId', 'reporterRole', 'points', 'notes', 'status', 'penalty']) &&
+        data.keys().hasOnly(['id', 'studentId', 'violationTypeId', 'date', 'reporterId', 'reporterRole', 'points', 'notes', 'status', 'penalty', 'recordedBy', 'createdAt', 'updatedAt']) &&
         data.id is string && data.id.size() <= 128 &&
         data.studentId is string && data.studentId.size() <= 128 &&
         data.violationTypeId is string && data.violationTypeId.size() <= 128 &&
         data.points is number && data.points >= 0 && data.points <= 500 &&
         (!('date' in data) || (data.date is string && data.date.size() <= 30)) &&
-        (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
-        (!('reporterId' in data) || (data.reporterId is string && data.reporterId.size() <= 128));
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+        (!('recordedBy' in data) || (data.recordedBy is string && data.recordedBy.size() <= 150)) &&
+        (!('reporterId' in data) || (data.reporterId is string && data.reporterId.size() <= 128)) &&
+        (!('reporterRole' in data) || (data.reporterRole is string && data.reporterRole.size() <= 50)) &&
+        (!('status' in data) || (data.status is string && data.status.size() <= 50)) &&
+        (!('penalty' in data) || (data.penalty is string && data.penalty.size() <= 300)) &&
+        (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 50)) &&
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50));
     }
 
     function isValidViolationType(data) {
       return data.keys().hasAll(['id', 'name', 'points']) &&
-        data.keys().hasOnly(['id', 'name', 'points', 'category', 'description']) &&
+        data.keys().hasOnly(['id', 'name', 'points', 'category', 'description', 'createdAt', 'updatedAt']) &&
         data.id is string && data.id.size() <= 128 &&
         data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
         data.points is number && data.points >= 0 && data.points <= 500 &&
         (!('category' in data) || (data.category is string && data.category.size() <= 100)) &&
-        (!('description' in data) || (data.description is string && data.description.size() <= 500));
+        (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+        (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 50)) &&
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50));
     }
 
     function isValidPendingRegistration(data) {
@@ -414,6 +422,12 @@ service cloud.firestore {
     }
 
     // ECo-Tiket (Bank Sampah & Penebusan Pelanggaran / Duta Kebersihan)
+    match /eco_categories/{id} {
+      allow get, list: if true;
+      allow create, update: if isValidId(id);
+      allow delete: if isValidId(id);
+    }
+
     match /eco_waste_categories/{id} {
       allow get, list: if true;
       allow create, update: if isValidId(id);
@@ -443,6 +457,14 @@ service cloud.firestore {
       allow create, update: if isValidId(id);
       allow delete: if isValidId(id);
     }
+
+    // 14b. Student Permits (Toilet, Keluar Kelas, Pulang Cepat, Track Record)
+    match /student_permits/{id} {
+      allow get, list: if true;
+      allow create, update: if isValidId(id);
+      allow delete: if isValidId(id);
+    }
+
 
     // 15. Aggregated Realtime Containers
     match /aggregated_announcements/{id} {

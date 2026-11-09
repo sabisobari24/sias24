@@ -22,7 +22,8 @@ import {
   Package, 
   AlertTriangle,
   Crown,
-  Users
+  Users,
+  Scan
 } from 'lucide-react';
 import { 
   Student, 
@@ -34,6 +35,7 @@ import {
   EcoConfig 
 } from '../../types';
 import { EcoCertificateModal } from './EcoCertificateModal';
+import StudentIdCardActivityScannerModal from '../common/StudentIdCardActivityScannerModal';
 import { downloadExcel } from '../../utils/excelExport';
 import { printTablePDF } from '../../utils/printHelper';
 import { getEffectiveSchoolLogo, getEffectiveRegionalLogo } from '../../utils/schoolLogoHelper';
@@ -108,6 +110,7 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
 
   // Manual Add Deposit Modal
   const [isAddingDeposit, setIsAddingDeposit] = useState(false);
+  const [isCardScannerOpen, setIsCardScannerOpen] = useState(false);
   const [depositForm, setDepositForm] = useState({
     studentId: '',
     categoryId: categories[0]?.id || '',
@@ -193,17 +196,26 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
   // Map of verified student points
   const studentPointsMap = useMemo(() => {
     const map = new Map<string, number>();
+    const nisnToIdMap = new Map<string, string>();
+    students.forEach(s => {
+      if (s.nisn) nisnToIdMap.set(s.nisn, s.id);
+    });
     deposits.forEach(d => {
       if (d.status === 'Diverifikasi') {
-        map.set(d.studentId, (map.get(d.studentId) || 0) + (d.pointsEarned || 0));
+        const canonicalId = nisnToIdMap.get(d.studentId) || d.studentId;
+        map.set(canonicalId, (map.get(canonicalId) || 0) + (d.pointsEarned || 0));
+        if (d.studentId !== canonicalId) {
+          map.set(d.studentId, (map.get(d.studentId) || 0) + (d.pointsEarned || 0));
+        }
       }
     });
     return map;
-  }, [deposits]);
+  }, [deposits, students]);
 
   // Leaderboard Calculation
   const leaderboard = useMemo(() => {
     const pointsMap = new Map<string, { totalPoints: number; count: number; name: string; classId: string; nisn?: string }>();
+    const nisnToIdMap = new Map<string, string>();
 
     students.forEach(s => {
       pointsMap.set(s.id, {
@@ -213,11 +225,13 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
         classId: s.classId || '-',
         nisn: s.nisn
       });
+      if (s.nisn) nisnToIdMap.set(s.nisn, s.id);
     });
 
     deposits.forEach(d => {
       if (d.status === 'Diverifikasi') {
-        const existing = pointsMap.get(d.studentId) || {
+        const canonicalId = nisnToIdMap.get(d.studentId) || d.studentId;
+        const existing = pointsMap.get(canonicalId) || {
           totalPoints: 0,
           count: 0,
           name: d.studentName,
@@ -227,7 +241,7 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
         existing.totalPoints += (d.pointsEarned || 0);
         existing.count += 1;
         if (!existing.name && d.studentName) existing.name = d.studentName;
-        pointsMap.set(d.studentId, existing);
+        pointsMap.set(canonicalId, existing);
       }
     });
 
@@ -689,6 +703,17 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
                 <option value="Diverifikasi">Diverifikasi ({verifiedDeposits.length})</option>
                 <option value="Ditolak">Ditolak</option>
               </select>
+
+              {/* Action Button: Scan Kartu Pelajar Siswa */}
+              <button
+                type="button"
+                onClick={() => setIsCardScannerOpen(true)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                title="Scan QR NISN Kartu Pelajar untuk Setor Sampah"
+              >
+                <Scan className="w-3.5 h-3.5" />
+                <span>Scan Kartu Siswa</span>
+              </button>
 
               {/* Action Button: Setor Sampah Siswa */}
               <button
@@ -1851,6 +1876,21 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
           }}
         />
       )}
+
+      {/* SCANNER KARTU PELAJAR UNTUK SETOR SAMPAH */}
+      <StudentIdCardActivityScannerModal
+        isOpen={isCardScannerOpen}
+        onClose={() => setIsCardScannerOpen(false)}
+        students={students}
+        classes={classes}
+        permits={[]}
+        onAddPermit={() => {}}
+        onReturnPermit={() => {}}
+        ecoCategories={categories}
+        onAddEcoDeposit={onAddDeposit}
+        operatorName="Petugas Bank Sampah"
+        initialMode="eco"
+      />
     </div>
   );
 };

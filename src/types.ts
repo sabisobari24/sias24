@@ -640,3 +640,31 @@ export interface EcoConfig {
   isFeatureActive: boolean;
   notes?: string;
 }
+
+// ==========================================
+// Student Activity & Movement Tracking (Izin Keluar Kelas, Toilet, Pulang Cepat)
+// ==========================================
+export type StudentPermitType = 'toilet' | 'keluar_kelas' | 'pulang_cepat' | 'uks' | 'perpustakaan' | 'lainnya';
+
+export interface StudentPermitLog {
+  id: string;
+  studentId: string;
+  studentName: string;
+  nisn: string;
+  classId: string;
+  type: StudentPermitType;
+  destination: string; // e.g. "Toilet Lantai 1", "Toilet Lantai 2", "Toilet Lantai 3", "UKS", "Perpustakaan", "Gerbang Depan"
+  reason: string; // e.g. "Buang air kecil", "Sakit kepala", "Urusan OSIS", "Dipanggil Guru BK"
+  date: string; // YYYY-MM-DD
+  timeOut: string; // HH:mm:ss WIB
+  timeIn?: string; // HH:mm:ss WIB (null if still out)
+  durationMinutes?: number; // Calculated elapsed time in minutes
+  status: 'keluar' | 'kembali' | 'izin_pulang';
+  approvedBy: string; // Guru Piket / Admin name
+  notes?: string;
+  isFlaggedSuspicious?: boolean; // Peringatan jika melebihi batas waktu wajar (misal: toilet > 12 menit)
+  flaggedReason?: string;
+  timestamp?: number;
+  createdAt?: string;
+}
+
