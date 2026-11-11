@@ -1,6 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teacher, TeachingJournal, ExamSchedule, CounselorNote, QuestionBank, StudentExamSubmission, ExamGrade, ELearningMaterial, StudentLearningProgress } from '../types';
-import { Calendar, UserCheck, AlertTriangle, Search, Check, Save, Sparkles, Send, Info, Download, FileSpreadsheet, Plus, Trash, GraduationCap, Edit, FileText, Award, Trash2, Clock, Database, Shield, Key, Lock, Users, RefreshCw, BookOpen } from 'lucide-react';
+import { 
+  Student, 
+  Attendance, 
+  SchoolClass, 
+  ViolationType, 
+  StudentViolation, 
+  Teacher, 
+  TeachingJournal, 
+  ExamSchedule, 
+  CounselorNote, 
+  QuestionBank, 
+  StudentExamSubmission, 
+  ExamGrade, 
+  ELearningMaterial, 
+  StudentLearningProgress,
+  StudentPermitLog,
+  EcoWasteCategory,
+  EcoWasteDeposit,
+  EcoReward,
+  EcoRedemption,
+  EcoConfig
+} from '../types';
+import { Calendar, UserCheck, AlertTriangle, Search, Check, Save, Sparkles, Send, Info, Download, FileSpreadsheet, Plus, Trash, GraduationCap, Edit, FileText, Award, Trash2, Clock, Database, Shield, Key, Lock, Users, RefreshCw, BookOpen, DoorOpen, Leaf } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
 import { printHTML } from '../utils/printHelper';
@@ -12,6 +33,8 @@ import { CbtScoreExporter } from './CbtScoreExporter';
 import { syncCollection } from '../lib/firebase';
 import ELearningPanel from './ELearningPanel';
 import { useDownload } from '../context/DownloadContext';
+import StudentPermitMonitoringPanel from './common/StudentPermitMonitoringPanel';
+import { AdminEcoTiketPanel } from './eco/AdminEcoTiketPanel';
 
 interface GuruPanelProps {
   teacher: Teacher;
@@ -36,8 +59,8 @@ interface GuruPanelProps {
   counselorNotes?: CounselorNote[];
   onAddCounselorNote?: (note: Omit<CounselorNote, 'id'>) => void;
   headmasterName: string;
-  activeTabOverride?: 'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal' | null;
-  onTabChange?: (tab: 'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal') => void;
+  activeTabOverride?: 'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal' | 'izin-siswa' | 'eco-tiket' | null;
+  onTabChange?: (tab: 'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal' | 'izin-siswa' | 'eco-tiket') => void;
   cbtBypassPin?: string;
   onUpdateCbtBypassPin?: (pin: string) => void;
   elearningMaterials?: ELearningMaterial[];
@@ -45,6 +68,29 @@ interface GuruPanelProps {
   onAddMaterial?: (m: Omit<ELearningMaterial, 'id'>) => void;
   onDeleteMaterial?: (id: string) => void;
   onUpdateProgress?: (p: StudentLearningProgress) => void;
+
+  // Student Permits (Toilet, Keluar Kelas, Pulang Cepat) & ECo-Tiket
+  permits?: StudentPermitLog[];
+  onAddPermit?: (p: Omit<StudentPermitLog, 'id'>) => Promise<void> | void;
+  onReturnPermit?: (permitId: string, timeIn?: string, notes?: string) => Promise<void> | void;
+  onDeletePermit?: (permitId: string) => Promise<void> | void;
+  ecoCategories?: EcoWasteCategory[];
+  ecoDeposits?: EcoWasteDeposit[];
+  ecoRewards?: EcoReward[];
+  ecoRedemptions?: EcoRedemption[];
+  ecoConfig?: EcoConfig;
+  onAddEcoDeposit?: (deposit: Omit<EcoWasteDeposit, 'id'>) => Promise<void> | void;
+  onUpdateEcoDepositStatus?: (id: string, status: 'Diverifikasi' | 'Menunggu' | 'Ditolak', approvedBy?: string) => Promise<void> | void;
+  onDeleteEcoDeposit?: (id: string) => Promise<void> | void;
+  onAddEcoCategory?: (cat: Omit<EcoWasteCategory, 'id'>) => Promise<void> | void;
+  onUpdateEcoCategory?: (cat: EcoWasteCategory) => Promise<void> | void;
+  onDeleteEcoCategory?: (id: string) => Promise<void> | void;
+  onAddEcoReward?: (reward: Omit<EcoReward, 'id'>) => Promise<void> | void;
+  onUpdateEcoReward?: (reward: EcoReward) => Promise<void> | void;
+  onDeleteEcoReward?: (id: string) => Promise<void> | void;
+  onUpdateEcoRedemptionStatus?: (id: string, status: 'Selesai' | 'Menunggu' | 'Ditolak', notes?: string) => Promise<void> | void;
+  onUpdateEcoConfig?: (config: EcoConfig) => Promise<void> | void;
+  schoolName?: string;
 }
 
 export default function GuruPanel({
@@ -79,10 +125,31 @@ export default function GuruPanel({
   onAddMaterial,
   onDeleteMaterial,
   onUpdateProgress,
+  permits = [],
+  onAddPermit,
+  onReturnPermit,
+  onDeletePermit,
+  ecoCategories = [],
+  ecoDeposits = [],
+  ecoRewards = [],
+  ecoRedemptions = [],
+  ecoConfig,
+  onAddEcoDeposit,
+  onUpdateEcoDepositStatus,
+  onDeleteEcoDeposit,
+  onAddEcoCategory,
+  onUpdateEcoCategory,
+  onDeleteEcoCategory,
+  onAddEcoReward,
+  onUpdateEcoReward,
+  onDeleteEcoReward,
+  onUpdateEcoRedemptionStatus,
+  onUpdateEcoConfig,
+  schoolName,
 }: GuruPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal'>('presensi');
+  const [internalActiveTab, setInternalActiveTab] = useState<'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal' | 'izin-siswa' | 'eco-tiket'>('presensi');
   const activeTab = activeTabOverride ? activeTabOverride : internalActiveTab;
-  const setActiveTab = (tab: 'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal') => {
+  const setActiveTab = (tab: 'presensi' | 'elearning' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal' | 'izin-siswa' | 'eco-tiket') => {
     setInternalActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
@@ -1010,7 +1077,45 @@ export default function GuruPanel({
             <h1 className="text-2xl font-bold">{teacher.name}</h1>
             <p className="text-teal-100 text-sm">NIP: {teacher.nip}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('izin-siswa')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                activeTab === 'izin-siswa'
+                  ? 'bg-amber-400 text-slate-950 ring-2 ring-white font-black'
+                  : 'bg-teal-950/40 hover:bg-teal-950/60 text-white border border-teal-400/30'
+              }`}
+              title="Buku Kendali Izin Siswa, Toilet & Pulang Cepat"
+            >
+              <DoorOpen className="w-3.5 h-3.5 text-amber-300" />
+              <span>Izin Siswa & Toilet</span>
+              {permits.filter(p => p.status === 'keluar').length > 0 && (
+                <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
+                  {permits.filter(p => p.status === 'keluar').length} Di Luar
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('eco-tiket')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                activeTab === 'eco-tiket'
+                  ? 'bg-emerald-300 text-slate-950 ring-2 ring-white font-black'
+                  : 'bg-teal-950/40 hover:bg-teal-950/60 text-white border border-teal-400/30'
+              }`}
+              title="Kelola ECo-Tiket & Bank Sampah Digital"
+            >
+              <Leaf className="w-3.5 h-3.5 text-emerald-300" />
+              <span>ECo-Tiket & Sampah</span>
+              {ecoDeposits.filter(d => d.status === 'Menunggu').length > 0 && (
+                <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
+                  {ecoDeposits.filter(d => d.status === 'Menunggu').length}
+                </span>
+              )}
+            </button>
+
             {downloadButtons.map((btn, idx) => (
               <button
                 key={idx}
@@ -2354,6 +2459,56 @@ export default function GuruPanel({
             onDeleteMaterial={onDeleteMaterial}
             onUpdateProgress={onUpdateProgress}
             headmasterName={headmasterName}
+          />
+        )}
+
+        {/* IZIN SISWA & TOILET TAB */}
+        {activeTab === 'izin-siswa' && (
+          <StudentPermitMonitoringPanel
+            permits={permits}
+            students={students}
+            classes={classes}
+            currentOfficer={teacher.name}
+            headmasterName={headmasterName}
+            onAddPermit={onAddPermit || (() => {})}
+            onReturnPermit={onReturnPermit || (() => {})}
+            onDeletePermit={onDeletePermit || (() => {})}
+            onAddViolation={onAddViolation}
+            violationTypes={violationTypes}
+            ecoCategories={ecoCategories}
+            onAddEcoDeposit={onAddEcoDeposit}
+          />
+        )}
+
+        {/* ECO-TIKET & BANK SAMPAH TAB */}
+        {activeTab === 'eco-tiket' && (
+          <AdminEcoTiketPanel
+            students={students}
+            classes={classes}
+            categories={ecoCategories}
+            deposits={ecoDeposits}
+            rewards={ecoRewards}
+            redemptions={ecoRedemptions}
+            config={ecoConfig || {
+              id: 'eco-config-default',
+              ecoPointsPerViolationPoint: 5,
+              ambassadorMinPoints: 100,
+              isFeatureActive: true,
+              schoolTitle: schoolName || 'SMP NEGERI 50 JAKARTA'
+            }}
+            headmasterName={headmasterName}
+            schoolName={schoolName || 'SMP NEGERI 50 JAKARTA'}
+            onAddDeposit={onAddEcoDeposit}
+            onUpdateDepositStatus={onUpdateEcoDepositStatus}
+            onDeleteDeposit={onDeleteEcoDeposit}
+            onAddCategory={onAddEcoCategory}
+            onUpdateCategory={onUpdateEcoCategory}
+            onDeleteCategory={onDeleteEcoCategory}
+            onAddReward={onAddEcoReward}
+            onUpdateReward={onUpdateEcoReward}
+            onDeleteReward={onDeleteEcoReward}
+            onUpdateRedemptionStatus={onUpdateEcoRedemptionStatus}
+            onUpdateConfig={onUpdateEcoConfig}
           />
         )}
       </div>

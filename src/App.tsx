@@ -762,11 +762,11 @@ export default function App({ initialMode }: AppProps = {}) {
 
   const [siswaTab, setSiswaTab] = useState<'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | 'elearning' | 'eco-tiket'>('profil');
   const [orangTuaTab, setOrangTuaTab] = useState<'profil' | 'absensi' | 'pelanggaran' | 'catatan' | 'komunikasi'>('profil');
-  const [guruTab, setGuruTab] = useState<'presensi' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal' | 'elearning'>('presensi');
+  const [guruTab, setGuruTab] = useState<'presensi' | 'pelanggaran' | 'riwayat' | 'verifikasi-mandiri' | 'jurnal-harian' | 'jadwal-ujian' | 'guru-wali-view' | 'bank-soal' | 'elearning' | 'izin-siswa' | 'eco-tiket'>('presensi');
   const [waliKelasTab, setWaliKelasTab] = useState<'beranda' | 'catatan' | 'ekskul' | 'prestasi' | 'pesan'>('beranda');
   const [bkTab, setBkTab] = useState<'beranda' | 'bimbingan' | 'jurnal' | 'jadwal' | 'pesan' | 'prestasi'>('beranda');
   const [guruWaliTab, setGuruWaliTab] = useState<'beranda' | 'bimbingan' | 'bimbingan-bk' | 'bakat-minat' | 'pesan'>('beranda');
-  const [piketTab, setPiketTab] = useState<'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa'>('pintu-depan');
+  const [piketTab, setPiketTab] = useState<'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa' | 'eco-tiket'>('pintu-depan');
   const [tendikTab, setTendikTab] = useState<'ringkasan' | 'pemberkasan' | 'kjp' | 'nomor-surat' | 'inventaris' | 'peminjaman-barang' | 'bos-bop'>('ringkasan');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
@@ -4331,6 +4331,8 @@ export default function App({ initialMode }: AppProps = {}) {
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
                         { id: 'presensi', label: 'Presensi Kelas', icon: UserCheck },
+                        { id: 'izin-siswa', label: 'Izin Siswa & Toilet', icon: DoorOpen, badgeCount: studentPermits.filter(p => p.status === 'keluar').length },
+                        { id: 'eco-tiket', label: 'ECo-Tiket & Sampah', icon: Leaf },
                         { id: 'elearning', label: 'E-Learning', icon: BookOpen },
                         { id: 'pelanggaran', label: 'Pelanggaran', icon: AlertTriangle },
                         { id: 'riwayat', label: 'Riwayat Siswa', icon: Search },
@@ -4343,14 +4345,21 @@ export default function App({ initialMode }: AppProps = {}) {
                         <button
                           key={tab.id}
                           onClick={() => setGuruTab(tab.id as any)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
                             guruTab === tab.id
                               ? 'bg-teal-600 text-white border-teal-600 shadow-md shadow-teal-100'
                               : 'bg-transparent text-slate-600 border-transparent hover:bg-slate-50 hover:text-slate-900 cursor-pointer'
                           }`}
                         >
-                          <tab.icon className="w-4 h-4 shrink-0" />
-                          <span className="truncate">{tab.label}</span>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <tab.icon className="w-4 h-4 shrink-0" />
+                            <span className="truncate">{tab.label}</span>
+                          </div>
+                          {tab.badgeCount !== undefined && tab.badgeCount > 0 && (
+                            <span className="bg-amber-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0 animate-pulse">
+                              {tab.badgeCount}
+                            </span>
+                          )}
                         </button>
                       ))}
                     </div>
@@ -4419,6 +4428,7 @@ export default function App({ initialMode }: AppProps = {}) {
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       {[
                         { id: 'izin-siswa', label: 'Izin Siswa & Toilet', icon: DoorOpen, badgeCount: studentPermits.filter(p => p.status === 'keluar').length },
+                        { id: 'eco-tiket', label: 'ECo-Tiket & Sampah', icon: Leaf, badgeCount: ecoDeposits.filter(d => d.status === 'Menunggu').length },
                         { id: 'pintu-depan', label: 'Gerbang Sekolah', icon: School },
                         { id: 'absensi-piket', label: 'Presensi Siswa', icon: Calendar },
                         { id: 'guru-absen', label: 'Pendidik Izin', icon: Users },
@@ -4629,6 +4639,8 @@ export default function App({ initialMode }: AppProps = {}) {
                         'Panel Kontrol Administrator'
                       )}
                       {activeRole === 'guru' && (
+                        guruTab === 'izin-siswa' ? 'Izin Siswa & Toilet' :
+                        guruTab === 'eco-tiket' ? 'ECo-Tiket & Bank Sampah' :
                         guruTab === 'presensi' ? 'Presensi Kelas Siswa' :
                         guruTab === 'elearning' ? 'E-Learning & Bahan Ajar' :
                         guruTab === 'pelanggaran' ? 'Catatan Pelanggaran Siswa' :
@@ -4658,6 +4670,7 @@ export default function App({ initialMode }: AppProps = {}) {
                       )}
                       {activeRole === 'piket' && (
                         piketTab === 'izin-siswa' ? 'Izin Siswa & Toilet' :
+                        piketTab === 'eco-tiket' ? 'ECo-Tiket & Bank Sampah' :
                         piketTab === 'pintu-depan' ? 'Piket Gerbang Sekolah' :
                         piketTab === 'absensi-piket' ? 'Presensi Siswa Piket' :
                         piketTab === 'guru-absen' ? 'Pendidik Izin & Pengganti' :
@@ -4684,7 +4697,15 @@ export default function App({ initialMode }: AppProps = {}) {
                           adminTabOverride === 'guru' ? 'Master Data Tenaga Pendidik & Akses SIAS' :
                           adminTabOverride === 'siswa' ? 'Master Data Siswa & Distribusi Kelas' :
                           'Basis data sinkron terpadu'
-                        ) : activeRole === 'piket' && piketTab === 'izin-siswa' ? 'Pusat Monitoring Izin Keluar, Toilet & Track Record Siswa' :
+                        ) : activeRole === 'guru' ? (
+                          guruTab === 'izin-siswa' ? 'Pusat Monitoring Izin Keluar, Toilet & Track Record Siswa di Kelas' :
+                          guruTab === 'eco-tiket' ? 'Pusat Setor Sampah, Tabungan & Poin Lingkungan Siswa' :
+                          'Portal administrasi guru mata pelajaran terpadu'
+                        ) : activeRole === 'piket' ? (
+                          piketTab === 'izin-siswa' ? 'Pusat Monitoring Izin Keluar, Toilet & Track Record Siswa' :
+                          piketTab === 'eco-tiket' ? 'Pusat Setor Sampah, Tabungan & Poin Lingkungan Sekolah' :
+                          'Basis data piket harian sekolah terpadu'
+                        ) :
                         'Basis data sinkron terpadu'
                       }
                     </p>
@@ -5099,6 +5120,27 @@ export default function App({ initialMode }: AppProps = {}) {
                             onAddMaterial={handleAddELearningMaterial}
                             onDeleteMaterial={handleDeleteELearningMaterial}
                             onUpdateProgress={handleUpdateELearningProgress}
+                            permits={studentPermits}
+                            onAddPermit={handleAddStudentPermit}
+                            onReturnPermit={handleReturnStudentPermit}
+                            onDeletePermit={handleDeleteStudentPermit}
+                            ecoCategories={ecoCategories}
+                            ecoDeposits={ecoDeposits}
+                            ecoRewards={ecoRewards}
+                            ecoRedemptions={ecoRedemptions}
+                            ecoConfig={ecoConfig}
+                            onAddEcoDeposit={handleAddEcoDeposit}
+                            onUpdateEcoDepositStatus={handleUpdateEcoDepositStatus}
+                            onDeleteEcoDeposit={handleDeleteEcoDeposit}
+                            onAddEcoCategory={handleAddEcoCategory}
+                            onUpdateEcoCategory={handleUpdateEcoCategory}
+                            onDeleteEcoCategory={handleDeleteEcoCategory}
+                            onAddEcoReward={handleAddEcoReward}
+                            onUpdateEcoReward={handleUpdateEcoReward}
+                            onDeleteEcoReward={handleDeleteEcoReward}
+                            onUpdateEcoRedemptionStatus={handleUpdateEcoRedemptionStatus}
+                            onUpdateEcoConfig={handleUpdateEcoConfig}
+                            schoolName={localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA'}
                           />
                         )}
 
@@ -5197,7 +5239,22 @@ export default function App({ initialMode }: AppProps = {}) {
                             onReturnPermit={handleReturnStudentPermit}
                             onDeletePermit={handleDeleteStudentPermit}
                             ecoCategories={ecoCategories}
+                            ecoDeposits={ecoDeposits}
+                            ecoRewards={ecoRewards}
+                            ecoRedemptions={ecoRedemptions}
+                            ecoConfig={ecoConfig}
                             onAddEcoDeposit={handleAddEcoDeposit}
+                            onUpdateEcoDepositStatus={handleUpdateEcoDepositStatus}
+                            onDeleteEcoDeposit={handleDeleteEcoDeposit}
+                            onAddEcoCategory={handleAddEcoCategory}
+                            onUpdateEcoCategory={handleUpdateEcoCategory}
+                            onDeleteEcoCategory={handleDeleteEcoCategory}
+                            onAddEcoReward={handleAddEcoReward}
+                            onUpdateEcoReward={handleUpdateEcoReward}
+                            onDeleteEcoReward={handleDeleteEcoReward}
+                            onUpdateEcoRedemptionStatus={handleUpdateEcoRedemptionStatus}
+                            onUpdateEcoConfig={handleUpdateEcoConfig}
+                            schoolName={localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA'}
                           />
                         )}
 
@@ -5459,6 +5516,8 @@ export default function App({ initialMode }: AppProps = {}) {
           ] :
           activeRole === 'guru' ? [
             { id: 'presensi', label: 'Presensi Kelas', icon: UserCheck },
+            { id: 'izin-siswa', label: 'Izin Siswa', icon: DoorOpen },
+            { id: 'eco-tiket', label: 'ECo-Tiket', icon: Leaf },
             { id: 'pelanggaran', label: 'Input Pelanggaran', icon: AlertTriangle },
             { id: 'riwayat', label: 'Riwayat Laporan', icon: Search },
             { id: 'verifikasi-mandiri', label: 'Verifikasi Absensi', icon: Check },
@@ -5481,6 +5540,7 @@ export default function App({ initialMode }: AppProps = {}) {
           ] :
           activeRole === 'piket' ? [
             { id: 'izin-siswa', label: 'Izin Siswa & Toilet', icon: DoorOpen },
+            { id: 'eco-tiket', label: 'ECo-Tiket', icon: Leaf },
             { id: 'pintu-depan', label: 'Pintu Depan', icon: School },
             { id: 'absensi-piket', label: 'Absensi Siswa', icon: Calendar },
             { id: 'guru-absen', label: 'Guru Piket/Izin', icon: Users },

@@ -11,7 +11,10 @@ import {
   StudentPermitLog,
   StudentPermitType,
   EcoWasteCategory,
-  EcoWasteDeposit
+  EcoWasteDeposit,
+  EcoReward,
+  EcoRedemption,
+  EcoConfig
 } from '../types';
 import {
   Clock,
@@ -29,7 +32,8 @@ import {
   FileSpreadsheet,
   Download,
   Zap,
-  DoorOpen
+  DoorOpen,
+  Leaf
 } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF, printHTML } from '../utils/printHelper';
@@ -39,6 +43,7 @@ import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import ExportDateFilterModal from './ExportDateFilterModal';
 import AttendanceQrScannerModal from './common/AttendanceQrScannerModal';
 import StudentPermitMonitoringPanel from './common/StudentPermitMonitoringPanel';
+import { AdminEcoTiketPanel } from './eco/AdminEcoTiketPanel';
 
 interface PiketPanelProps {
   teacher: Teacher;
@@ -60,8 +65,8 @@ interface PiketPanelProps {
   onAddImportantEvent: (e: Omit<ImportantEvent, 'id'>) => void;
   onDeleteImportantEvent: (id: string) => void;
   headmasterName: string;
-  activeTabOverride?: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa' | null;
-  onTabChange?: (tab: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa') => void;
+  activeTabOverride?: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa' | 'eco-tiket' | null;
+  onTabChange?: (tab: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa' | 'eco-tiket') => void;
 
   // Student Permits (Toilet, Keluar Kelas, Pulang Cepat) & ECo-Tiket
   permits?: StudentPermitLog[];
@@ -69,7 +74,22 @@ interface PiketPanelProps {
   onReturnPermit?: (permitId: string, timeIn?: string, notes?: string) => Promise<void> | void;
   onDeletePermit?: (permitId: string) => Promise<void> | void;
   ecoCategories?: EcoWasteCategory[];
+  ecoDeposits?: EcoWasteDeposit[];
+  ecoRewards?: EcoReward[];
+  ecoRedemptions?: EcoRedemption[];
+  ecoConfig?: EcoConfig;
   onAddEcoDeposit?: (d: Omit<EcoWasteDeposit, 'id'>) => Promise<void> | void;
+  onUpdateEcoDepositStatus?: (id: string, status: 'Diverifikasi' | 'Menunggu' | 'Ditolak', approvedBy?: string) => Promise<void> | void;
+  onDeleteEcoDeposit?: (id: string) => Promise<void> | void;
+  onAddEcoCategory?: (cat: Omit<EcoWasteCategory, 'id'>) => Promise<void> | void;
+  onUpdateEcoCategory?: (cat: EcoWasteCategory) => Promise<void> | void;
+  onDeleteEcoCategory?: (id: string) => Promise<void> | void;
+  onAddEcoReward?: (reward: Omit<EcoReward, 'id'>) => Promise<void> | void;
+  onUpdateEcoReward?: (reward: EcoReward) => Promise<void> | void;
+  onDeleteEcoReward?: (id: string) => Promise<void> | void;
+  onUpdateEcoRedemptionStatus?: (id: string, status: 'Selesai' | 'Menunggu' | 'Ditolak', notes?: string) => Promise<void> | void;
+  onUpdateEcoConfig?: (config: EcoConfig) => Promise<void> | void;
+  schoolName?: string;
 }
 
 export default function PiketPanel({
@@ -97,13 +117,28 @@ export default function PiketPanel({
   onReturnPermit,
   onDeletePermit,
   ecoCategories = [],
+  ecoDeposits = [],
+  ecoRewards = [],
+  ecoRedemptions = [],
+  ecoConfig,
   onAddEcoDeposit,
+  onUpdateEcoDepositStatus,
+  onDeleteEcoDeposit,
+  onAddEcoCategory,
+  onUpdateEcoCategory,
+  onDeleteEcoCategory,
+  onAddEcoReward,
+  onUpdateEcoReward,
+  onDeleteEcoReward,
+  onUpdateEcoRedemptionStatus,
+  onUpdateEcoConfig,
+  schoolName,
 }: PiketPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa'>('pintu-depan');
+  const [internalActiveTab, setInternalActiveTab] = useState<'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa' | 'eco-tiket'>('pintu-depan');
   const [verifyDateFilter, setVerifyDateFilter] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [previewPhotoRecord, setPreviewPhotoRecord] = useState<Attendance | null>(null);
   const activeTab = activeTabOverride ? activeTabOverride : internalActiveTab;
-  const setActiveTab = (tab: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa') => {
+  const setActiveTab = (tab: 'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa' | 'eco-tiket') => {
     setInternalActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
@@ -634,6 +669,25 @@ export default function PiketPanel({
 
           <button
             type="button"
+            onClick={() => setActiveTab('eco-tiket')}
+            className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer ${
+              activeTab === 'eco-tiket'
+                ? 'bg-emerald-300 text-slate-950 ring-2 ring-white'
+                : 'bg-emerald-950/40 hover:bg-emerald-950/60 text-white border border-emerald-400/40'
+            }`}
+            title="Kelola ECo-Tiket & Bank Sampah Digital"
+          >
+            <Leaf className="w-4 h-4 text-emerald-300" />
+            <span>ECo-Tiket & Sampah</span>
+            {ecoDeposits.filter(d => d.status === 'Menunggu').length > 0 && (
+              <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full ml-1 animate-pulse">
+                {ecoDeposits.filter(d => d.status === 'Menunggu').length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
             onClick={() => setIsScannerModalOpen(true)}
             className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer"
             title="Buka Pos Scanner QR / Barcode Absensi Siswa"
@@ -754,6 +808,38 @@ export default function PiketPanel({
             violationTypes={violationTypes}
             ecoCategories={ecoCategories}
             onAddEcoDeposit={onAddEcoDeposit}
+          />
+        )}
+
+        {/* Tab ECo-Tiket & Sampah */}
+        {activeTab === 'eco-tiket' && (
+          <AdminEcoTiketPanel
+            students={students}
+            classes={classes}
+            categories={ecoCategories}
+            deposits={ecoDeposits}
+            rewards={ecoRewards}
+            redemptions={ecoRedemptions}
+            config={ecoConfig || {
+              id: 'eco-config-default',
+              ecoPointsPerViolationPoint: 5,
+              ambassadorMinPoints: 100,
+              isFeatureActive: true,
+              schoolTitle: schoolName || 'SMP NEGERI 50 JAKARTA'
+            }}
+            headmasterName={headmasterName}
+            schoolName={schoolName || 'SMP NEGERI 50 JAKARTA'}
+            onAddDeposit={onAddEcoDeposit}
+            onUpdateDepositStatus={onUpdateEcoDepositStatus}
+            onDeleteDeposit={onDeleteEcoDeposit}
+            onAddCategory={onAddEcoCategory}
+            onUpdateCategory={onUpdateEcoCategory}
+            onDeleteCategory={onDeleteEcoCategory}
+            onAddReward={onAddEcoReward}
+            onUpdateReward={onUpdateEcoReward}
+            onDeleteReward={onDeleteEcoReward}
+            onUpdateRedemptionStatus={onUpdateEcoRedemptionStatus}
+            onUpdateConfig={onUpdateEcoConfig}
           />
         )}
 
