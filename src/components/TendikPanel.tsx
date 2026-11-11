@@ -713,24 +713,24 @@ export default function TendikPanel({
   return (
     <div className="space-y-6 relative">
       {/* HEADER BANNER */}
-      <div className="bg-gradient-to-r from-teal-800 via-cyan-800 to-teal-900 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="space-y-1">
+      <div className="bg-gradient-to-r from-teal-800 via-cyan-800 to-teal-900 rounded-3xl p-5 sm:p-6 text-white shadow-lg flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+        <div className="space-y-1 min-w-0 flex-1 max-w-2xl">
           <div className="flex items-center gap-2">
             <span className="bg-teal-500/30 text-teal-200 border border-teal-400/40 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
               Dashboard Tenaga Kependidikan (Tendik)
             </span>
           </div>
-          <h1 className="text-xl md:text-2xl font-black flex items-center gap-2.5 text-white">
-            <Building className="w-6 h-6 text-cyan-300" />
+          <h1 className="text-xl sm:text-2xl font-black flex items-center gap-2.5 text-white tracking-tight">
+            <Building className="w-6 h-6 text-cyan-300 shrink-0" />
             <span>Sistem Layanan Administrasi &amp; Sarpras (Tendik)</span>
           </h1>
-          <p className="text-xs text-teal-100 max-w-2xl leading-relaxed">
+          <p className="text-xs sm:text-sm text-teal-100 max-w-2xl leading-relaxed">
             Pengelolaan Pemberkasan Siswa, Pendataan KJP Plus, Agenda Nomor Surat, Inventarisasi Barang, serta Laporan Transparansi BOS &amp; BOP.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-          <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20 text-right">
+        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto justify-start xl:justify-end">
+          <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20 text-left xl:text-right">
             <span className="block text-[10px] uppercase tracking-wider text-teal-200 font-bold">Staf Tendik:</span>
             <span className="font-extrabold text-sm text-white">{teacher.name}</span>
           </div>

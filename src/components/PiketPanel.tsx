@@ -33,7 +33,8 @@ import {
   Download,
   Zap,
   DoorOpen,
-  Leaf
+  Leaf,
+  ChevronDown
 } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF, printHTML } from '../utils/printHelper';
@@ -144,7 +145,6 @@ export default function PiketPanel({
   };
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  const [isDownloadDropdownOpen, setIsDownloadDropdownOpen] = useState(false);
   const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
 
   // Retrieve dynamic logos from Admin Settings (with default fallbacks)
@@ -586,22 +586,27 @@ export default function PiketPanel({
   useEffect(() => {
     setDownloadActions([
       {
-        label: 'Laporan Rekap Harian (PDF)',
+        label: 'Cetak Rekap Harian (PDF Langsung)',
+        onClick: () => setIsPrintModalOpen(true),
+        type: 'pdf',
+      },
+      {
+        label: 'Laporan Rekap Harian (Filter Tanggal PDF)',
         onClick: () => setExportModal({ isOpen: true, type: 'rekap-harian', title: 'Cetak / Unduh Rekap Laporan Harian Piket' }),
         type: 'pdf',
       },
       {
-        label: 'Ekspor Kehadiran (Excel)',
+        label: 'Ekspor Kehadiran Siswa (Excel)',
         onClick: () => setExportModal({ isOpen: true, type: 'kehadiran', title: 'Unduh Rekap Kehadiran Piket' }),
         type: 'excel',
       },
       {
-        label: 'Ekspor Kedisiplinan (Excel)',
+        label: 'Ekspor Kedisiplinan & Pelanggaran (Excel)',
         onClick: () => setExportModal({ isOpen: true, type: 'kedisiplinan', title: 'Unduh Rekap Kedisiplinan Piket' }),
         type: 'excel',
       },
       {
-        label: 'Ekspor Jurnal Harian (Excel)',
+        label: 'Ekspor Jurnal Harian Guru Piket (Excel)',
         onClick: () => setExportModal({ isOpen: true, type: 'jurnal', title: 'Unduh Jurnal Harian Piket' }),
         type: 'excel',
       },
@@ -641,17 +646,23 @@ export default function PiketPanel({
       `}</style>
 
       {/* Piket Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="space-y-1">
-          <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Portal Guru Piket Harian</p>
-          <h1 className="text-2xl font-bold">{teacher.name}</h1>
-          <p className="text-emerald-100 text-sm">Bertugas mengawal ketertiban, presensi harian, ketidakhadiran guru, & log kejadian penting harian.</p>
+      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-teal-700 rounded-3xl p-5 sm:p-6 text-white shadow-md flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+        <div className="space-y-1 min-w-0 flex-1 max-w-xl">
+          <div className="inline-flex items-center gap-2">
+            <span className="bg-emerald-950/40 text-emerald-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-emerald-400/30">
+              Portal Guru Piket Harian
+            </span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight">{teacher.name}</h1>
+          <p className="text-emerald-100 text-xs sm:text-sm">
+            NIP: {teacher.nip || '-'} &bull; Petugas Piket &amp; Presensi Sekolah
+          </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full md:w-auto relative">
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
           <button
             type="button"
             onClick={() => setActiveTab('izin-siswa')}
-            className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer active:scale-95 ${
               activeTab === 'izin-siswa'
                 ? 'bg-amber-400 text-slate-950 ring-2 ring-white'
                 : 'bg-emerald-950/40 hover:bg-emerald-950/60 text-white border border-emerald-400/40'
@@ -659,7 +670,7 @@ export default function PiketPanel({
             title="Buku Kendali Izin Siswa, Toilet & Pulang Cepat"
           >
             <DoorOpen className="w-4 h-4 text-amber-300" />
-            <span>Izin Siswa & Toilet</span>
+            <span>Izin Siswa &amp; Toilet</span>
             {permits.filter(p => p.status === 'keluar').length > 0 && (
               <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full ml-1 animate-pulse">
                 {permits.filter(p => p.status === 'keluar').length} Di Luar
@@ -670,7 +681,7 @@ export default function PiketPanel({
           <button
             type="button"
             onClick={() => setActiveTab('eco-tiket')}
-            className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer active:scale-95 ${
               activeTab === 'eco-tiket'
                 ? 'bg-emerald-300 text-slate-950 ring-2 ring-white'
                 : 'bg-emerald-950/40 hover:bg-emerald-950/60 text-white border border-emerald-400/40'
@@ -678,7 +689,7 @@ export default function PiketPanel({
             title="Kelola ECo-Tiket & Bank Sampah Digital"
           >
             <Leaf className="w-4 h-4 text-emerald-300" />
-            <span>ECo-Tiket & Sampah</span>
+            <span>ECo-Tiket &amp; Sampah</span>
             {ecoDeposits.filter(d => d.status === 'Menunggu').length > 0 && (
               <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full ml-1 animate-pulse">
                 {ecoDeposits.filter(d => d.status === 'Menunggu').length}
@@ -689,86 +700,12 @@ export default function PiketPanel({
           <button
             type="button"
             onClick={() => setIsScannerModalOpen(true)}
-            className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer"
+            className="flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer active:scale-95"
             title="Buka Pos Scanner QR / Barcode Absensi Siswa"
           >
             <Zap className="w-4 h-4 text-slate-950" />
             <span>Pos Scanner QR Absen</span>
           </button>
-
-          <button
-            onClick={() => setIsPrintModalOpen(true)}
-            className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 bg-white text-emerald-700 hover:bg-emerald-50 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-all cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Cetak Rekap Harian (PDF)</span>
-          </button>
-
-          <div className="relative flex-1 md:flex-initial">
-            <button
-              type="button"
-              onClick={() => setIsDownloadDropdownOpen(!isDownloadDropdownOpen)}
-              className="w-full flex items-center justify-center gap-1.5 bg-white text-slate-800 hover:bg-slate-50 border border-slate-200/80 px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <span>Ekspor Rekapitulasi</span>
-            </button>
-            
-            {isDownloadDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setIsDownloadDropdownOpen(false)}></div>
-                <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-20 text-slate-800 text-[11px] font-medium divide-y divide-slate-100">
-                  <div className="px-4 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rekap Laporan Piket</div>
-                  <button
-                    onClick={() => {
-                      setExportModal({ isOpen: true, type: 'rekap-harian', title: 'Cetak / Unduh Rekap Laporan Harian Piket' });
-                      setIsDownloadDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-4 py-2 hover:bg-emerald-50 text-emerald-800 font-bold transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Laporan Rekap Harian Lengkap (PDF)</span>
-                  </button>
-
-                  <div className="px-4 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rekap Kehadiran</div>
-                  <button
-                    onClick={() => {
-                      setExportModal({ isOpen: true, type: 'kehadiran', title: 'Unduh Rekap Kehadiran Piket' });
-                      setIsDownloadDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-4 py-2 hover:bg-slate-50 transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Ekspor Kehadiran (Excel / PDF)</span>
-                  </button>
-
-                  <div className="px-4 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rekap Kedisiplinan</div>
-                  <button
-                    onClick={() => {
-                      setExportModal({ isOpen: true, type: 'kedisiplinan', title: 'Unduh Rekap Kedisiplinan Piket' });
-                      setIsDownloadDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-4 py-2 hover:bg-slate-50 transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Ekspor Kedisiplinan (Excel / PDF)</span>
-                  </button>
-
-                  <div className="px-4 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jurnal Harian Piket</div>
-                  <button
-                    onClick={() => {
-                      setExportModal({ isOpen: true, type: 'jurnal', title: 'Unduh Jurnal Harian Piket' });
-                      setIsDownloadDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-4 py-2 hover:bg-slate-50 transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Ekspor Jurnal Harian (Excel / PDF)</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
         </div>
       </div>
 

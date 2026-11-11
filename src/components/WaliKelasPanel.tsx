@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teacher, HomeroomNote, ParentMessage, StudentAchievement, StudentGrade } from '../types';
-import { GraduationCap, Users, Calendar, AlertTriangle, FileText, CheckCircle, Save, MessageSquare, Send, Check, Award, FileSpreadsheet, Search, Download, Filter } from 'lucide-react';
+import { GraduationCap, Users, Calendar, AlertTriangle, FileText, CheckCircle, Save, MessageSquare, Send, Check, Award, FileSpreadsheet, Search, Download, Filter, ChevronDown } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
 import { syncCollection } from '../lib/firebase';
@@ -410,33 +410,17 @@ export default function WaliKelasPanel({
   return (
     <div className="space-y-6">
       {/* Wali Kelas Header */}
-      <div className="bg-gradient-to-r from-blue-700 to-indigo-800 rounded-2xl p-6 text-white shadow-md">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="space-y-1">
-            <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Portal Wali Kelas</p>
-            <h1 className="text-2xl font-bold">{teacher.name}</h1>
-            <p className="text-blue-100 text-sm">
-              Mengampu Kelas: <span className="font-bold underline">{managedClass?.name || 'Belum Diatur'}</span> &bull; {classStudents.length} Siswa Binaan
-            </p>
+      <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-800 rounded-3xl p-5 sm:p-6 text-white shadow-md">
+        <div className="space-y-1 min-w-0 max-w-3xl">
+          <div className="inline-flex items-center gap-2">
+            <span className="bg-blue-950/40 text-blue-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-blue-400/30">
+              Portal Wali Kelas
+            </span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {getWaliKelasDownloadConfig().map((btn, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={btn.onClick}
-                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
-                title={btn.label}
-              >
-                {btn.type === 'excel' ? (
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                ) : (
-                  <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                )}
-                <span>{btn.label}</span>
-              </button>
-            ))}
-          </div>
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight">{teacher.name}</h1>
+          <p className="text-blue-100 text-xs sm:text-sm">
+            Mengampu Kelas: <span className="font-bold underline">{managedClass?.name || 'Belum Diatur'}</span> &bull; {classStudents.length} Siswa Binaan
+          </p>
         </div>
       </div>
 

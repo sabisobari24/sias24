@@ -4582,10 +4582,10 @@ export default function App({ initialMode }: AppProps = {}) {
             </aside>
 
             {/* Main Content Pane */}
-            <main className="flex-1 min-w-0 flex flex-col h-screen overflow-y-auto">
+            <main className="flex-1 min-w-0 flex flex-col h-screen overflow-y-auto overflow-x-hidden">
               {/* Top Mobile/Header Nav */}
-              <header className="h-20 bg-white border-b border-slate-200 px-4 sm:px-6 md:px-8 2xl:px-12 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-sm">
-                <div className="flex items-center gap-3">
+              <header className="h-16 sm:h-20 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 md:px-8 2xl:px-12 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-xs gap-3">
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                   {/* Desktop Hide/Unhide Toggle Button */}
                   <button
                     onClick={() => setIsSidebarVisible(!isSidebarVisible)}
@@ -4618,12 +4618,10 @@ export default function App({ initialMode }: AppProps = {}) {
                   </button>
 
                   {/* Divider */}
-                  <div className="h-6 w-px bg-slate-200 hidden md:block" />
+                  <div className="h-6 w-px bg-slate-200 hidden md:block shrink-0" />
 
-
-
-                  <div>
-                    <h1 className="text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-none">
+                  <div className="min-w-0 flex-1">
+                    <h1 className="text-sm sm:text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight truncate">
                       {activeRole === 'admin' && (
                         adminTabOverride === 'siswa' ? 'Data Siswa & Rombel' :
                         adminTabOverride === 'guru' ? 'Data Guru & Tenaga Kependidikan' :
@@ -4682,7 +4680,7 @@ export default function App({ initialMode }: AppProps = {}) {
                       {activeRole === 'orang_tua' && 'Portal Wali Orang Tua'}
                       {activeRole === 'guru_wali' && 'Portal Pendampingan Guru Wali'}
                     </h1>
-                    <p className="text-[11px] text-slate-400 mt-1 hidden sm:block">
+                    <p className="text-[11px] text-slate-400 mt-0.5 hidden md:block truncate">
                       SMPN 50 JAKARTA &bull; {
                         activeRole === 'admin' ? (
                           adminTabOverride === 'izin-siswa' ? 'Pusat Monitoring Izin Keluar, Toilet & Track Record Siswa' :
@@ -4712,7 +4710,7 @@ export default function App({ initialMode }: AppProps = {}) {
                   </div>
                 </div>
 
-                 <div className="flex items-center gap-2.5 md:gap-3">
+                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   {/* Dark Mode Quick Toggle */}
                   <button
                     onClick={() => setIsDarkMode(!isDarkMode)}
@@ -4905,13 +4903,13 @@ export default function App({ initialMode }: AppProps = {}) {
                     <button
                       type="button"
                       onClick={() => setIsProfileModalOpen(true)}
-                      className="text-right hidden sm:block hover:text-indigo-600 transition-colors group cursor-pointer"
+                      className="text-right hidden sm:block hover:text-indigo-600 transition-colors group cursor-pointer max-w-[140px] xl:max-w-[200px]"
                       title="Klik untuk Edit Profil & Kata Sandi"
                     >
-                      <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors flex items-center justify-end gap-1">
-                        <span>{activeUser?.name || 'User'}</span>
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center justify-end gap-1 truncate">
+                        <span className="truncate">{activeUser?.name || 'User'}</span>
                       </p>
-                      <p className="text-[10px] text-slate-400 capitalize mt-0.5">{activeRole?.replace('_', ' ')}</p>
+                      <p className="text-[10px] text-slate-400 capitalize mt-0.5 truncate">{activeRole?.replace('_', ' ')}</p>
                     </button>
 
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teacher, CounselorNote, ParentMessage, BimbinganJournal, BimbinganSchedule, StudentAchievement } from '../types';
-import { HeartHandshake, Search, FileText, CheckCircle, Save, Send, MessageSquare, AlertTriangle, ShieldCheck, Download, FileSpreadsheet, Calendar, Trash2, Clock, Users, UserCheck, Award } from 'lucide-react';
+import { HeartHandshake, Search, FileText, CheckCircle, Save, Send, MessageSquare, AlertTriangle, ShieldCheck, Download, FileSpreadsheet, Calendar, Trash2, Clock, Users, UserCheck, Award, ChevronDown } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
 import { useDownload } from '../context/DownloadContext';
@@ -398,30 +398,15 @@ export default function BKPanel({
   return (
     <div className="space-y-6">
       {/* BK Header */}
-      <div className="bg-gradient-to-r from-rose-600 to-pink-700 rounded-2xl p-6 text-white shadow-md">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="space-y-1">
-            <p className="text-rose-100 text-xs font-semibold uppercase tracking-wider">Portal Bimbingan Konseling (BK)</p>
-            <h1 className="text-2xl font-bold">{teacher.name}</h1>
-            <p className="text-rose-100 text-sm">NIP: {teacher.nip} &bull; Spesialis Bimbingan & Disiplin Siswa</p>
+      <div className="bg-gradient-to-r from-rose-600 via-pink-600 to-rose-700 rounded-3xl p-5 sm:p-6 text-white shadow-md">
+        <div className="space-y-1 min-w-0 max-w-3xl">
+          <div className="inline-flex items-center gap-2">
+            <span className="bg-rose-950/40 text-rose-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-rose-400/30">
+              Portal Bimbingan Konseling (BK)
+            </span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {getBKDownloadConfig().map((btn, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={btn.onClick}
-                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
-              >
-                {btn.label.includes('Excel') ? (
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                ) : (
-                  <FileText className="w-3.5 h-3.5 text-rose-600" />
-                )}
-                <span>{btn.label}</span>
-              </button>
-            ))}
-          </div>
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight">{teacher.name}</h1>
+          <p className="text-rose-100 text-xs sm:text-sm">NIP: {teacher.nip} &bull; Spesialis Bimbingan &amp; Disiplin Siswa</p>
         </div>
       </div>
 

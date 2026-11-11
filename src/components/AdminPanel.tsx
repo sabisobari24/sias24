@@ -1811,57 +1811,11 @@ export default function AdminPanel({
     <div className="space-y-6">
       {/* Admin Header: Only shown for standard tabs without their own dedicated banner modules */}
       {!['izin-siswa', 'eco-tiket', 'setting-kartu-pelajar', 'setting-sertifikat', 'kelola-web'].includes(activeTab) && (
-        <div className="bg-gradient-to-r from-purple-700 to-indigo-800 rounded-2xl p-6 text-white shadow-md">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <p className="text-purple-100 text-xs font-semibold uppercase tracking-wider">{getTabBannerInfo().badge}</p>
-              <h1 className="text-2xl font-bold">{getTabBannerInfo().title}</h1>
-              <p className="text-purple-100 text-sm mt-0.5">{getTabBannerInfo().desc}</p>
-            </div>
-            {getAdminDownloadConfig().length > 0 && (
-              <div className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsBannerDownloadOpen(!isBannerDownloadOpen)}
-                  className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/90 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer active:scale-95"
-                >
-                  <Download className="w-4 h-4 text-emerald-600" />
-                  <span>Unduh Data &amp; Laporan</span>
-                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isBannerDownloadOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isBannerDownloadOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setIsBannerDownloadOpen(false)} />
-                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-40 text-slate-800 text-xs font-medium">
-                      <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between">
-                        <span>Pilihan Unduh</span>
-                        <span className="text-indigo-600 capitalize">{activeTab.replace('-', ' ')}</span>
-                      </div>
-                      <div className="py-1 space-y-1">
-                        {getAdminDownloadConfig().map((btn, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              btn.onClick();
-                              setIsBannerDownloadOpen(false);
-                            }}
-                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-700 hover:text-indigo-600"
-                          >
-                            {btn.type === 'excel' ? (
-                              <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
-                            ) : (
-                              <FileText className="w-4 h-4 text-purple-600 shrink-0" />
-                            )}
-                            <span>{btn.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+        <div className="bg-gradient-to-r from-purple-700 via-indigo-700 to-indigo-800 rounded-3xl p-5 sm:p-6 text-white shadow-md">
+          <div className="space-y-1 min-w-0 max-w-3xl">
+            <p className="text-purple-200 text-xs font-semibold uppercase tracking-wider">{getTabBannerInfo().badge}</p>
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight">{getTabBannerInfo().title}</h1>
+            <p className="text-purple-100 text-xs sm:text-sm mt-0.5 leading-relaxed">{getTabBannerInfo().desc}</p>
           </div>
         </div>
       )}

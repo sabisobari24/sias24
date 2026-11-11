@@ -513,12 +513,12 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
       {/* Main Feature Banner */}
       <div className="bg-gradient-to-r from-emerald-800 via-teal-700 to-green-800 rounded-3xl p-6 sm:p-7 text-white shadow-lg relative overflow-hidden">
         <div className="absolute right-0 top-0 translate-x-12 -translate-y-8 w-60 h-60 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
+        <div className="relative z-10 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-5">
+          <div className="space-y-1.5 min-w-0 flex-1 max-w-2xl">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
                 <Leaf className="w-3 h-3 text-emerald-300" />
-                <span>Program Adiwiyata & Bank Sampah</span>
+                <span>Program Adiwiyata &amp; Bank Sampah</span>
               </span>
               {pendingDeposits.length > 0 && (
                 <span className="bg-amber-400 text-amber-950 px-2.5 py-0.5 rounded-full text-[10px] font-black animate-pulse">
@@ -526,17 +526,17 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
                 </span>
               )}
             </div>
-            <h1 className="text-2xl font-black tracking-tight">Manajemen ECo-Tiket & Duta Kebersihan</h1>
-            <p className="text-emerald-100 text-xs sm:text-sm max-w-2xl font-medium">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight">Manajemen ECo-Tiket &amp; Duta Kebersihan</h1>
+            <p className="text-emerald-100 text-xs sm:text-sm max-w-2xl font-medium leading-relaxed">
               Kelola penukaran sampah bernilai poin, penebusan poin pelanggaran, katalog hadiah ramah lingkungan, serta penetapan otomatis Duta Kebersihan sekolah.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
             <button
               type="button"
               onClick={() => setIsAddingDeposit(true)}
-              className="flex items-center gap-1.5 bg-white hover:bg-emerald-50 text-emerald-900 border border-white/60 px-4 py-2.5 rounded-2xl text-xs font-black shadow-md transition-all active:scale-95 cursor-pointer"
+              className="flex items-center justify-center gap-1.5 bg-white hover:bg-emerald-50 text-emerald-900 border border-white/60 px-4 py-2.5 rounded-2xl text-xs font-black shadow-md transition-all active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4 text-emerald-700" />
               <span>+ Setor Sampah Siswa</span>
@@ -544,20 +544,20 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
             <button
               type="button"
               onClick={exportDepositsExcel}
-              className="flex items-center gap-1.5 bg-emerald-900/60 hover:bg-emerald-900 text-white border border-emerald-600/50 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer"
+              className="flex items-center justify-center gap-1.5 bg-emerald-900/60 hover:bg-emerald-900 text-white border border-emerald-600/50 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
               title="Unduh rekap setoran ke Excel"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
-              <span className="hidden sm:inline">Excel</span>
+              <span>Ekspor Excel</span>
             </button>
             <button
               type="button"
               onClick={exportDepositsPDF}
-              className="flex items-center gap-1.5 bg-emerald-900/60 hover:bg-emerald-900 text-white border border-emerald-600/50 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer"
+              className="flex items-center justify-center gap-1.5 bg-emerald-900/60 hover:bg-emerald-900 text-white border border-emerald-600/50 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
               title="Cetak rekap setoran ke PDF"
             >
               <FileText className="w-4 h-4 text-emerald-300" />
-              <span className="hidden sm:inline">PDF</span>
+              <span>Cetak PDF</span>
             </button>
           </div>
         </div>

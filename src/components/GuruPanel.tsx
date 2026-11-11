@@ -21,7 +21,7 @@ import {
   EcoRedemption,
   EcoConfig
 } from '../types';
-import { Calendar, UserCheck, AlertTriangle, Search, Check, Save, Sparkles, Send, Info, Download, FileSpreadsheet, Plus, Trash, GraduationCap, Edit, FileText, Award, Trash2, Clock, Database, Shield, Key, Lock, Users, RefreshCw, BookOpen, DoorOpen, Leaf } from 'lucide-react';
+import { Calendar, UserCheck, AlertTriangle, Search, Check, Save, Sparkles, Send, Info, Download, FileSpreadsheet, Plus, Trash, GraduationCap, Edit, FileText, Award, Trash2, Clock, Database, Shield, Key, Lock, Users, RefreshCw, BookOpen, DoorOpen, Leaf, ChevronDown } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
 import { printHTML } from '../utils/printHelper';
@@ -1070,18 +1070,22 @@ export default function GuruPanel({
   return (
     <div className="space-y-6">
       {/* Teacher Header */}
-      <div className="bg-gradient-to-r from-teal-600 to-cyan-700 rounded-2xl p-6 text-white shadow-md">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <div>
-            <p className="text-teal-100 text-xs font-semibold uppercase tracking-wider">Portal Guru Pengajar</p>
-            <h1 className="text-2xl font-bold">{teacher.name}</h1>
-            <p className="text-teal-100 text-sm">NIP: {teacher.nip}</p>
+      <div className="bg-gradient-to-r from-teal-600 via-cyan-700 to-teal-800 rounded-3xl p-5 sm:p-6 text-white shadow-md">
+        <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+          <div className="space-y-1 min-w-0 flex-1 max-w-xl">
+            <div className="inline-flex items-center gap-2">
+              <span className="bg-teal-950/40 text-teal-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-teal-400/30">
+                Portal Guru Pengajar
+              </span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight">{teacher.name}</h1>
+            <p className="text-teal-100 text-xs sm:text-sm">NIP: {teacher.nip}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
             <button
               type="button"
               onClick={() => setActiveTab('izin-siswa')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+              className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 ${
                 activeTab === 'izin-siswa'
                   ? 'bg-amber-400 text-slate-950 ring-2 ring-white font-black'
                   : 'bg-teal-950/40 hover:bg-teal-950/60 text-white border border-teal-400/30'
@@ -1089,7 +1093,7 @@ export default function GuruPanel({
               title="Buku Kendali Izin Siswa, Toilet & Pulang Cepat"
             >
               <DoorOpen className="w-3.5 h-3.5 text-amber-300" />
-              <span>Izin Siswa & Toilet</span>
+              <span>Izin Siswa &amp; Toilet</span>
               {permits.filter(p => p.status === 'keluar').length > 0 && (
                 <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
                   {permits.filter(p => p.status === 'keluar').length} Di Luar
@@ -1100,7 +1104,7 @@ export default function GuruPanel({
             <button
               type="button"
               onClick={() => setActiveTab('eco-tiket')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+              className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 ${
                 activeTab === 'eco-tiket'
                   ? 'bg-emerald-300 text-slate-950 ring-2 ring-white font-black'
                   : 'bg-teal-950/40 hover:bg-teal-950/60 text-white border border-teal-400/30'
@@ -1108,30 +1112,13 @@ export default function GuruPanel({
               title="Kelola ECo-Tiket & Bank Sampah Digital"
             >
               <Leaf className="w-3.5 h-3.5 text-emerald-300" />
-              <span>ECo-Tiket & Sampah</span>
+              <span>ECo-Tiket &amp; Sampah</span>
               {ecoDeposits.filter(d => d.status === 'Menunggu').length > 0 && (
                 <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
                   {ecoDeposits.filter(d => d.status === 'Menunggu').length}
                 </span>
               )}
             </button>
-
-            {downloadButtons.map((btn, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={btn.onClick}
-                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
-                title={btn.label}
-              >
-                {btn.type === 'excel' ? (
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                ) : (
-                  <FileText className="w-3.5 h-3.5 text-teal-600" />
-                )}
-                <span>{btn.label}</span>
-              </button>
-            ))}
           </div>
         </div>
       </div>

@@ -326,9 +326,9 @@ export default function StudentPermitMonitoringPanel({
   return (
     <div className="space-y-6">
       {/* Top Banner Header */}
-      <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 rounded-3xl p-6 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
+      <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 rounded-3xl p-5 sm:p-6 text-white shadow-lg flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+        <div className="space-y-1 min-w-0 flex-1 max-w-2xl">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="bg-white/20 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
               Buku Kendali &amp; Keamanan Sekolah
             </span>
@@ -338,25 +338,25 @@ export default function StudentPermitMonitoringPanel({
               </span>
             )}
           </div>
-          <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2">
-            <DoorOpen className="w-6 h-6 text-amber-200" />
+          <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2 tracking-tight">
+            <DoorOpen className="w-6 h-6 text-amber-200 shrink-0" />
             <span>Pusat Monitoring Izin Keluar, Toilet &amp; Track Record Siswa</span>
           </h2>
-          <p className="text-xs text-amber-100 max-w-2xl leading-relaxed">
+          <p className="text-xs sm:text-sm text-amber-100 max-w-2xl leading-relaxed">
             Terintegrasi langsung dengan scan QR Kartu Pelajar untuk izin ke toilet, izin keluar kelas, pulang cepat, serta pelacakan jejak insiden kerusakan fasilitas.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto justify-start xl:justify-end">
           <button
             type="button"
             onClick={() => {
               setScannerInitialMode('permit');
               setIsScannerOpen(true);
             }}
-            className="flex-1 md:flex-initial px-4 py-2.5 bg-white hover:bg-amber-50 text-amber-900 rounded-2xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+            className="flex-1 sm:flex-initial px-4 py-2.5 bg-white hover:bg-amber-50 text-amber-900 rounded-2xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95 whitespace-nowrap"
           >
-            <Scan className="w-4 h-4 text-amber-600" />
+            <Scan className="w-4 h-4 text-amber-600 shrink-0" />
             <span>+ Buka Scanner Kartu Pelajar</span>
           </button>
 
@@ -366,11 +366,11 @@ export default function StudentPermitMonitoringPanel({
               setScannerInitialMode('eco');
               setIsScannerOpen(true);
             }}
-            className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+            className="flex-1 sm:flex-initial px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 whitespace-nowrap"
             title="Scan Kartu Pelajar untuk Setor Sampah ECo-Tiket"
           >
-            <Recycle className="w-4 h-4 text-emerald-200" />
-            <span className="hidden sm:inline">Scan Setor ECo-Tiket</span>
+            <Recycle className="w-4 h-4 text-emerald-200 shrink-0" />
+            <span>Scan Setor ECo-Tiket</span>
           </button>
         </div>
       </div>
