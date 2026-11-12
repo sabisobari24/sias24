@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Student, Attendance, StudentViolation, CounselorNote, HomeroomNote, ViolationType, SchoolClass, Teacher, ParentMessage, BimbinganSchedule, StudentAchievement, PemberkasanSchedule } from '../types';
 import { User, Calendar, AlertTriangle, FileText, HeartHandshake, CheckCircle2, MessageSquare, Send, Check, RefreshCw, Clock, Award, Download, Sparkles, FileCheck } from 'lucide-react';
 import { printCertificate, printTablePDF } from '../utils/printHelper';
+import { downloadExcel } from '../utils/excelExport';
+import { downloadDocx } from '../utils/docxExport';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import { useDownload } from '../context/DownloadContext';
 
@@ -81,24 +83,58 @@ export default function OrangTuaPanel({
   };
 
   const getParentDownloadConfig = () => {
+    const attendanceHeaders = ["Tanggal", "Status", "Keterangan"];
+    const attendanceRows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
+
+    const violationHeaders = ["Tanggal", "Pelanggaran", "Poin"];
+    const violationRows = studentViolations.map(v => [
+      v.date,
+      violationTypes.find(vt => vt.id === v.violationTypeId)?.name || 'Pelanggaran',
+      `${v.points} Poin`
+    ]);
+
     return [
       {
-        label: 'Presensi Anak (PDF)',
+        label: 'Presensi (.docx)',
         onClick: () => {
-          const headers = ["Tanggal", "Status", "Keterangan"];
-          const rows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
-          printTablePDF(`Rekap Kehadiran Siswa - ${student.name}`, headers, rows, headmasterName);
+          downloadDocx(`rekap_kehadiran_${student.name.toLowerCase().replace(/\s+/g, '_')}.docx`, `Rekap Kehadiran Siswa - ${student.name}`, attendanceHeaders, attendanceRows, headmasterName);
+        },
+        type: 'docx' as const,
+      },
+      {
+        label: 'Presensi (.pdf)',
+        onClick: () => {
+          printTablePDF(`Rekap Kehadiran Siswa - ${student.name}`, attendanceHeaders, attendanceRows, headmasterName);
         },
         type: 'pdf' as const,
       },
       {
-        label: 'Kedisiplinan (PDF)',
+        label: 'Presensi (.xlsx)',
         onClick: () => {
-          const headers = ["Tanggal", "Pelanggaran", "Poin"];
-          const rows = studentViolations.map(v => [v.date, violationTypes.find(vt => vt.id === v.violationTypeId)?.name || 'Pelanggaran', `${v.points} Poin`]);
-          printTablePDF(`Catatan Kedisiplinan Siswa - ${student.name}`, headers, rows, headmasterName);
+          downloadExcel(`rekap_kehadiran_${student.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`, attendanceHeaders, attendanceRows, 'Kehadiran');
+        },
+        type: 'excel' as const,
+      },
+      {
+        label: 'Kedisiplinan (.docx)',
+        onClick: () => {
+          downloadDocx(`catatan_kedisiplinan_${student.name.toLowerCase().replace(/\s+/g, '_')}.docx`, `Catatan Kedisiplinan Siswa - ${student.name}`, violationHeaders, violationRows, headmasterName);
+        },
+        type: 'docx' as const,
+      },
+      {
+        label: 'Kedisiplinan (.pdf)',
+        onClick: () => {
+          printTablePDF(`Catatan Kedisiplinan Siswa - ${student.name}`, violationHeaders, violationRows, headmasterName);
         },
         type: 'pdf' as const,
+      },
+      {
+        label: 'Kedisiplinan (.xlsx)',
+        onClick: () => {
+          downloadExcel(`catatan_kedisiplinan_${student.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`, violationHeaders, violationRows, 'Kedisiplinan');
+        },
+        type: 'excel' as const,
       }
     ];
   };

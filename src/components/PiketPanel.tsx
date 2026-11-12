@@ -37,6 +37,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
+import { downloadDocx } from '../utils/docxExport';
 import { printTablePDF, printHTML } from '../utils/printHelper';
 import { useDownload } from '../context/DownloadContext';
 import ConfirmModal from './ConfirmModal';
@@ -219,7 +220,7 @@ export default function PiketPanel({
   });
 
   // Download / Export Handlers with Date Filtering
-  const handleExportDispatch = (startDate: string, endDate: string, format: 'excel' | 'pdf') => {
+  const handleExportDispatch = (startDate: string, endDate: string, format: 'excel' | 'pdf' | 'docx') => {
     switch (exportModal.type) {
       case 'kehadiran':
         handleDownloadKehadiranPiket(startDate, endDate, format);
@@ -231,14 +232,18 @@ export default function PiketPanel({
         handleDownloadJurnalHarianPiket(startDate, endDate, format);
         break;
       case 'rekap-harian':
-        setPrintFilterStartDate(startDate || todayStr);
-        setPrintFilterEndDate(endDate || todayStr);
-        setIsPrintModalOpen(true);
+        if (format === 'docx') {
+          handleDownloadJurnalHarianPiket(startDate, endDate, 'docx');
+        } else {
+          setPrintFilterStartDate(startDate || todayStr);
+          setPrintFilterEndDate(endDate || todayStr);
+          setIsPrintModalOpen(true);
+        }
         break;
     }
   };
 
-  const handleDownloadKehadiranPiket = (startDate: string, endDate: string, format: 'excel' | 'pdf') => {
+  const handleDownloadKehadiranPiket = (startDate: string, endDate: string, format: 'excel' | 'pdf' | 'docx') => {
     let list = attendance;
     if (startDate) list = list.filter(a => a.date >= startDate);
     if (endDate) list = list.filter(a => a.date <= endDate);
@@ -260,6 +265,9 @@ export default function PiketPanel({
     if (format === 'excel') {
       downloadExcel(`rekap_kehadiran_piket${dateSuffix}.xlsx`, headers, rows, 'Presensi Piket');
       setSuccessMsg('Rekapan Kehadiran berhasil diunduh (Excel)!');
+    } else if (format === 'docx') {
+      downloadDocx(`rekap_kehadiran_piket${dateSuffix}.docx`, `Rekapitulasi Kehadiran Siswa oleh Guru Piket (${startDate || 'Semua'} s.d. ${endDate || 'Semua'})`, headers, rows, headmasterName);
+      setSuccessMsg('Rekapan Kehadiran berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF(`Rekapitulasi Kehadiran Siswa oleh Guru Piket (${startDate || 'Semua'} s.d. ${endDate || 'Semua'})`, headers, rows, headmasterName);
       setSuccessMsg('Dokumen Kehadiran berhasil dicetak / disimpan ke PDF!');
@@ -267,7 +275,7 @@ export default function PiketPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleDownloadKedisiplinanPiket = (startDate: string, endDate: string, format: 'excel' | 'pdf') => {
+  const handleDownloadKedisiplinanPiket = (startDate: string, endDate: string, format: 'excel' | 'pdf' | 'docx') => {
     let list = violations;
     if (startDate) list = list.filter(v => v.date >= startDate);
     if (endDate) list = list.filter(v => v.date <= endDate);
@@ -290,6 +298,9 @@ export default function PiketPanel({
     if (format === 'excel') {
       downloadExcel(`rekap_kedisiplinan_piket${dateSuffix}.xlsx`, headers, rows, 'Kedisiplinan Piket');
       setSuccessMsg('Rekapan Catatan Kedisiplinan berhasil diunduh (Excel)!');
+    } else if (format === 'docx') {
+      downloadDocx(`rekap_kedisiplinan_piket${dateSuffix}.docx`, `Rekapitulasi Pelanggaran Kedisiplinan Siswa (${startDate || 'Semua'} s.d. ${endDate || 'Semua'})`, headers, rows, headmasterName);
+      setSuccessMsg('Rekapan Catatan Kedisiplinan berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF(`Rekapitulasi Pelanggaran Kedisiplinan Siswa (${startDate || 'Semua'} s.d. ${endDate || 'Semua'})`, headers, rows, headmasterName);
       setSuccessMsg('Dokumen Kedisiplinan berhasil dicetak / disimpan ke PDF!');
@@ -297,7 +308,7 @@ export default function PiketPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleDownloadJurnalHarianPiket = (startDate: string, endDate: string, format: 'excel' | 'pdf') => {
+  const handleDownloadJurnalHarianPiket = (startDate: string, endDate: string, format: 'excel' | 'pdf' | 'docx') => {
     let filteredTeachers = absentTeachers;
     let filteredEvents = importantEvents;
     if (startDate) {
@@ -338,6 +349,9 @@ export default function PiketPanel({
     if (format === 'excel') {
       downloadExcel(`jurnal_harian_piket${dateSuffix}.xlsx`, headers, rows, 'Jurnal Piket');
       setSuccessMsg('Laporan Jurnal Harian Piket berhasil diunduh (Excel)!');
+    } else if (format === 'docx') {
+      downloadDocx(`jurnal_harian_piket${dateSuffix}.docx`, `Laporan Jurnal Mengajar & Kejadian Penting (${startDate || 'Semua'} s.d. ${endDate || 'Semua'})`, headers, rows, headmasterName);
+      setSuccessMsg('Laporan Jurnal Harian Piket berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF(`Laporan Jurnal Mengajar & Kejadian Penting (${startDate || 'Semua'} s.d. ${endDate || 'Semua'})`, headers, rows, headmasterName);
       setSuccessMsg('Laporan Jurnal Harian berhasil dicetak / disimpan ke PDF!');

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig, EcoWasteCategory, EcoWasteDeposit, EcoReward, EcoRedemption, EcoConfig, StudentPermitLog, StudentPermitType } from '../types';
 import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown, Leaf, Recycle, Crown, Printer, DoorOpen } from 'lucide-react';
 import { downloadExcel, parseExcel } from '../utils/excelExport';
+import { downloadDocx } from '../utils/docxExport';
 import { printHTML, printTablePDF, printCertificate } from '../utils/printHelper';
 import { useDownload } from '../context/DownloadContext';
 import { getSchoolClassName } from '../utils/classUtils';
@@ -273,7 +274,7 @@ export default function AdminPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleDownloadAchievements = (format: 'excel' | 'pdf') => {
+  const handleDownloadAchievements = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
     const filtered = studentAchievements.filter(a => {
       const matchCat = achFilterCat === 'Semua' || a.category === achFilterCat;
@@ -298,10 +299,13 @@ export default function AdminPanel({
 
     if (format === 'excel') {
       downloadExcel(`Rekap_Prestasi_Siswa_${new Date().toISOString().split('T')[0]}.xlsx`, headers, rows, 'Prestasi Siswa');
-      setSuccessMsg('Berhasil mengunduh Rekapitulasi Prestasi Siswa (Excel)');
+      setSuccessMsg('Berhasil mengunduh Rekapitulasi Prestasi Siswa (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`Rekap_Prestasi_Siswa_${new Date().toISOString().split('T')[0]}.docx`, 'Daftar Raihan Prestasi Siswa (Akademik & Non-Akademik)', headers, rows, headmasterName);
+      setSuccessMsg('Berhasil mengunduh Rekapitulasi Prestasi Siswa (Word .docx)!');
     } else {
-      printTablePDF('Daftar Raihan Prestasi Siswa (Akademik & Non-Akademik)', headers, rows);
-      setSuccessMsg('Rekapitulasi Prestasi Siswa berhasil dicetak / PDF!');
+      printTablePDF('Daftar Raihan Prestasi Siswa (Akademik & Non-Akademik)', headers, rows, headmasterName);
+      setSuccessMsg('Rekapitulasi Prestasi Siswa berhasil dicetak / PDF (.pdf)!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
@@ -1240,7 +1244,7 @@ export default function AdminPanel({
   const isTeacherFilterActive = globalSearch.trim() !== '';
 
   // Export handlers
-  const handleExportSiswa = (format: 'excel' | 'pdf', exportFilteredOnly: boolean = false) => {
+  const handleExportSiswa = (format: 'excel' | 'pdf' | 'docx', exportFilteredOnly: boolean = false) => {
     const listToExport = exportFilteredOnly ? filteredStudents : students;
     const selectedClass = classes.find(c => c.id === studentClassFilter);
     const filterDesc = exportFilteredOnly && studentClassFilter !== 'all' && selectedClass ? ` Kelas ${selectedClass.name}` : '';
@@ -1262,15 +1266,18 @@ export default function AdminPanel({
 
     if (format === 'excel') {
       downloadExcel(`rekap_database_siswa${fileSuffix}.xlsx`, headers, rows, `Data Siswa${filterDesc}`);
-      setSuccessMsg(`Berhasil mengunduh Database Siswa${filterDesc} (${listToExport.length} siswa) ke Excel!`);
+      setSuccessMsg(`Berhasil mengunduh Database Siswa${filterDesc} (${listToExport.length} siswa) ke Excel (.xlsx)!`);
+    } else if (format === 'docx') {
+      downloadDocx(`rekap_database_siswa${fileSuffix}.docx`, `Daftar Database Siswa Terdaftar${filterDesc}`, headers, rows, headmasterName);
+      setSuccessMsg(`Berhasil mengunduh Database Siswa${filterDesc} (${listToExport.length} siswa) ke Word (.docx)!`);
     } else {
-      printTablePDF(`Daftar Database Siswa Terdaftar${filterDesc}`, headers, rows);
-      setSuccessMsg(`Dokumen Database Siswa${filterDesc} (${listToExport.length} siswa) berhasil dicetak / disimpan ke PDF!`);
+      printTablePDF(`Daftar Database Siswa Terdaftar${filterDesc}`, headers, rows, headmasterName);
+      setSuccessMsg(`Dokumen Database Siswa${filterDesc} (${listToExport.length} siswa) berhasil dicetak / disimpan ke PDF (.pdf)!`);
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportGuru = (format: 'excel' | 'pdf', exportFilteredOnly: boolean = false) => {
+  const handleExportGuru = (format: 'excel' | 'pdf' | 'docx', exportFilteredOnly: boolean = false) => {
     const listToExport = exportFilteredOnly ? filteredTeachers : teachers;
     const filterDesc = exportFilteredOnly && isTeacherFilterActive ? ` (Pencarian: ${globalSearch})` : '';
     const headers = ["ID Guru", "Nama Lengkap", "NIP", "Email", "Peran", "Kelas Pendamping (Wali)"];
@@ -1301,15 +1308,18 @@ export default function AdminPanel({
 
     if (format === 'excel') {
       downloadExcel('rekap_database_pendidik.xlsx', headers, rows, 'Data Guru');
-      setSuccessMsg(`Berhasil mengunduh Database Pendidik (${listToExport.length} guru/staf) ke Excel!`);
+      setSuccessMsg(`Berhasil mengunduh Database Pendidik (${listToExport.length} guru/staf) ke Excel (.xlsx)!`);
+    } else if (format === 'docx') {
+      downloadDocx('rekap_database_pendidik.docx', `Daftar Database Tenaga Pendidik & Kependidikan${filterDesc}`, headers, rows, headmasterName);
+      setSuccessMsg(`Berhasil mengunduh Database Pendidik (${listToExport.length} guru/staf) ke Word (.docx)!`);
     } else {
-      printTablePDF(`Daftar Database Tenaga Pendidik & Kependidikan${filterDesc}`, headers, rows);
-      setSuccessMsg(`Dokumen Database Pendidik (${listToExport.length} guru/staf) berhasil dicetak / disimpan ke PDF!`);
+      printTablePDF(`Daftar Database Tenaga Pendidik & Kependidikan${filterDesc}`, headers, rows, headmasterName);
+      setSuccessMsg(`Dokumen Database Pendidik (${listToExport.length} guru/staf) berhasil dicetak / disimpan ke PDF (.pdf)!`);
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportAbsensi = (format: 'excel' | 'pdf') => {
+  const handleExportAbsensi = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ["Tanggal", "Nama Siswa", "NISN", "Kelas", "Status Kehadiran", "Catatan", "Pencatat / Verifikator"];
     const rows = attendance.map(a => {
       const s = students.find(std => std.id === a.studentId);
@@ -1326,15 +1336,18 @@ export default function AdminPanel({
     });
     if (format === 'excel') {
       downloadExcel('rekap_log_kehadiran_global.xlsx', headers, rows, 'Kehadiran Global');
-      setSuccessMsg('Berhasil mengunduh Log Kehadiran Global (Excel)!');
+      setSuccessMsg('Berhasil mengunduh Log Kehadiran Global (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('rekap_log_kehadiran_global.docx', 'Rekapitulasi Kehadiran Siswa Global', headers, rows, headmasterName);
+      setSuccessMsg('Berhasil mengunduh Log Kehadiran Global (Word .docx)!');
     } else {
-      printTablePDF('Rekapitulasi Kehadiran Siswa Global', headers, rows);
-      setSuccessMsg('Dokumen Kehadiran Global berhasil dicetak / disimpan ke PDF!');
+      printTablePDF('Rekapitulasi Kehadiran Siswa Global', headers, rows, headmasterName);
+      setSuccessMsg('Dokumen Kehadiran Global berhasil dicetak / disimpan ke PDF (.pdf)!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPelanggaran = (format: 'excel' | 'pdf') => {
+  const handleExportPelanggaran = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ["Tanggal", "Nama Siswa", "NISN", "Kelas", "Pelanggaran", "Poin Pelanggaran", "Kategori", "Catatan Kejadian", "Pencatat"];
     const rows = violations.map(v => {
       const s = students.find(std => std.id === v.studentId);
@@ -1354,15 +1367,18 @@ export default function AdminPanel({
     });
     if (format === 'excel') {
       downloadExcel('rekap_laporan_pelanggaran_global.xlsx', headers, rows, 'Pelanggaran Global');
-      setSuccessMsg('Berhasil mengunduh Laporan Pelanggaran Global (Excel)!');
+      setSuccessMsg('Berhasil mengunduh Laporan Pelanggaran Global (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('rekap_laporan_pelanggaran_global.docx', 'Rekapitulasi Pelanggaran Kedisiplinan Siswa Global', headers, rows, headmasterName);
+      setSuccessMsg('Berhasil mengunduh Laporan Pelanggaran Global (Word .docx)!');
     } else {
-      printTablePDF('Rekapitulasi Pelanggaran Kedisiplinan Siswa Global', headers, rows);
-      setSuccessMsg('Dokumen Pelanggaran Global berhasil dicetak / disimpan ke PDF!');
+      printTablePDF('Rekapitulasi Pelanggaran Kedisiplinan Siswa Global', headers, rows, headmasterName);
+      setSuccessMsg('Dokumen Pelanggaran Global berhasil dicetak / disimpan ke PDF (.pdf)!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportKustom = (format: 'excel' | 'pdf') => {
+  const handleExportKustom = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const selectedClassObj = classes.find(c => c.id === rekapClassId);
     const classNameText = selectedClassObj ? selectedClassObj.name : "Semua Kelas";
     const subjectText = rekapSubject === 'all' ? "Semua Mapel" : rekapSubject;
@@ -1400,10 +1416,13 @@ export default function AdminPanel({
 
       if (format === 'excel') {
         downloadExcel(`rekap_kehadiran_${classNameText.replace(/\s+/g, '_')}_TP_${rekapTahunPelajaran.replace(/\s+|\//g, '_')}.xlsx`, headers, rows, 'Presensi');
-        setSuccessMsg(`Berhasil mengunduh Rekap Presensi Kustom (Excel)!`);
+        setSuccessMsg(`Berhasil mengunduh Rekap Presensi Kustom (Excel .xlsx)!`);
+      } else if (format === 'docx') {
+        downloadDocx(`rekap_kehadiran_${classNameText.replace(/\s+/g, '_')}_TP_${rekapTahunPelajaran.replace(/\s+|\//g, '_')}.docx`, `Rekap Presensi Siswa - ${classNameText} (TP: ${rekapTahunPelajaran})`, headers, rows, headmasterName);
+        setSuccessMsg(`Berhasil mengunduh Rekap Presensi Kustom (Word .docx)!`);
       } else {
         printTablePDF(`Rekap Presensi - ${classNameText} (TP: ${rekapTahunPelajaran})`, headers, rows);
-        setSuccessMsg(`Rekap Presensi Kustom berhasil dicetak / disimpan ke PDF!`);
+        setSuccessMsg(`Rekap Presensi Kustom berhasil dicetak / disimpan ke PDF (.pdf)!`);
       }
     }
 
@@ -1442,10 +1461,13 @@ export default function AdminPanel({
 
       if (format === 'excel') {
         downloadExcel(`rekap_pelanggaran_${classNameText.replace(/\s+/g, '_')}_TP_${rekapTahunPelajaran.replace(/\s+|\//g, '_')}.xlsx`, headers, rows, 'Kedisiplinan');
-        setSuccessMsg(`Berhasil mengunduh Rekap Pelanggaran Kustom (Excel)!`);
+        setSuccessMsg(`Berhasil mengunduh Rekap Pelanggaran Kustom (Excel .xlsx)!`);
+      } else if (format === 'docx') {
+        downloadDocx(`rekap_pelanggaran_${classNameText.replace(/\s+/g, '_')}_TP_${rekapTahunPelajaran.replace(/\s+|\//g, '_')}.docx`, `Rekap Catatan Pelanggaran - ${classNameText} (TP: ${rekapTahunPelajaran})`, headers, rows, headmasterName);
+        setSuccessMsg(`Berhasil mengunduh Rekap Pelanggaran Kustom (Word .docx)!`);
       } else {
         printTablePDF(`Rekap Catatan Pelanggaran - ${classNameText} (TP: ${rekapTahunPelajaran})`, headers, rows);
-        setSuccessMsg(`Rekap Pelanggaran Kustom berhasil dicetak / disimpan ke PDF!`);
+        setSuccessMsg(`Rekap Pelanggaran Kustom berhasil dicetak / disimpan ke PDF (.pdf)!`);
       }
     }
 
@@ -1483,10 +1505,13 @@ export default function AdminPanel({
 
       if (format === 'excel') {
         downloadExcel(`rekap_nilai_cbt_${classNameText.replace(/\s+/g, '_')}_${subjectText.replace(/\s+/g, '_')}_TP_${rekapTahunPelajaran.replace(/\s+|\//g, '_')}.xlsx`, headers, rows, 'Nilai CBT');
-        setSuccessMsg(`Berhasil mengunduh Rekap Nilai CBT Kustom (Excel)!`);
+        setSuccessMsg(`Berhasil mengunduh Rekap Nilai CBT Kustom (Excel .xlsx)!`);
+      } else if (format === 'docx') {
+        downloadDocx(`rekap_nilai_cbt_${classNameText.replace(/\s+/g, '_')}_${subjectText.replace(/\s+/g, '_')}_TP_${rekapTahunPelajaran.replace(/\s+|\//g, '_')}.docx`, `Rekap Nilai CBT ${subjectText} - ${classNameText} (TP: ${rekapTahunPelajaran})`, headers, rows, headmasterName);
+        setSuccessMsg(`Berhasil mengunduh Rekap Nilai CBT Kustom (Word .docx)!`);
       } else {
         printTablePDF(`Rekap Nilai CBT ${subjectText} - ${classNameText} (TP: ${rekapTahunPelajaran})`, headers, rows);
-        setSuccessMsg(`Rekap Nilai CBT Kustom berhasil dicetak / disimpan ke PDF!`);
+        setSuccessMsg(`Rekap Nilai CBT Kustom berhasil dicetak / disimpan ke PDF (.pdf)!`);
       }
     }
 
@@ -1556,17 +1581,20 @@ export default function AdminPanel({
 
       if (format === 'excel') {
         downloadExcel(`rekap_kolektif_${classNameText.replace(/\s+/g, '_')}_TP_${rekapTahunPelajaran.replace(/\s+|\//g, '_')}.xlsx`, headers, rows, 'Kolektif Kelas');
-        setSuccessMsg(`Berhasil mengunduh Rekapitulasi Kolektif Kelas (Excel)!`);
+        setSuccessMsg(`Berhasil mengunduh Rekapitulasi Kolektif Kelas (Excel .xlsx)!`);
+      } else if (format === 'docx') {
+        downloadDocx(`rekap_kolektif_${classNameText.replace(/\s+/g, '_')}_TP_${rekapTahunPelajaran.replace(/\s+|\//g, '_')}.docx`, `Rekapitulasi Rapor Kolektif Kelas - ${classNameText} (TP: ${rekapTahunPelajaran})`, headers, rows, headmasterName);
+        setSuccessMsg(`Berhasil mengunduh Rekapitulasi Kolektif Kelas (Word .docx)!`);
       } else {
         printTablePDF(`Rekapitulasi Rapor Kolektif Kelas - ${classNameText} (TP: ${rekapTahunPelajaran})`, headers, rows);
-        setSuccessMsg(`Rekapitulasi Kolektif Kelas berhasil dicetak / disimpan ke PDF!`);
+        setSuccessMsg(`Rekapitulasi Kolektif Kelas berhasil dicetak / disimpan ke PDF (.pdf)!`);
       }
     }
 
     setTimeout(() => setSuccessMsg(''), 5000);
   };
 
-  const handleExportEcoDeposits = (format: 'excel' | 'pdf') => {
+  const handleExportEcoDeposits = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const headers = ["Tanggal", "Nama Siswa", "Kelas", "Jenis Sampah", "Volume", "Poin", "Status", "Pencatat"];
     const rows = (ecoDeposits || []).map(d => [
       d.date,
@@ -1580,15 +1608,18 @@ export default function AdminPanel({
     ]);
     if (format === 'excel') {
       downloadExcel('rekap_setoran_sampah_eco_tiket.xlsx', headers, rows, 'Setoran ECo-Tiket');
-      setSuccessMsg('Berhasil mengunduh Laporan Setoran ECo-Tiket (Excel)!');
+      setSuccessMsg('Berhasil mengunduh Laporan Setoran ECo-Tiket (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('rekap_setoran_sampah_eco_tiket.docx', 'Rekapitulasi Setoran Sampah ECo-Tiket Siswa', headers, rows, headmasterName);
+      setSuccessMsg('Berhasil mengunduh Laporan Setoran ECo-Tiket (Word .docx)!');
     } else {
       printTablePDF('Rekapitulasi Setoran Sampah ECo-Tiket Siswa', headers, rows, headmasterName);
-      setSuccessMsg('Laporan Setoran ECo-Tiket siap dicetak / disimpan ke PDF!');
+      setSuccessMsg('Laporan Setoran ECo-Tiket siap dicetak / disimpan ke PDF (.pdf)!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportEcoLeaderboard = (format: 'excel' | 'pdf') => {
+  const handleExportEcoLeaderboard = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const studentPointsMap = new Map<string, { total: number; name: string; classId: string; count: number }>();
     (ecoDeposits || []).forEach(d => {
       if (d.status === 'Diverifikasi') {
@@ -1614,15 +1645,18 @@ export default function AdminPanel({
 
     if (format === 'excel') {
       downloadExcel('leaderboard_duta_kebersihan.xlsx', headers, rows, 'Duta Kebersihan');
-      setSuccessMsg('Berhasil mengunduh Leaderboard Duta Kebersihan (Excel)!');
+      setSuccessMsg('Berhasil mengunduh Leaderboard Duta Kebersihan (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('leaderboard_duta_kebersihan.docx', 'Leaderboard Duta Kebersihan & Peringkat ECo-Tiket', headers, rows, headmasterName);
+      setSuccessMsg('Berhasil mengunduh Leaderboard Duta Kebersihan (Word .docx)!');
     } else {
       printTablePDF('Leaderboard Duta Kebersihan & Peringkat ECo-Tiket', headers, rows, headmasterName);
-      setSuccessMsg('Leaderboard Duta Kebersihan siap dicetak / disimpan ke PDF!');
+      setSuccessMsg('Leaderboard Duta Kebersihan siap dicetak / disimpan ke PDF (.pdf)!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPendingRegistrations = (format: 'excel' | 'pdf') => {
+  const handleExportPendingRegistrations = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const headers = ["Nama Lengkap", "Peran Diajukan", "NIP / NISN / NIK", "Email", "No. HP", "Kelas / Keterangan"];
     const rows = (pendingRegistrations || []).map(p => [
       p.name,
@@ -1634,15 +1668,18 @@ export default function AdminPanel({
     ]);
     if (format === 'excel') {
       downloadExcel('antrean_validasi_registrasi.xlsx', headers, rows, 'Validasi Akun');
-      setSuccessMsg(`Berhasil mengunduh antrean registrasi (${rows.length} data) ke Excel!`);
+      setSuccessMsg(`Berhasil mengunduh antrean registrasi (${rows.length} data) ke Excel (.xlsx)!`);
+    } else if (format === 'docx') {
+      downloadDocx('antrean_validasi_registrasi.docx', 'Daftar Antrean Permohonan Registrasi Akun Pengguna', headers, rows, headmasterName);
+      setSuccessMsg(`Berhasil mengunduh antrean registrasi (${rows.length} data) ke Word (.docx)!`);
     } else {
       printTablePDF('Daftar Antrean Permohonan Registrasi Akun Pengguna', headers, rows, headmasterName);
-      setSuccessMsg(`Dokumen antrean registrasi siap dicetak / disimpan ke PDF!`);
+      setSuccessMsg(`Dokumen antrean registrasi siap dicetak / disimpan ke PDF (.pdf)!`);
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportCbtGrades = (format: 'excel' | 'pdf') => {
+  const handleExportCbtGrades = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const headers = ["Tanggal Ujian", "Nama Siswa", "NISN", "Kelas", "Mata Pelajaran", "Jenis Ujian", "Skor CBT", "Status"];
     const rows = examGrades.map(g => {
       const s = students.find(std => std.id === g.studentId);
@@ -1660,17 +1697,20 @@ export default function AdminPanel({
     });
     if (format === 'excel') {
       downloadExcel('rekap_seluruh_nilai_cbt.xlsx', headers, rows, 'Nilai CBT Global');
-      setSuccessMsg(`Berhasil mengunduh Rekap Nilai CBT Global (${rows.length} nilai) ke Excel!`);
+      setSuccessMsg(`Berhasil mengunduh Rekap Nilai CBT Global (${rows.length} nilai) ke Excel (.xlsx)!`);
+    } else if (format === 'docx') {
+      downloadDocx('rekap_seluruh_nilai_cbt.docx', 'Rekapitulasi Seluruh Nilai Ujian CBT Siswa', headers, rows, headmasterName);
+      setSuccessMsg(`Berhasil mengunduh Rekap Nilai CBT Global (${rows.length} nilai) ke Word (.docx)!`);
     } else {
       printTablePDF('Rekapitulasi Seluruh Nilai Ujian CBT Siswa', headers, rows, headmasterName);
-      setSuccessMsg(`Dokumen Nilai CBT Global siap dicetak / disimpan ke PDF!`);
+      setSuccessMsg(`Dokumen Nilai CBT Global siap dicetak / disimpan ke PDF (.pdf)!`);
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
   const [isBannerDownloadOpen, setIsBannerDownloadOpen] = useState(false);
 
-  const handleExportPermits = (format: 'excel' | 'pdf' = 'excel') => {
+  const handleExportPermits = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const permitData = permits || [];
     const headers = ['No', 'Tanggal', 'Jam Keluar', 'Jam Kembali', 'Durasi', 'NISN', 'Nama Siswa', 'Kelas', 'Jenis Izin', 'Tujuan & Keperluan', 'Status', 'Petugas', 'Keterangan'];
     const rows = permitData.map((p, idx) => {
@@ -1697,10 +1737,13 @@ export default function AdminPanel({
 
     if (format === 'excel') {
       downloadExcel(`buku_kendali_izin_siswa_${new Date().toISOString().slice(0, 10)}.xlsx`, headers, rows, 'Buku Kendali Izin');
-      setSuccessMsg(`Berhasil mengunduh Log Izin Siswa (${rows.length} riwayat) ke Excel!`);
+      setSuccessMsg(`Berhasil mengunduh Log Izin Siswa (${rows.length} riwayat) ke Excel (.xlsx)!`);
+    } else if (format === 'docx') {
+      downloadDocx(`buku_kendali_izin_siswa_${new Date().toISOString().slice(0, 10)}.docx`, 'Buku Kendali Izin Siswa, Toilet & Keamanan Sekolah', headers, rows, headmasterName);
+      setSuccessMsg(`Berhasil mengunduh Log Izin Siswa (${rows.length} riwayat) ke Word (.docx)!`);
     } else {
       printTablePDF('Buku Kendali Izin Siswa, Toilet & Keamanan Sekolah', headers, rows, headmasterName);
-      setSuccessMsg('Dokumen Log Izin Siswa siap dicetak / disimpan ke PDF!');
+      setSuccessMsg('Dokumen Log Izin Siswa siap dicetak / disimpan ke PDF (.pdf)!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
@@ -1709,61 +1752,77 @@ export default function AdminPanel({
     switch (activeTab) {
       case 'siswa':
         return [
-          { label: 'Siswa (Excel)', onClick: () => handleExportSiswa('excel', isStudentFilterActive), type: 'excel' as const },
-          { label: 'Siswa (PDF)', onClick: () => handleExportSiswa('pdf', isStudentFilterActive), type: 'pdf' as const },
+          { label: 'Siswa (.docx)', onClick: () => handleExportSiswa('docx', isStudentFilterActive), type: 'docx' as const },
+          { label: 'Siswa (.pdf)', onClick: () => handleExportSiswa('pdf', isStudentFilterActive), type: 'pdf' as const },
+          { label: 'Siswa (.xlsx)', onClick: () => handleExportSiswa('excel', isStudentFilterActive), type: 'excel' as const },
         ];
       case 'guru':
         return [
-          { label: 'Guru (Excel)', onClick: () => handleExportGuru('excel', isTeacherFilterActive), type: 'excel' as const },
-          { label: 'Guru (PDF)', onClick: () => handleExportGuru('pdf', isTeacherFilterActive), type: 'pdf' as const },
+          { label: 'Guru (.docx)', onClick: () => handleExportGuru('docx', isTeacherFilterActive), type: 'docx' as const },
+          { label: 'Guru (.pdf)', onClick: () => handleExportGuru('pdf', isTeacherFilterActive), type: 'pdf' as const },
+          { label: 'Guru (.xlsx)', onClick: () => handleExportGuru('excel', isTeacherFilterActive), type: 'excel' as const },
         ];
       case 'prestasi':
         return [
-          { label: 'Prestasi (Excel)', onClick: () => handleDownloadAchievements('excel'), type: 'excel' as const },
-          { label: 'Prestasi (PDF)', onClick: () => handleDownloadAchievements('pdf'), type: 'pdf' as const },
+          { label: 'Prestasi (.docx)', onClick: () => handleDownloadAchievements('docx'), type: 'docx' as const },
+          { label: 'Prestasi (.pdf)', onClick: () => handleDownloadAchievements('pdf'), type: 'pdf' as const },
+          { label: 'Prestasi (.xlsx)', onClick: () => handleDownloadAchievements('excel'), type: 'excel' as const },
         ];
       case 'eco-tiket':
         return [
-          { label: 'Setoran (Excel)', onClick: () => handleExportEcoDeposits('excel'), type: 'excel' as const },
-          { label: 'Setoran (PDF)', onClick: () => handleExportEcoDeposits('pdf'), type: 'pdf' as const },
-          { label: 'Duta ECo (Excel)', onClick: () => handleExportEcoLeaderboard('excel'), type: 'excel' as const },
-          { label: 'Duta ECo (PDF)', onClick: () => handleExportEcoLeaderboard('pdf'), type: 'pdf' as const },
+          { label: 'Setoran (.docx)', onClick: () => handleExportEcoDeposits('docx'), type: 'docx' as const },
+          { label: 'Setoran (.pdf)', onClick: () => handleExportEcoDeposits('pdf'), type: 'pdf' as const },
+          { label: 'Setoran (.xlsx)', onClick: () => handleExportEcoDeposits('excel'), type: 'excel' as const },
+          { label: 'Duta ECo (.docx)', onClick: () => handleExportEcoLeaderboard('docx'), type: 'docx' as const },
+          { label: 'Duta ECo (.pdf)', onClick: () => handleExportEcoLeaderboard('pdf'), type: 'pdf' as const },
+          { label: 'Duta ECo (.xlsx)', onClick: () => handleExportEcoLeaderboard('excel'), type: 'excel' as const },
         ];
       case 'pelatih':
         return [
-          { label: 'Daftar Pelatih (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
-          { label: 'Daftar Pelatih (PDF)', onClick: () => handleExportGuru('pdf'), type: 'pdf' as const },
+          { label: 'Daftar Pelatih (.docx)', onClick: () => handleExportGuru('docx'), type: 'docx' as const },
+          { label: 'Daftar Pelatih (.pdf)', onClick: () => handleExportGuru('pdf'), type: 'pdf' as const },
+          { label: 'Daftar Pelatih (.xlsx)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
         ];
       case 'orang-tua':
         return [
-          { label: 'Data Orang Tua (Excel)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
-          { label: 'Data Orang Tua (PDF)', onClick: () => handleExportSiswa('pdf'), type: 'pdf' as const },
+          { label: 'Data Orang Tua (.docx)', onClick: () => handleExportSiswa('docx'), type: 'docx' as const },
+          { label: 'Data Orang Tua (.pdf)', onClick: () => handleExportSiswa('pdf'), type: 'pdf' as const },
+          { label: 'Data Orang Tua (.xlsx)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
         ];
       case 'setting-cbt':
         return [
-          { label: 'Cetak Kartu Ujian CBT (PDF)', onClick: () => setIsExamCardModalOpen(true), type: 'pdf' as const },
-          { label: 'Nilai CBT (Excel)', onClick: () => handleExportCbtGrades('excel'), type: 'excel' as const },
-          { label: 'Nilai CBT (PDF)', onClick: () => handleExportCbtGrades('pdf'), type: 'pdf' as const },
+          { label: 'Cetak Kartu Ujian (PDF)', onClick: () => setIsExamCardModalOpen(true), type: 'pdf' as const },
+          { label: 'Nilai CBT (.docx)', onClick: () => handleExportCbtGrades('docx'), type: 'docx' as const },
+          { label: 'Nilai CBT (.pdf)', onClick: () => handleExportCbtGrades('pdf'), type: 'pdf' as const },
+          { label: 'Nilai CBT (.xlsx)', onClick: () => handleExportCbtGrades('excel'), type: 'excel' as const },
         ];
       case 'validasi-akun':
         return [
-          { label: 'Antrean (Excel)', onClick: () => handleExportPendingRegistrations('excel'), type: 'excel' as const },
-          { label: 'Antrean (PDF)', onClick: () => handleExportPendingRegistrations('pdf'), type: 'pdf' as const },
+          { label: 'Antrean (.docx)', onClick: () => handleExportPendingRegistrations('docx'), type: 'docx' as const },
+          { label: 'Antrean (.pdf)', onClick: () => handleExportPendingRegistrations('pdf'), type: 'pdf' as const },
+          { label: 'Antrean (.xlsx)', onClick: () => handleExportPendingRegistrations('excel'), type: 'excel' as const },
         ];
       case 'izin-siswa':
         return [
-          { label: 'Buku Kendali Izin (Excel)', onClick: () => handleExportPermits('excel'), type: 'excel' as const },
-          { label: 'Buku Kendali Izin (PDF)', onClick: () => handleExportPermits('pdf'), type: 'pdf' as const },
+          { label: 'Buku Kendali Izin (.docx)', onClick: () => handleExportPermits('docx'), type: 'docx' as const },
+          { label: 'Buku Kendali Izin (.pdf)', onClick: () => handleExportPermits('pdf'), type: 'pdf' as const },
+          { label: 'Buku Kendali Izin (.xlsx)', onClick: () => handleExportPermits('excel'), type: 'excel' as const },
         ];
       case 'ringkasan':
       default:
         return [
-          { label: 'Siswa (Excel)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
-          { label: 'Guru (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
-          { label: 'Presensi (Excel)', onClick: () => handleExportAbsensi('excel'), type: 'excel' as const },
-          { label: 'Pelanggaran (Excel)', onClick: () => handleExportPelanggaran('excel'), type: 'excel' as const },
-          { label: 'ECo-Tiket (Excel)', onClick: () => handleExportEcoDeposits('excel'), type: 'excel' as const },
-          { label: 'Rapor (Excel)', onClick: () => handleExportKustom('excel'), type: 'excel' as const },
+          { label: 'Siswa (.docx)', onClick: () => handleExportSiswa('docx'), type: 'docx' as const },
+          { label: 'Siswa (.pdf)', onClick: () => handleExportSiswa('pdf'), type: 'pdf' as const },
+          { label: 'Siswa (.xlsx)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
+          { label: 'Guru (.docx)', onClick: () => handleExportGuru('docx'), type: 'docx' as const },
+          { label: 'Guru (.pdf)', onClick: () => handleExportGuru('pdf'), type: 'pdf' as const },
+          { label: 'Guru (.xlsx)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
+          { label: 'Presensi (.docx)', onClick: () => handleExportAbsensi('docx'), type: 'docx' as const },
+          { label: 'Presensi (.pdf)', onClick: () => handleExportAbsensi('pdf'), type: 'pdf' as const },
+          { label: 'Presensi (.xlsx)', onClick: () => handleExportAbsensi('excel'), type: 'excel' as const },
+          { label: 'Pelanggaran (.docx)', onClick: () => handleExportPelanggaran('docx'), type: 'docx' as const },
+          { label: 'Pelanggaran (.pdf)', onClick: () => handleExportPelanggaran('pdf'), type: 'pdf' as const },
+          { label: 'Pelanggaran (.xlsx)', onClick: () => handleExportPelanggaran('excel'), type: 'excel' as const },
         ];
     }
   };
@@ -1803,7 +1862,7 @@ export default function AdminPanel({
       case 'setting-cbt':
         return {
           badge: 'Asesmen & Ujian Berbasis Komputer',
-          title: 'Computer Based Test (CBT)',
+          title: 'Computare Base Test (CBT)',
           desc: 'Kelola jadwal sesi ujian, cetak kartu tanda peserta ujian (A4/B4), token pengawas, dan nilai CBT.'
         };
       case 'validasi-akun':
@@ -1839,7 +1898,7 @@ export default function AdminPanel({
   return (
     <div className="space-y-6">
       {/* Admin Header: Only shown for standard tabs without their own dedicated banner modules */}
-      {!['izin-siswa', 'eco-tiket', 'setting-kartu-pelajar', 'setting-sertifikat', 'kelola-web'].includes(activeTab) && (
+      {!['izin-siswa', 'eco-tiket', 'setting-kartu-pelajar', 'setting-sertifikat', 'kelola-web', 'pelatih', 'orang-tua', 'setting-cbt'].includes(activeTab) && (
         <div className="bg-gradient-to-r from-purple-700 via-indigo-700 to-indigo-800 rounded-3xl p-5 sm:p-6 text-white shadow-md">
           <div className="space-y-1 min-w-0 max-w-3xl">
             <p className="text-purple-200 text-xs font-semibold uppercase tracking-wider">{getTabBannerInfo().badge}</p>
@@ -4168,7 +4227,7 @@ export default function AdminPanel({
             <div className="bg-gradient-to-r from-purple-100 to-indigo-100 border border-purple-200 p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
               <div className="space-y-1">
                 <span className="text-[10px] bg-purple-600 text-white font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">CBT Examination Hub</span>
-                <h3 className="text-lg font-black text-slate-800">Computer Based Test (CBT)</h3>
+                <h3 className="text-lg font-black text-slate-800">Computare Base Test (CBT)</h3>
                 <p className="text-xs text-slate-600">
                   Manajemen sesi ujian digital, tautan soal Exambro/Google Form, PIN pengawas, serta pencetakan kartu tanda peserta ujian resmi.
                 </p>

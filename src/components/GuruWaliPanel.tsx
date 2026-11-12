@@ -3,6 +3,7 @@ import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teac
 import { HeartHandshake, Search, FileText, CheckCircle, Save, Send, MessageSquare, AlertTriangle, ShieldCheck, Download, FileSpreadsheet, Star, Award, GraduationCap, Users, Calendar, Activity, Clock, Trash } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
+import { downloadDocx } from '../utils/docxExport';
 import { useDownload } from '../context/DownloadContext';
 
 interface GuruWaliPanelProps {
@@ -209,7 +210,7 @@ export default function GuruWaliPanel({
   };
 
   // Export Handlers
-  const handleExportBimbingan = (format: 'excel' | 'pdf') => {
+  const handleExportBimbingan = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const headers = ["Tanggal", "Nama Siswa", "Kelas", "Catatan Bimbingan", "Rencana Tindak Lanjut", "Status", "Pencatat"];
     const rows = counselorNotes
       .filter(n => myStudents.some(s => s.id === n.studentId))
@@ -228,15 +229,18 @@ export default function GuruWaliPanel({
 
     if (format === 'excel') {
       downloadExcel('rekap_bimbingan_guru_wali.xlsx', headers, rows, 'Bimbingan Guru Wali');
-      setSuccessMsg('Laporan Rekapitulasi Bimbingan berhasil diunduh (Excel)!');
+      setSuccessMsg('Laporan Rekapitulasi Bimbingan berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('rekap_bimbingan_guru_wali.docx', 'Laporan Rekapitulasi Layanan Bimbingan & Pembinaan (Guru Wali)', headers, rows, headmasterName);
+      setSuccessMsg('Laporan Rekapitulasi Bimbingan berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF('Laporan Rekapitulasi Layanan Bimbingan & Pembinaan (Guru Wali)', headers, rows, headmasterName);
-      setSuccessMsg('Dokumen Laporan Bimbingan berhasil dicetak / disimpan ke PDF!');
+      setSuccessMsg('Dokumen Laporan Bimbingan berhasil dicetak / disimpan ke PDF (.pdf)!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportBakatMinat = (format: 'excel' | 'pdf') => {
+  const handleExportBakatMinat = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const headers = ["NISN", "Nama Siswa", "Kelas", "Bakat & Minat", "Prestasi Akademik / Non-Akademik"];
     const rows = myStudents.map(s => [
       s.nisn,
@@ -248,15 +252,18 @@ export default function GuruWaliPanel({
 
     if (format === 'excel') {
       downloadExcel('rekap_bakat_minat_prestasi_guru_wali.xlsx', headers, rows, 'Bakat & Minat');
-      setSuccessMsg('Rekapitulasi Bakat & Minat berhasil diunduh (Excel)!');
+      setSuccessMsg('Rekapitulasi Bakat & Minat berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('rekap_bakat_minat_prestasi_guru_wali.docx', 'Rekapitulasi Pembinaan Bakat, Minat, dan Prestasi Siswa', headers, rows, headmasterName);
+      setSuccessMsg('Rekapitulasi Bakat & Minat berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF('Rekapitulasi Pembinaan Bakat, Minat, dan Prestasi Siswa', headers, rows, headmasterName);
-      setSuccessMsg('Dokumen Rekapitulasi Bakat & Minat berhasil dicetak ke PDF!');
+      setSuccessMsg('Dokumen Rekapitulasi Bakat & Minat berhasil dicetak ke PDF (.pdf)!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPesanGuruWali = (format: 'excel' | 'pdf') => {
+  const handleExportPesanGuruWali = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const headers = ["Tanggal", "Nama Orang Tua", "Siswa Bimbingan", "Pesan dari Orang Tua", "Balasan Terakhir", "Status"];
     const myMsgList = parentMessages.filter(m => myStudents.some(s => s.id === m.studentId));
     const rows = myMsgList.map(m => {
@@ -274,15 +281,18 @@ export default function GuruWaliPanel({
 
     if (format === 'excel') {
       downloadExcel('komunikasi_orang_tua_guru_wali.xlsx', headers, rows, 'Pesan Orang Tua');
-      setSuccessMsg('Pesan Komunikasi Orang Tua berhasil diunduh (Excel)!');
+      setSuccessMsg('Pesan Komunikasi Orang Tua berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('komunikasi_orang_tua_guru_wali.docx', 'Rekapitulasi Komunikasi Orang Tua & Guru Wali', headers, rows, headmasterName);
+      setSuccessMsg('Pesan Komunikasi Orang Tua berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF('Rekapitulasi Komunikasi Orang Tua & Guru Wali', headers, rows, headmasterName);
-      setSuccessMsg('Pesan Komunikasi berhasil dicetak ke PDF!');
+      setSuccessMsg('Pesan Komunikasi berhasil dicetak ke PDF (.pdf)!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPrestasiGuruWali = (format: 'excel' | 'pdf') => {
+  const handleExportPrestasiGuruWali = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const myStudentIds = myStudents.map(s => s.id);
     const myAchs = studentAchievements.filter(a => myStudentIds.includes(a.studentId));
     const headers = ['No', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
@@ -299,15 +309,18 @@ export default function GuruWaliPanel({
     ]);
     if (format === 'excel') {
       downloadExcel(`Prestasi_Siswa_Bimbingan_GuruWali.xlsx`, headers, rows, 'Prestasi Bimbingan');
-      setSuccessMsg('Rekap Prestasi Siswa Bimbingan berhasil diunduh (Excel)!');
+      setSuccessMsg('Rekap Prestasi Siswa Bimbingan berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`Prestasi_Siswa_Bimbingan_GuruWali.docx`, 'Daftar Raihan Prestasi Siswa Bimbingan - Guru Wali', headers, rows, headmasterName);
+      setSuccessMsg('Rekap Prestasi Siswa Bimbingan berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF(`Daftar Raihan Prestasi Siswa Bimbingan - Guru Wali`, headers, rows, headmasterName);
-      setSuccessMsg('Rekap Prestasi Siswa Bimbingan berhasil dicetak / disimpan ke PDF!');
+      setSuccessMsg('Rekap Prestasi Siswa Bimbingan berhasil dicetak / disimpan ke PDF (.pdf)!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPresensiBinaan = (format: 'excel' | 'pdf') => {
+  const handleExportPresensiBinaan = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const headers = ["No", "NISN", "Nama Siswa", "Kelas", "Hadir (H)", "Sakit (S)", "Izin (I)", "Alpa (A)", "Persentase Kehadiran (%)"];
     const rows = myStudents.map((s, idx) => {
       const sAtt = attendance.filter(a => a.studentId === s.id || (s.nisn && a.studentId === s.nisn));
@@ -332,10 +345,13 @@ export default function GuruWaliPanel({
 
     if (format === 'excel') {
       downloadExcel(`Rekap_Presensi_Siswa_Binaan_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Presensi Binaan');
-      setSuccessMsg('Rekap Presensi Siswa Binaan berhasil diunduh (Excel)!');
+      setSuccessMsg('Rekap Presensi Siswa Binaan berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`Rekap_Presensi_Siswa_Binaan_${teacher.name.replace(/\s+/g, '_')}.docx`, `Rekapitulasi Presensi Kehadiran Siswa Binaan - ${teacher.name}`, headers, rows, headmasterName);
+      setSuccessMsg('Rekap Presensi Siswa Binaan berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF(`Rekapitulasi Presensi Kehadiran Siswa Binaan - ${teacher.name}`, headers, rows, headmasterName);
-      setSuccessMsg('Dokumen Presensi Siswa Binaan berhasil dicetak / PDF!');
+      setSuccessMsg('Dokumen Presensi Siswa Binaan berhasil dicetak / disimpan ke PDF (.pdf)!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
@@ -364,31 +380,40 @@ export default function GuruWaliPanel({
     switch (activeTab) {
       case 'bimbingan':
         return [
-          { label: 'Presensi Binaan (Excel)', onClick: () => handleExportPresensiBinaan('excel'), type: 'excel' as const },
-          { label: 'Presensi Binaan (PDF)', onClick: () => handleExportPresensiBinaan('pdf'), type: 'pdf' as const },
+          { label: 'Presensi Binaan (.docx)', onClick: () => handleExportPresensiBinaan('docx'), type: 'docx' as const },
+          { label: 'Presensi Binaan (.pdf)', onClick: () => handleExportPresensiBinaan('pdf'), type: 'pdf' as const },
+          { label: 'Presensi Binaan (.xlsx)', onClick: () => handleExportPresensiBinaan('excel'), type: 'excel' as const },
         ];
       case 'bimbingan-bk':
         return [
-          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbingan('excel'), type: 'excel' as const },
-          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbingan('pdf'), type: 'pdf' as const },
+          { label: 'Bimbingan (.docx)', onClick: () => handleExportBimbingan('docx'), type: 'docx' as const },
+          { label: 'Bimbingan (.pdf)', onClick: () => handleExportBimbingan('pdf'), type: 'pdf' as const },
+          { label: 'Bimbingan (.xlsx)', onClick: () => handleExportBimbingan('excel'), type: 'excel' as const },
         ];
       case 'bakat-minat':
         return [
-          { label: 'Bakat & Minat (Excel)', onClick: () => handleExportBakatMinat('excel'), type: 'excel' as const },
-          { label: 'Bakat & Minat (PDF)', onClick: () => handleExportBakatMinat('pdf'), type: 'pdf' as const },
+          { label: 'Bakat & Minat (.docx)', onClick: () => handleExportBakatMinat('docx'), type: 'docx' as const },
+          { label: 'Bakat & Minat (.pdf)', onClick: () => handleExportBakatMinat('pdf'), type: 'pdf' as const },
+          { label: 'Bakat & Minat (.xlsx)', onClick: () => handleExportBakatMinat('excel'), type: 'excel' as const },
         ];
       case 'pesan':
         return [
-          { label: 'Pesan Orang Tua (Excel)', onClick: () => handleExportPesanGuruWali('excel'), type: 'excel' as const },
-          { label: 'Pesan Orang Tua (PDF)', onClick: () => handleExportPesanGuruWali('pdf'), type: 'pdf' as const },
+          { label: 'Pesan Orang Tua (.docx)', onClick: () => handleExportPesanGuruWali('docx'), type: 'docx' as const },
+          { label: 'Pesan Orang Tua (.pdf)', onClick: () => handleExportPesanGuruWali('pdf'), type: 'pdf' as const },
+          { label: 'Pesan Orang Tua (.xlsx)', onClick: () => handleExportPesanGuruWali('excel'), type: 'excel' as const },
         ];
       case 'beranda':
       default:
         return [
-          { label: 'Presensi Binaan (Excel)', onClick: () => handleExportPresensiBinaan('excel'), type: 'excel' as const },
-          { label: 'Presensi Binaan (PDF)', onClick: () => handleExportPresensiBinaan('pdf'), type: 'pdf' as const },
-          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbingan('excel'), type: 'excel' as const },
-          { label: 'Bakat & Minat (Excel)', onClick: () => handleExportBakatMinat('excel'), type: 'excel' as const },
+          { label: 'Presensi Binaan (.docx)', onClick: () => handleExportPresensiBinaan('docx'), type: 'docx' as const },
+          { label: 'Presensi Binaan (.pdf)', onClick: () => handleExportPresensiBinaan('pdf'), type: 'pdf' as const },
+          { label: 'Presensi Binaan (.xlsx)', onClick: () => handleExportPresensiBinaan('excel'), type: 'excel' as const },
+          { label: 'Bimbingan (.docx)', onClick: () => handleExportBimbingan('docx'), type: 'docx' as const },
+          { label: 'Bimbingan (.pdf)', onClick: () => handleExportBimbingan('pdf'), type: 'pdf' as const },
+          { label: 'Bimbingan (.xlsx)', onClick: () => handleExportBimbingan('excel'), type: 'excel' as const },
+          { label: 'Bakat & Minat (.docx)', onClick: () => handleExportBakatMinat('docx'), type: 'docx' as const },
+          { label: 'Bakat & Minat (.pdf)', onClick: () => handleExportBakatMinat('pdf'), type: 'pdf' as const },
+          { label: 'Bakat & Minat (.xlsx)', onClick: () => handleExportBakatMinat('excel'), type: 'excel' as const },
         ];
     }
   };

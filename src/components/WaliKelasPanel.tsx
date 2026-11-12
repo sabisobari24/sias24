@@ -3,6 +3,7 @@ import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teac
 import { GraduationCap, Users, Calendar, AlertTriangle, FileText, CheckCircle, Save, MessageSquare, Send, Check, Award, FileSpreadsheet, Search, Download, Filter, ChevronDown } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
+import { downloadDocx } from '../utils/docxExport';
 import { syncCollection } from '../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../data/initialWebContent';
 import { useDownload } from '../context/DownloadContext';

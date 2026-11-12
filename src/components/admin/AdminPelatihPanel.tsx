@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { downloadExcel } from '../../utils/excelExport';
 import { printTablePDF } from '../../utils/printHelper';
+import { downloadDocx } from '../../utils/docxExport';
 
 interface AttendanceSession {
   id: string;
@@ -392,7 +393,7 @@ export default function AdminPelatihPanel({
   };
 
   // Export handlers
-  const handleExportAttendanceExcel = () => {
+  const handleExportAttendance = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const headers = ['No', 'Tanggal', 'Topik/Materi', 'Total Hadir', 'Total Sakit', 'Total Izin', 'Total Alpa'];
     const rows = attendanceSessions.map((s, idx) => {
       const counts = { Hadir: 0, Sakit: 0, Izin: 0, Alpa: 0 };
@@ -411,12 +412,20 @@ export default function AdminPelatihPanel({
         counts.Alpa
       ];
     });
-    downloadExcel(`Rekap_Absensi_${currentEkskulObj.name}.xlsx`, headers, rows, 'Absensi Ekskul');
-    setSuccessMsg('Rekap Absensi Ekskul berhasil diunduh (Excel)!');
+    if (format === 'excel') {
+      downloadExcel(`Rekap_Absensi_${currentEkskulObj.name}.xlsx`, headers, rows, 'Absensi Ekskul');
+      setSuccessMsg('Rekap Absensi Ekskul berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`Rekap_Absensi_${currentEkskulObj.name}.docx`, `Rekap Presensi & Sesi Latihan Ekskul ${currentEkskulObj.name}`, headers, rows, headmasterName);
+      setSuccessMsg('Rekap Absensi Ekskul berhasil diunduh (Word .docx)!');
+    } else {
+      printTablePDF(`Rekap Presensi & Sesi Latihan Ekskul ${currentEkskulObj.name}`, headers, rows, headmasterName);
+      setSuccessMsg('Rekap Absensi Ekskul siap dicetak / disimpan ke PDF (.pdf)!');
+    }
     setTimeout(() => setSuccessMsg(''), 3500);
   };
 
-  const handleExportGradesExcel = () => {
+  const handleExportGrades = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Nilai Angka', 'Predikat', 'Nilai Sikap', 'Keterangan'];
     const rows = memberIds.map((sid, idx) => {
       const student = students.find(s => s.id === sid);
@@ -437,8 +446,16 @@ export default function AdminPelatihPanel({
         notes
       ];
     });
-    downloadExcel(`Nilai_Ekskul_${currentEkskulObj.name}.xlsx`, headers, rows, 'Nilai Ekskul');
-    setSuccessMsg('Rekap Nilai Ekskul berhasil diunduh (Excel)!');
+    if (format === 'excel') {
+      downloadExcel(`Nilai_Ekskul_${currentEkskulObj.name}.xlsx`, headers, rows, 'Nilai Ekskul');
+      setSuccessMsg('Rekap Nilai Ekskul berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`Nilai_Ekskul_${currentEkskulObj.name}.docx`, `Rekap Penilaian Hasil Belajar Ekskul ${currentEkskulObj.name}`, headers, rows, headmasterName);
+      setSuccessMsg('Rekap Nilai Ekskul berhasil diunduh (Word .docx)!');
+    } else {
+      printTablePDF(`Rekap Penilaian Hasil Belajar Ekskul ${currentEkskulObj.name}`, headers, rows, headmasterName);
+      setSuccessMsg('Rekap Nilai Ekskul siap dicetak / disimpan ke PDF (.pdf)!');
+    }
     setTimeout(() => setSuccessMsg(''), 3500);
   };
 
@@ -703,14 +720,33 @@ export default function AdminPelatihPanel({
               </h3>
               <p className="text-xs text-slate-500">Riwayat sesi latihan mingguan dan rekapitulasi kehadiran anggota.</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={handleExportAttendanceExcel}
-                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                onClick={() => handleExportAttendance('docx')}
+                className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+                title="Unduh format Microsoft Word (.docx)"
               >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>Unduh Excel</span>
+                <FileText className="w-3.5 h-3.5" />
+                <span>Word (.docx)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportAttendance('pdf')}
+                className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+                title="Cetak atau simpan sebagai PDF (.pdf)"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>PDF (.pdf)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportAttendance('excel')}
+                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+                title="Unduh format Microsoft Excel (.xlsx)"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Excel (.xlsx)</span>
               </button>
               <button
                 type="button"
@@ -720,7 +756,7 @@ export default function AdminPelatihPanel({
                   setSessionAttendance({});
                   setShowSessionModal(true);
                 }}
-                className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer ml-1"
               >
                 <Plus className="w-4 h-4" />
                 <span>Input Sesi Latihan Baru</span>
@@ -855,19 +891,38 @@ export default function AdminPelatihPanel({
               </h3>
               <p className="text-xs text-slate-500">Input nilai akhir ekstrakurikuler yang akan langsung tertera di rapor siswa.</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={handleExportGradesExcel}
-                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                onClick={() => handleExportGrades('docx')}
+                className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+                title="Unduh format Microsoft Word (.docx)"
               >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>Unduh Excel</span>
+                <FileText className="w-3.5 h-3.5" />
+                <span>Word (.docx)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportGrades('pdf')}
+                className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+                title="Cetak atau simpan sebagai PDF (.pdf)"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>PDF (.pdf)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportGrades('excel')}
+                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+                title="Unduh format Microsoft Excel (.xlsx)"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Excel (.xlsx)</span>
               </button>
               <button
                 type="button"
                 onClick={handleSaveAllGrades}
-                className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer ml-1"
               >
                 <Save className="w-4 h-4" />
                 <span>Simpan Seluruh Nilai</span>

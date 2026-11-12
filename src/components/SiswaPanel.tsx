@@ -69,6 +69,8 @@ import { EcoTiketPanel } from './eco/EcoTiketPanel';
 import { EcoCertificateModal } from './eco/EcoCertificateModal';
 import { fileToBase64, convertGoogleDriveLink } from '../utils/imageHelper';
 import { printCertificate, printTablePDF } from '../utils/printHelper';
+import { downloadExcel } from '../utils/excelExport';
+import { downloadDocx } from '../utils/docxExport';
 import { useDownload } from '../context/DownloadContext';
 import { getEffectiveSchoolLogo, getEffectiveRegionalLogo } from '../utils/schoolLogoHelper';
 
@@ -701,24 +703,54 @@ export default function SiswaPanel({
   });
 
   const getSiswaDownloadConfig = () => {
+    const achHeaders = ["Judul Prestasi", "Kategori", "Tingkat", "Peringkat", "Tanggal"];
+    const achRows = myAchievements.map((a) => [a.title, a.category, `Tingkat ${a.level}`, a.rank || a.level, a.date]);
+
+    const attHeaders = ["Tanggal", "Status", "Keterangan"];
+    const attRows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
+
     return [
       {
-        label: 'Rekap Prestasi (PDF)',
+        label: 'Prestasi (.docx)',
         onClick: () => {
-          const headers = ["Judul Prestasi", "Kategori", "Tingkat", "Peringkat", "Tanggal"];
-          const rows = myAchievements.map((a) => [a.title, a.category, `Tingkat ${a.level}`, a.rank || a.level, a.date]);
-          printTablePDF(`Rekapitulasi Raihan Prestasi Siswa - ${student.name}`, headers, rows, headmasterName);
+          downloadDocx(`rekap_prestasi_${student.name.toLowerCase().replace(/\s+/g, '_')}.docx`, `Rekapitulasi Raihan Prestasi Siswa - ${student.name}`, achHeaders, achRows, headmasterName);
+        },
+        type: 'docx' as const,
+      },
+      {
+        label: 'Prestasi (.pdf)',
+        onClick: () => {
+          printTablePDF(`Rekapitulasi Raihan Prestasi Siswa - ${student.name}`, achHeaders, achRows, headmasterName);
         },
         type: 'pdf' as const,
       },
       {
-        label: 'Rekap Presensi (PDF)',
+        label: 'Prestasi (.xlsx)',
         onClick: () => {
-          const headers = ["Tanggal", "Status", "Keterangan"];
-          const rows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
-          printTablePDF(`Rekap Presensi Kehadiran Siswa - ${student.name}`, headers, rows, headmasterName);
+          downloadExcel(`rekap_prestasi_${student.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`, achHeaders, achRows, 'Prestasi');
+        },
+        type: 'excel' as const,
+      },
+      {
+        label: 'Presensi (.docx)',
+        onClick: () => {
+          downloadDocx(`rekap_presensi_${student.name.toLowerCase().replace(/\s+/g, '_')}.docx`, `Rekap Presensi Kehadiran Siswa - ${student.name}`, attHeaders, attRows, headmasterName);
+        },
+        type: 'docx' as const,
+      },
+      {
+        label: 'Presensi (.pdf)',
+        onClick: () => {
+          printTablePDF(`Rekap Presensi Kehadiran Siswa - ${student.name}`, attHeaders, attRows, headmasterName);
         },
         type: 'pdf' as const,
+      },
+      {
+        label: 'Presensi (.xlsx)',
+        onClick: () => {
+          downloadExcel(`rekap_presensi_${student.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`, attHeaders, attRows, 'Presensi');
+        },
+        type: 'excel' as const,
       }
     ];
   };

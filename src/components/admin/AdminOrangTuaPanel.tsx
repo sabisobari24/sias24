@@ -20,6 +20,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { downloadExcel } from '../../utils/excelExport';
+import { downloadDocx } from '../../utils/docxExport';
 import { printTablePDF } from '../../utils/printHelper';
 
 interface AdminOrangTuaPanelProps {
@@ -170,6 +171,24 @@ export default function AdminOrangTuaPanel({
     setTimeout(() => setSuccessMsg(''), 3500);
   };
 
+  const handleExportDocx = () => {
+    const headers = ['No', 'Nama Orang Tua / Wali', 'NIK Orang Tua', 'No. HP / WhatsApp', 'Email', 'Siswa yang Diwakili', 'NISN', 'Kelas', 'Kata Sandi Akun'];
+    const rows = filteredStudents.map((s, idx) => [
+      idx + 1,
+      s.parentName || 'Belum Diatur',
+      s.parentNik || '-',
+      s.parentPhone || '-',
+      s.parentEmail || '-',
+      s.name,
+      s.nisn || '-',
+      classes.find(c => c.id === s.classId)?.name || s.classId,
+      s.parentPassword || 'ortu123'
+    ]);
+    downloadDocx(`Data_Orang_Tua_Murid_${new Date().toISOString().split('T')[0]}.docx`, 'Daftar Kontak & Akun Orang Tua Siswa', headers, rows, headmasterName);
+    setSuccessMsg('Data kontak Orang Tua berhasil diunduh (Word .docx)!');
+    setTimeout(() => setSuccessMsg(''), 3500);
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner Header */}
@@ -184,22 +203,33 @@ export default function AdminOrangTuaPanel({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={handleExportExcel}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
+            onClick={handleExportDocx}
+            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
+            title="Unduh Data Orang Tua dalam format Microsoft Word (.docx)"
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Unduh Excel</span>
+            <FileText className="w-4 h-4 text-blue-200" />
+            <span>Word (.docx)</span>
           </button>
           <button
             type="button"
             onClick={handleExportPDF}
-            className="px-3.5 py-2 bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
+            className="px-3.5 py-2 bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
+            title="Cetak atau simpan dokumen dalam format PDF (.pdf)"
           >
-            <FileText className="w-4 h-4" />
-            <span>Cetak PDF</span>
+            <FileText className="w-4 h-4 text-rose-200" />
+            <span>Cetak PDF (.pdf)</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
+            title="Unduh data dalam format Microsoft Excel (.xlsx)"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+            <span>Excel (.xlsx)</span>
           </button>
         </div>
       </div>

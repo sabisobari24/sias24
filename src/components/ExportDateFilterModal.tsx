@@ -6,7 +6,7 @@ interface ExportDateFilterModalProps {
   onClose: () => void;
   title: string;
   description?: string;
-  onExport: (startDate: string, endDate: string, format: 'excel' | 'pdf') => void;
+  onExport: (startDate: string, endDate: string, format: 'excel' | 'pdf' | 'docx') => void;
   initialStartDate?: string;
   initialEndDate?: string;
 }
@@ -54,7 +54,7 @@ export default function ExportDateFilterModal({
     setEndDate('');
   };
 
-  const handleExecute = (format: 'excel' | 'pdf') => {
+  const handleExecute = (format: 'excel' | 'pdf' | 'docx') => {
     onExport(startDate, endDate, format);
     onClose();
   };
@@ -158,24 +158,36 @@ export default function ExportDateFilterModal({
           </div>
         )}
 
-        {/* Export Action Buttons */}
-        <div className="grid grid-cols-2 gap-3 pt-2">
+        {/* Export Action Buttons - 3 Formats (.docx, .pdf, .xlsx) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2">
           <button
             type="button"
-            onClick={() => handleExecute('excel')}
-            className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+            onClick={() => handleExecute('docx')}
+            className="w-full py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+            title="Unduh dokumen dalam format Microsoft Word (.docx)"
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Unduh Excel (.xlsx)</span>
+            <FileText className="w-4 h-4 text-blue-200 shrink-0" />
+            <span>Word (.docx)</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleExecute('pdf')}
-            className="w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+            className="w-full py-2.5 px-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+            title="Cetak atau simpan dokumen dalam format PDF (.pdf)"
           >
-            <Printer className="w-4 h-4 text-indigo-200" />
-            <span>Cetak / PDF (.pdf)</span>
+            <Printer className="w-4 h-4 text-indigo-200 shrink-0" />
+            <span>PDF (.pdf)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleExecute('excel')}
+            className="w-full py-2.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+            title="Unduh data dalam format Microsoft Excel (.xlsx)"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-200 shrink-0" />
+            <span>Excel (.xlsx)</span>
           </button>
         </div>
       </div>

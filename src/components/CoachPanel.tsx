@@ -31,8 +31,9 @@ import {
 import { saveDocument, syncCollection, saveDocumentsBatch } from '../lib/firebase';
 import { compressImageFile } from '../utils/imageHelper';
 import { safeLocalStorageSet } from '../utils/storageHelper';
-import { printHTML } from '../utils/printHelper';
+import { printHTML, printTablePDF } from '../utils/printHelper';
 import { downloadExcel } from '../utils/excelExport';
+import { downloadDocx } from '../utils/docxExport';
 import { Student, Teacher, WebSectionContent, WebExtracurricular, StudentAchievement } from '../types';
 import { INITIAL_WEB_CONTENT } from '../data/initialWebContent';
 import { WebIcon } from './website/WebIcon';
@@ -876,7 +877,7 @@ export default function CoachPanel({
     document.body.removeChild(link);
   };
 
-  const handleDownloadAttendanceRecap = () => {
+  const handleDownloadAttendanceRecap = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
     if (attendanceList.length === 0) return;
     
     // Sort oldest first
@@ -929,11 +930,50 @@ export default function CoachPanel({
       ];
     });
     
-    downloadExcel(
-      `rekap_kehadiran_ekskul_${currentEkskul.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`,
+    if (format === 'excel') {
+      downloadExcel(
+        `rekap_kehadiran_ekskul_${currentEkskul.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`,
+        headers,
+        rows,
+        `Presensi ${currentEkskul.name.slice(0, 25)}`
+      );
+    } else if (format === 'docx') {
+      downloadDocx(
+        `rekap_kehadiran_ekskul_${currentEkskul.name.toLowerCase().replace(/\s+/g, '_')}.docx`,
+        `Rekapitulasi Kehadiran Anggota Ekskul ${currentEkskul.name}`,
+        headers,
+        rows
+      );
+    } else {
+      printTablePDF(
+        `Rekapitulasi Kehadiran Anggota Ekskul ${currentEkskul.name}`,
+        headers,
+        rows
+      );
+    }
+  };
+
+  const handleDownloadDocxGrades = () => {
+    const activeMembers = students.filter(s => memberIds.includes(s.id));
+    const ekskulName = currentEkskul.name;
+    const headers = ['No', 'Nama Siswa', 'Kelas', 'Nilai Angka', 'Predikat', 'Sikap', 'Catatan Perkembangan'];
+    const rows = activeMembers.map((m, idx) => {
+      const g = studentGrades.find(grade => grade.studentId === m.id);
+      return [
+        idx + 1,
+        m.name,
+        m.classId || '-',
+        g ? g.score : '-',
+        g ? g.predicate : '-',
+        g ? g.attitude : '-',
+        g?.notes || '-'
+      ];
+    });
+    downloadDocx(
+      `rekap_nilai_ekskul_${ekskulName.toLowerCase().replace(/\s+/g, '_')}.docx`,
+      `Rekapitulasi Nilai Akhir Anggota Ekskul ${ekskulName}`,
       headers,
-      rows,
-      `Presensi ${currentEkskul.name.slice(0, 25)}`
+      rows
     );
   };
 
@@ -960,17 +1000,24 @@ export default function CoachPanel({
     switch (activeTab) {
       case 'absensi':
         return [
-          { label: 'Rekap Kehadiran (Excel)', onClick: handleDownloadAttendanceRecap, type: 'excel' as const },
+          { label: 'Kehadiran (.docx)', onClick: () => handleDownloadAttendanceRecap('docx'), type: 'docx' as const },
+          { label: 'Kehadiran (.pdf)', onClick: () => handleDownloadAttendanceRecap('pdf'), type: 'pdf' as const },
+          { label: 'Kehadiran (.xlsx)', onClick: () => handleDownloadAttendanceRecap('excel'), type: 'excel' as const },
         ];
       case 'nilai':
         return [
-          { label: 'Nilai Ekskul (Excel)', onClick: handleDownloadExcelGrades, type: 'excel' as const },
-          { label: 'Nilai Ekskul (PDF)', onClick: handleDownloadPDFGrades, type: 'pdf' as const },
+          { label: 'Nilai Ekskul (.docx)', onClick: handleDownloadDocxGrades, type: 'docx' as const },
+          { label: 'Nilai Ekskul (.pdf)', onClick: handleDownloadPDFGrades, type: 'pdf' as const },
+          { label: 'Nilai Ekskul (.xlsx)', onClick: handleDownloadExcelGrades, type: 'excel' as const },
         ];
       default:
         return [
-          { label: 'Rekap Kehadiran (Excel)', onClick: handleDownloadAttendanceRecap, type: 'excel' as const },
-          { label: 'Nilai Ekskul (Excel)', onClick: handleDownloadExcelGrades, type: 'excel' as const },
+          { label: 'Kehadiran (.docx)', onClick: () => handleDownloadAttendanceRecap('docx'), type: 'docx' as const },
+          { label: 'Kehadiran (.pdf)', onClick: () => handleDownloadAttendanceRecap('pdf'), type: 'pdf' as const },
+          { label: 'Kehadiran (.xlsx)', onClick: () => handleDownloadAttendanceRecap('excel'), type: 'excel' as const },
+          { label: 'Nilai Ekskul (.docx)', onClick: handleDownloadDocxGrades, type: 'docx' as const },
+          { label: 'Nilai Ekskul (.pdf)', onClick: handleDownloadPDFGrades, type: 'pdf' as const },
+          { label: 'Nilai Ekskul (.xlsx)', onClick: handleDownloadExcelGrades, type: 'excel' as const },
         ];
     }
   };

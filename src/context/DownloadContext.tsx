@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 export interface DownloadActionItem {
   label: string;
   onClick: () => void;
-  type?: 'excel' | 'pdf' | 'print';
+  type?: 'excel' | 'pdf' | 'print' | 'docx';
 }
 
 interface DownloadContextType {

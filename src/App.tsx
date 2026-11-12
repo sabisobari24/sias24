@@ -4213,7 +4213,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <FileCheck className="w-4 h-4 shrink-0 text-indigo-500" />
-                        <span className="truncate">Computer Based Test (CBT)</span>
+                        <span className="truncate">Computare Base Test (CBT)</span>
                       </button>
 
                       <button
@@ -4678,7 +4678,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         adminTabOverride === 'pelatih' ? 'Data Pelatih & Ekskul' :
                         adminTabOverride === 'orang-tua' ? 'Data Orang Tua Murid' :
                         adminTabOverride === 'database-settings' ? 'Kelas & Pengaturan Database' :
-                        adminTabOverride === 'setting-cbt' ? 'Computer Based Test (CBT)' :
+                        adminTabOverride === 'setting-cbt' ? 'Computare Base Test (CBT)' :
                         adminTabOverride === 'validasi-akun' ? 'Validasi Akun Baru' :
                         adminTabOverride === 'kelola-web' ? 'Kelola Konten Website' :
                         adminTabOverride === 'prestasi' ? 'Prestasi Siswa' :
@@ -4932,14 +4932,25 @@ export default function App({ initialMode }: AppProps = {}) {
                                       action.onClick();
                                       setIsDownloadMenuOpen(false);
                                     }}
-                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors flex items-center justify-between gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
                                   >
-                                    {action.type === 'excel' ? (
-                                      <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
-                                    ) : (
-                                      <FileText className="w-4 h-4 text-rose-500 shrink-0" />
-                                    )}
-                                    <span className="truncate">{action.label}</span>
+                                    <div className="flex items-center gap-2.5 truncate">
+                                      {action.type === 'excel' ? (
+                                        <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                                      ) : action.type === 'docx' ? (
+                                        <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                                      ) : (
+                                        <FileText className="w-4 h-4 text-rose-500 shrink-0" />
+                                      )}
+                                      <span className="truncate">{action.label}</span>
+                                    </div>
+                                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded shrink-0 border ${
+                                      action.type === 'excel' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' :
+                                      action.type === 'docx' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800' :
+                                      'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                                    }`}>
+                                      {action.type === 'excel' ? '.xlsx' : action.type === 'docx' ? '.docx' : '.pdf'}
+                                    </span>
                                   </button>
                                 ))}
                               </div>
