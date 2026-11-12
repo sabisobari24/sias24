@@ -25,7 +25,8 @@ import {
   Filter,
   CheckSquare,
   Square,
-  Sparkles
+  Sparkles,
+  ChevronDown
 } from 'lucide-react';
 import { saveDocument, syncCollection, saveDocumentsBatch } from '../lib/firebase';
 import { compressImageFile } from '../utils/imageHelper';
@@ -99,6 +100,7 @@ export default function CoachPanel({
   // Local state for forms
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [isCoachDownloadOpen, setIsCoachDownloadOpen] = useState(false);
   
   // Member selection & filter states
   const [selectedStudentId, setSelectedStudentId] = useState('');
@@ -997,22 +999,54 @@ export default function CoachPanel({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {getCoachDownloadConfig().map((btn, idx) => (
+          {/* Unified Unduh Dropdown */}
+          <div className="relative">
             <button
-              key={idx}
               type="button"
-              onClick={btn.onClick}
-              className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
-              title={btn.label}
+              onClick={() => setIsCoachDownloadOpen(!isCoachDownloadOpen)}
+              className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+              title="Menu Unduh & Ekspor Laporan Ekskul"
             >
-              {btn.type === 'excel' ? (
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              ) : (
-                <FileText className="w-3.5 h-3.5 text-amber-600" />
-              )}
-              <span>{btn.label}</span>
+              <Download className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Unduh</span>
+              <span className="bg-amber-100 text-amber-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                {getCoachDownloadConfig().length}
+              </span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isCoachDownloadOpen ? 'rotate-180' : ''}`} />
             </button>
-          ))}
+
+            {isCoachDownloadOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsCoachDownloadOpen(false)} />
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-40 text-slate-800 text-xs font-medium">
+                  <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                    <span>Menu Unduh &amp; Ekspor</span>
+                    <span className="text-amber-600 font-bold">Pelatih</span>
+                  </div>
+                  <div className="py-1 space-y-1">
+                    {getCoachDownloadConfig().map((action, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          action.onClick();
+                          setIsCoachDownloadOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-700 hover:text-amber-600"
+                      >
+                        {action.type === 'excel' ? (
+                          <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <FileText className="w-4 h-4 text-rose-500 shrink-0" />
+                        )}
+                        <span className="truncate">{action.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <span className="bg-emerald-500/20 text-emerald-400 font-black text-[10px] px-3 py-1.5 rounded-full uppercase tracking-wider flex items-center gap-1">
             <Globe className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Tersinkronisasi</span>
@@ -1430,16 +1464,6 @@ export default function CoachPanel({
                   <h3 className="text-sm font-black text-slate-800">Rekap Presensi Pertemuan</h3>
                   <p className="text-xs text-slate-400">Catat dan kelola riwayat absensi kehadiran latihan anggota ekstrakurikuler.</p>
                 </div>
-                {attendanceList.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleDownloadAttendanceRecap}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer w-max"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Download Rekap Kehadiran (Excel)</span>
-                  </button>
-                )}
               </div>
 
               {memberStudents.length === 0 ? (
@@ -1957,25 +1981,11 @@ export default function CoachPanel({
 
                 <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                   <button
-                    onClick={handleDownloadPDFGrades}
-                    className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer border border-rose-500"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span>Unduh PDF</span>
-                  </button>
-                  <button
-                    onClick={handleDownloadExcelGrades}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer border border-emerald-500"
-                  >
-                    <FileSpreadsheet className="w-4 h-4" />
-                    <span>Unduh Excel</span>
-                  </button>
-                  <button
                     onClick={handleSaveAllGrades}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer border border-indigo-500"
                   >
                     <Save className="w-4 h-4" />
-                    <span>Simpan Semua</span>
+                    <span>Simpan Semua Nilai</span>
                   </button>
                 </div>
               </div>

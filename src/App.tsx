@@ -758,7 +758,7 @@ export default function App({ initialMode }: AppProps = {}) {
   // Public website tab state
   const [publicTab, setPublicTab] = useState<'beranda' | 'akademik' | 'kesiswaan' | 'sarpras' | 'berita' | 'portal'>('beranda');
 
-  const [adminTabOverride, setAdminTabOverride] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | null>(null);
+  const [adminTabOverride, setAdminTabOverride] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua' | null>(null);
 
   const [siswaTab, setSiswaTab] = useState<'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | 'elearning' | 'eco-tiket'>('profil');
   const [orangTuaTab, setOrangTuaTab] = useState<'profil' | 'absensi' | 'pelanggaran' | 'catatan' | 'komunikasi'>('profil');
@@ -1861,6 +1861,28 @@ export default function App({ initialMode }: AppProps = {}) {
       .catch((err) => console.error("Error replying to parent message:", err));
   };
 
+  // Staff / Guru Wali / Wali Kelas sends direct message to parent
+  const handleSendMessageToParent = (studentId: string, message: string, senderTitle?: string) => {
+    const id = `pm-${Date.now()}`;
+    const newMsg: ParentMessage = {
+      id,
+      studentId,
+      date: new Date().toLocaleDateString('id-ID') + ' ' + new Date().toTimeString().split(' ')[0].substr(0, 5),
+      senderName: senderTitle || `${activeUser?.name || 'Guru Wali'} (Guru Wali)`,
+      message,
+      replies: []
+    };
+
+    setParentMessages((prev) => {
+      const next = [...prev.filter((i) => i.id !== id), newMsg];
+      localStorage.setItem('siakad_parent_messages', JSON.stringify(next));
+      return next;
+    });
+
+    saveDocument('parent_messages', id, newMsg)
+      .catch((err) => console.error("Error adding parent message from staff:", err));
+  };
+
   // Parent signs/acknowledges a note
   const handleAcknowledgeNote = (type: 'homeroom' | 'counselor', noteId: string) => {
     if (type === 'homeroom') {
@@ -2620,12 +2642,16 @@ export default function App({ initialMode }: AppProps = {}) {
   };
 
   const handleUpdateClass = (updatedClass: SchoolClass) => {
+    const sanitizedClass: SchoolClass = {
+      ...updatedClass,
+      homeroomTeacherId: updatedClass.homeroomTeacherId || ''
+    };
     setClasses((prev) => {
-      const next = prev.map((i) => i.id === updatedClass.id ? { ...i, ...updatedClass } : i);
+      const next = prev.map((i) => i.id === sanitizedClass.id ? { ...i, ...sanitizedClass } : i);
       safeLocalStorageSet('siakad_classes', JSON.stringify(next));
       return next;
     });
-    saveDocument('classes', updatedClass.id, updatedClass)
+    saveDocument('classes', sanitizedClass.id, sanitizedClass)
       .catch((err) => console.error("Error updating class:", err));
   };
 
@@ -4143,6 +4169,30 @@ export default function App({ initialMode }: AppProps = {}) {
                       </button>
 
                       <button
+                        onClick={() => setAdminTabOverride('pelatih')}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          adminTabOverride === 'pelatih'
+                            ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-100'
+                            : 'bg-transparent text-slate-600 border-transparent hover:bg-slate-50 hover:text-slate-900 cursor-pointer'
+                        }`}
+                      >
+                        <Award className="w-4 h-4 shrink-0 text-amber-500" />
+                        <span className="truncate">Data Pelatih &amp; Ekskul</span>
+                      </button>
+
+                      <button
+                        onClick={() => setAdminTabOverride('orang-tua')}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          adminTabOverride === 'orang-tua'
+                            ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-100'
+                            : 'bg-transparent text-slate-600 border-transparent hover:bg-slate-50 hover:text-slate-900 cursor-pointer'
+                        }`}
+                      >
+                        <Users className="w-4 h-4 shrink-0 text-orange-500" />
+                        <span className="truncate">Data Orang Tua</span>
+                      </button>
+
+                      <button
                         onClick={() => setAdminTabOverride('database-settings')}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
                           adminTabOverride === 'database-settings'
@@ -4163,7 +4213,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <FileCheck className="w-4 h-4 shrink-0 text-indigo-500" />
-                        <span className="truncate">Jadwal CBT</span>
+                        <span className="truncate">Computer Based Test (CBT)</span>
                       </button>
 
                       <button
@@ -4625,8 +4675,10 @@ export default function App({ initialMode }: AppProps = {}) {
                       {activeRole === 'admin' && (
                         adminTabOverride === 'siswa' ? 'Data Siswa & Rombel' :
                         adminTabOverride === 'guru' ? 'Data Guru & Tenaga Kependidikan' :
+                        adminTabOverride === 'pelatih' ? 'Data Pelatih & Ekskul' :
+                        adminTabOverride === 'orang-tua' ? 'Data Orang Tua Murid' :
                         adminTabOverride === 'database-settings' ? 'Kelas & Pengaturan Database' :
-                        adminTabOverride === 'setting-cbt' ? 'Jadwal & Pengaturan CBT' :
+                        adminTabOverride === 'setting-cbt' ? 'Computer Based Test (CBT)' :
                         adminTabOverride === 'validasi-akun' ? 'Validasi Akun Baru' :
                         adminTabOverride === 'kelola-web' ? 'Kelola Konten Website' :
                         adminTabOverride === 'prestasi' ? 'Prestasi Siswa' :
@@ -5207,6 +5259,7 @@ export default function App({ initialMode }: AppProps = {}) {
                             onDeleteBimbinganJournal={handleDeleteBimbinganJournal}
                             onAddBimbinganSchedule={handleAddBimbinganSchedule}
                             onDeleteBimbinganSchedule={handleDeleteBimbinganSchedule}
+                            onSendMessageToParent={handleSendMessageToParent}
                             headmasterName={headmasterName}
                           />
                         )}

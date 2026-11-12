@@ -26,6 +26,7 @@ interface GuruWaliPanelProps {
   onDeleteBimbinganJournal: (id: string) => void;
   onAddBimbinganSchedule: (schedule: Omit<BimbinganSchedule, 'id'>) => void;
   onDeleteBimbinganSchedule: (id: string) => void;
+  onSendMessageToParent?: (studentId: string, message: string, senderTitle?: string) => void;
   headmasterName?: string;
 
   activeTabOverride?: 'beranda' | 'bimbingan' | 'bimbingan-bk' | 'bakat-minat' | 'pesan' | null;
@@ -51,6 +52,7 @@ export default function GuruWaliPanel({
   onDeleteBimbinganJournal,
   onAddBimbinganSchedule,
   onDeleteBimbinganSchedule,
+  onSendMessageToParent,
   headmasterName = 'Dra. Hj. Endah Purwani, M.M.',
   activeTabOverride,
   onTabChange,
@@ -62,6 +64,14 @@ export default function GuruWaliPanel({
     if (onTabChange) onTabChange(tab);
   };
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Presensi Binaan filters
+  const [presensiStudentFilter, setPresensiStudentFilter] = useState<string>('all');
+  const [presensiDateFilter, setPresensiDateFilter] = useState<string>('');
+
+  // Kirim Pesan Baru ke Orang Tua
+  const [newMsgStudentId, setNewMsgStudentId] = useState<string>('');
+  const [newMsgContent, setNewMsgContent] = useState<string>('');
 
   // Filter students managed by this Guru Wali (binaaan dari kelas 7 sampai lulus)
   const myStudents = students.filter(s => s.guruWaliTeacherId === teacher.id);
@@ -297,10 +307,66 @@ export default function GuruWaliPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
+  const handleExportPresensiBinaan = (format: 'excel' | 'pdf') => {
+    const headers = ["No", "NISN", "Nama Siswa", "Kelas", "Hadir (H)", "Sakit (S)", "Izin (I)", "Alpa (A)", "Persentase Kehadiran (%)"];
+    const rows = myStudents.map((s, idx) => {
+      const sAtt = attendance.filter(a => a.studentId === s.id || (s.nisn && a.studentId === s.nisn));
+      const hadir = sAtt.filter(a => a.status === 'Hadir').length;
+      const sakit = sAtt.filter(a => a.status === 'Sakit').length;
+      const izin = sAtt.filter(a => a.status === 'Izin').length;
+      const alpa = sAtt.filter(a => a.status === 'Alpa').length;
+      const total = sAtt.length;
+      const pct = total > 0 ? Math.round((hadir / total) * 100) : 100;
+      return [
+        idx + 1,
+        s.nisn || '-',
+        s.name,
+        classes.find(c => c.id === s.classId)?.name || s.classId,
+        hadir,
+        sakit,
+        izin,
+        alpa,
+        `${pct}%`
+      ];
+    });
+
+    if (format === 'excel') {
+      downloadExcel(`Rekap_Presensi_Siswa_Binaan_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Presensi Binaan');
+      setSuccessMsg('Rekap Presensi Siswa Binaan berhasil diunduh (Excel)!');
+    } else {
+      printTablePDF(`Rekapitulasi Presensi Kehadiran Siswa Binaan - ${teacher.name}`, headers, rows, headmasterName);
+      setSuccessMsg('Dokumen Presensi Siswa Binaan berhasil dicetak / PDF!');
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  const handleSendNewParentMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMsgStudentId || !newMsgContent.trim()) {
+      alert('Mohon pilih siswa binaan dan tulis isi pesan untuk orang tua.');
+      return;
+    }
+
+    const targetStudent = myStudents.find(s => s.id === newMsgStudentId);
+    if (!targetStudent) return;
+
+    if (onSendMessageToParent) {
+      onSendMessageToParent(targetStudent.id, newMsgContent.trim(), `${teacher.name} (Guru Wali)`);
+    }
+
+    setSuccessMsg(`Pesan resmi berhasil dikirimkan ke akun Orang Tua dari ${targetStudent.name}!`);
+    setNewMsgStudentId('');
+    setNewMsgContent('');
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
   const getGuruWaliDownloadConfig = () => {
     switch (activeTab) {
-      case 'beranda':
       case 'bimbingan':
+        return [
+          { label: 'Presensi Binaan (Excel)', onClick: () => handleExportPresensiBinaan('excel'), type: 'excel' as const },
+          { label: 'Presensi Binaan (PDF)', onClick: () => handleExportPresensiBinaan('pdf'), type: 'pdf' as const },
+        ];
       case 'bimbingan-bk':
         return [
           { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbingan('excel'), type: 'excel' as const },
@@ -316,10 +382,13 @@ export default function GuruWaliPanel({
           { label: 'Pesan Orang Tua (Excel)', onClick: () => handleExportPesanGuruWali('excel'), type: 'excel' as const },
           { label: 'Pesan Orang Tua (PDF)', onClick: () => handleExportPesanGuruWali('pdf'), type: 'pdf' as const },
         ];
+      case 'beranda':
       default:
         return [
+          { label: 'Presensi Binaan (Excel)', onClick: () => handleExportPresensiBinaan('excel'), type: 'excel' as const },
+          { label: 'Presensi Binaan (PDF)', onClick: () => handleExportPresensiBinaan('pdf'), type: 'pdf' as const },
           { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbingan('excel'), type: 'excel' as const },
-          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbingan('pdf'), type: 'pdf' as const },
+          { label: 'Bakat & Minat (Excel)', onClick: () => handleExportBakatMinat('excel'), type: 'excel' as const },
         ];
     }
   };
@@ -334,29 +403,12 @@ export default function GuruWaliPanel({
   return (
     <div className="space-y-6">
       {/* Guru Wali Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-2xl p-6 text-white shadow-md">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-3xl p-5 sm:p-6 text-white shadow-md">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="space-y-1">
-            <span className="text-indigo-100 text-xs font-semibold uppercase tracking-wider">Masa Bimbingan: Kelas 7 s/d Kelulusan</span>
-            <h1 className="text-2xl font-bold">{teacher.name}</h1>
-            <p className="text-indigo-100 text-sm">NIP: {teacher.nip} | Peran: Guru Wali Akademik & Bakat Minat</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {getGuruWaliDownloadConfig().map((btn, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={btn.onClick}
-                className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-800 rounded-xl transition-all text-xs font-bold flex items-center gap-2 border border-slate-200 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98]"
-              >
-                {btn.label.includes('Excel') ? (
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                ) : (
-                  <FileText className="w-4 h-4 text-indigo-600" />
-                )}
-                <span>{btn.label}</span>
-              </button>
-            ))}
+            <span className="text-indigo-200 text-xs font-semibold uppercase tracking-wider">Masa Bimbingan: Kelas 7 s/d Kelulusan</span>
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight">{teacher.name}</h1>
+            <p className="text-indigo-100 text-xs sm:text-sm">NIP: {teacher.nip} &bull; Guru Wali Akademik &amp; Bakat Minat ({myStudents.length} Siswa Binaan)</p>
           </div>
         </div>
       </div>
@@ -521,150 +573,326 @@ export default function GuruWaliPanel({
         </div>
       )}
 
-      {/* BIMBINGAN TAB */}
-      {activeTab === 'bimbingan' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Add Bimbingan Note Form */}
-          <div className="bg-white rounded-xl p-5 border shadow-sm space-y-4 h-fit">
-            <h4 className="font-bold text-slate-800 flex items-center gap-2 pb-2 border-b">
-              <FileText className="w-5 h-5 text-indigo-600" />
-              <span>Input Layanan Bimbingan</span>
-            </h4>
+      {/* REKAP PRESENSI SISWA BINAAN TAB */}
+      {activeTab === 'bimbingan' && (() => {
+        const targetStudentList = presensiStudentFilter === 'all'
+          ? myStudents
+          : myStudents.filter(s => s.id === presensiStudentFilter);
 
-            <form onSubmit={handleSubmitCounselorNote} className="space-y-3.5 text-xs">
-              <div className="space-y-1">
-                <label className="block text-slate-500 font-semibold mb-1">Target Siswa Bimbingan <span className="text-rose-500">*</span></label>
+        let relevantAttendance = attendance.filter(a => 
+          targetStudentList.some(s => s.id === a.studentId || (s.nisn && a.studentId === s.nisn))
+        );
+
+        if (presensiDateFilter) {
+          relevantAttendance = relevantAttendance.filter(a => a.date === presensiDateFilter);
+        }
+
+        const totalRecords = relevantAttendance.length;
+        const totalHadir = relevantAttendance.filter(a => a.status === 'Hadir').length;
+        const totalSakit = relevantAttendance.filter(a => a.status === 'Sakit').length;
+        const totalIzin = relevantAttendance.filter(a => a.status === 'Izin').length;
+        const totalAlpa = relevantAttendance.filter(a => a.status === 'Alpa').length;
+        const hadirPct = totalRecords > 0 ? Math.round((totalHadir / totalRecords) * 100) : 100;
+
+        return (
+          <div className="space-y-6">
+            {/* Header & Filter Controls */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-indigo-600" />
+                  <span>Rekapitulasi Presensi Kehadiran Siswa Binaan</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Pantau riwayat absensi harian, kedisiplinan, dan ketidakhadiran siswa bimbingan Anda secara berkala.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 text-xs w-full md:w-auto">
                 <select
-                  value={targetStudentId}
-                  onChange={(e) => setTargetStudentId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer text-slate-700 font-medium"
+                  value={presensiStudentFilter}
+                  onChange={(e) => setPresensiStudentFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-800 text-xs focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                 >
-                  <option value="">-- Pilih Siswa Binaan --</option>
-                  {myStudents.map((s) => (
+                  <option value="all">Semua Siswa Binaan ({myStudents.length} Siswa)</option>
+                  {myStudents.map(s => (
                     <option key={s.id} value={s.id}>
                       {s.name} ({classes.find(c => c.id === s.classId)?.name || s.classId})
                     </option>
                   ))}
                 </select>
+
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={presensiDateFilter}
+                    onChange={(e) => setPresensiDateFilter(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium"
+                  />
+                  {presensiDateFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setPresensiDateFilter('')}
+                      className="px-2 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold"
+                      title="Reset Tanggal"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
               </div>
-
-              <div className="space-y-1">
-                <label className="block text-slate-500 font-semibold mb-1">Catatan Pembinaan &amp; Saran Akademik <span className="text-rose-500">*</span></label>
-                <textarea
-                  required
-                  rows={4}
-                  placeholder="Ketik rincian hasil bimbingan, permasalahan akademik/non-akademik, atau saran pengembangan di sini..."
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-slate-500 font-semibold mb-1">Rencana Tindak Lanjut</label>
-                <textarea
-                  rows={2}
-                  placeholder="Ketik kesepakatan tindak lanjut bimbingan..."
-                  value={followUpContent}
-                  onChange={(e) => setFollowUpContent(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-slate-500 font-semibold mb-1">Status Pembinaan</label>
-                <select
-                  value={counselingStatus}
-                  onChange={(e) => setCounselingStatus(e.target.value as any)}
-                  className="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer text-slate-700"
-                >
-                  <option value="Dalam Pemantauan">Dalam Pemantauan</option>
-                  <option value="Perlu Perhatian">Perlu Perhatian Khusus</option>
-                  <option value="Selesai">Bimbingan Selesai / Tuntas</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Save className="w-4 h-4" />
-                <span>Terbitkan Catatan Bimbingan</span>
-              </button>
-            </form>
-          </div>
-
-          {/* Bimbingan List History */}
-          <div className="lg:col-span-2 bg-white rounded-xl p-5 border shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-              <h4 className="font-bold text-slate-800 flex items-center gap-2">
-                <Activity className="w-5 h-5 text-indigo-600" />
-                <span>Riwayat Sesi Bimbingan Siswa Binaan</span>
-              </h4>
             </div>
 
-            <div className="space-y-3.5 max-h-[550px] overflow-y-auto pr-1">
-              {counselorNotes.filter(n => myStudents.some(s => s.id === n.studentId)).length === 0 ? (
-                <div className="py-24 text-center text-slate-400">
-                  <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                  <p className="text-sm font-medium">Belum ada catatan bimbingan terbit.</p>
-                  <p className="text-xs text-slate-400 mt-1">Gunakan form di samping untuk mulai mempublikasikan catatan bimbingan akademik pertama.</p>
-                </div>
-              ) : (
-                counselorNotes
-                  .filter(n => myStudents.some(s => s.id === n.studentId))
-                  .slice()
-                  .reverse()
-                  .map((note) => {
-                    const student = students.find(s => s.id === note.studentId);
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                <span className="text-[10px] font-black uppercase text-emerald-600">Kehadiran (Hadir)</span>
+                <p className="text-2xl font-black text-slate-900 mt-1">{totalHadir}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">{hadirPct}% dari total presensi</p>
+              </div>
+              <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                <span className="text-[10px] font-black uppercase text-blue-600">Sakit (S)</span>
+                <p className="text-2xl font-black text-slate-900 mt-1">{totalSakit}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Surat / Keterangan dokter</p>
+              </div>
+              <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                <span className="text-[10px] font-black uppercase text-amber-600">Izin (I)</span>
+                <p className="text-2xl font-black text-slate-900 mt-1">{totalIzin}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Izin orang tua / kegiatan</p>
+              </div>
+              <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                <span className="text-[10px] font-black uppercase text-rose-600">Alpa / Tanpa Ket. (A)</span>
+                <p className="text-2xl font-black text-slate-900 mt-1">{totalAlpa}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Perlu perhatian khusus</p>
+              </div>
+            </div>
+
+            {/* Rekapitulasi per Siswa Binaan */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h4 className="font-bold text-slate-900 text-sm">Rekapitulasi Kehadiran Akumulatif per Siswa</h4>
+                <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
+                  {targetStudentList.length} Siswa
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Nama Siswa</th>
+                      <th className="px-4 py-3">NISN</th>
+                      <th className="px-4 py-3">Kelas</th>
+                      <th className="px-4 py-3 text-center text-emerald-700 font-black">Hadir</th>
+                      <th className="px-4 py-3 text-center text-blue-700 font-black">Sakit</th>
+                      <th className="px-4 py-3 text-center text-amber-700 font-black">Izin</th>
+                      <th className="px-4 py-3 text-center text-rose-700 font-black">Alpa</th>
+                      <th className="px-4 py-3 text-center">% Kehadiran</th>
+                      <th className="px-4 py-3 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+                    {targetStudentList.map((s) => {
+                      const sAtt = attendance.filter(a => a.studentId === s.id || (s.nisn && a.studentId === s.nisn));
+                      const h = sAtt.filter(a => a.status === 'Hadir').length;
+                      const sk = sAtt.filter(a => a.status === 'Sakit').length;
+                      const iz = sAtt.filter(a => a.status === 'Izin').length;
+                      const al = sAtt.filter(a => a.status === 'Alpa').length;
+                      const tot = sAtt.length;
+                      const pct = tot > 0 ? Math.round((h / tot) * 100) : 100;
+
+                      return (
+                        <tr key={s.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 font-bold text-slate-900 flex items-center gap-2">
+                            <img src={s.avatarUrl} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                            <span>{s.name}</span>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-slate-500">{s.nisn}</td>
+                          <td className="px-4 py-3 font-semibold text-slate-600">
+                            {classes.find(c => c.id === s.classId)?.name || s.classId}
+                          </td>
+                          <td className="px-4 py-3 text-center font-bold text-emerald-700 bg-emerald-50/50">{h}</td>
+                          <td className="px-4 py-3 text-center font-bold text-blue-700 bg-blue-50/50">{sk}</td>
+                          <td className="px-4 py-3 text-center font-bold text-amber-700 bg-amber-50/50">{iz}</td>
+                          <td className="px-4 py-3 text-center font-bold text-rose-700 bg-rose-50/50">{al}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`px-2 py-0.5 rounded font-bold font-mono text-[11px] ${
+                              pct >= 90 ? 'bg-emerald-100 text-emerald-800' :
+                              pct >= 75 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                            }`}>
+                              {pct}%
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase ${
+                              al > 3 ? 'bg-rose-100 text-rose-800' :
+                              al > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {al > 3 ? 'Perlu Panggilan' : al > 0 ? 'Perlu Perhatian' : 'Sangat Tertib'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Log Detail Presensi Harian */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+              <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <Clock className="w-4 h-4 text-indigo-600" />
+                <span>Riwayat Log Presensi Harian Siswa Binaan</span>
+              </h4>
+
+              <div className="divide-y max-h-80 overflow-y-auto pr-1 text-xs">
+                {relevantAttendance.length === 0 ? (
+                  <p className="text-slate-400 italic text-center py-8">Belum ada rekaman presensi untuk filter yang dipilih.</p>
+                ) : (
+                  relevantAttendance.slice().reverse().map((att) => {
+                    const st = students.find(s => s.id === att.studentId);
                     return (
-                      <div key={note.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50/40 space-y-3 text-xs">
-                        <div className="flex justify-between items-start gap-3">
-                          <div className="flex items-center gap-2.5">
-                            <img src={student?.avatarUrl} alt="" className="w-7 h-7 rounded-full shrink-0" />
-                            <div>
-                              <p className="font-bold text-slate-800 text-[13px]">{student?.name}</p>
-                              <p className="text-[10px] text-slate-400">Tanggal Sesi: {note.date} | Oleh: {note.recordedBy}</p>
-                            </div>
-                          </div>
-                          <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase tracking-wider ${
-                            note.status === 'Perlu Perhatian' ? 'bg-rose-100 text-rose-800 border border-rose-200' :
-                            note.status === 'Selesai' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
-                            'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                          }`}>
-                            {note.status}
-                          </span>
+                      <div key={att.id} className="py-2.5 flex justify-between items-center gap-3">
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-slate-900">{st?.name || 'Siswa'}</p>
+                          <p className="text-[11px] text-slate-400">
+                            {att.date} &bull; Kelas: {classes.find(c => c.id === att.classId)?.name || att.classId} &bull; Dicatat: {att.recordedBy}
+                          </p>
+                          {att.notes && <p className="text-[10px] text-slate-500 italic">"{att.notes}"</p>}
                         </div>
-
-                        <div className="space-y-2 border-t pt-2.5 text-slate-600">
-                          <div>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase">Catatan Pembinaan / Bimbingan:</p>
-                            <p className="text-slate-700 leading-relaxed mt-0.5">{note.notes}</p>
-                          </div>
-                          {note.followUp && (
-                            <div className="bg-white border p-2 rounded-lg mt-1.5">
-                              <p className="text-[9px] font-bold text-indigo-500 uppercase">Kesepakatan Rencana Tindak Lanjut:</p>
-                              <p className="text-slate-600 mt-0.5 leading-relaxed font-medium">{note.followUp}</p>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400 pt-1.5 border-t border-slate-100">
-                          <ShieldCheck className={`w-4 h-4 ${note.parentAcknowledge ? 'text-emerald-500' : 'text-slate-300'}`} />
-                          <span>Status Wali Murid: {note.parentAcknowledge ? 'Sudah membaca & menandatangani secara digital' : 'Belum membaca'}</span>
-                        </div>
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                          att.status === 'Hadir' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                          att.status === 'Sakit' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                          att.status === 'Izin' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                          'bg-rose-50 text-rose-700 border border-rose-200'
+                        }`}>
+                          {att.status}
+                        </span>
                       </div>
                     );
                   })
-              )}
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* BIMBINGAN BK (HYBRID ROLE) TAB */}
+      {/* BIMBINGAN BK (HYBRID ROLE) TAB: LAYANAN BIMBINGAN, JURNAL & JADWAL */}
       {activeTab === 'bimbingan-bk' && (
         <div className="space-y-6">
+          {/* Add Bimbingan Note Form & History */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="bg-white rounded-xl p-5 border shadow-sm space-y-4 h-fit">
+              <h4 className="font-bold text-slate-800 flex items-center gap-2 pb-2 border-b">
+                <FileText className="w-5 h-5 text-indigo-600" />
+                <span>Input Layanan Bimbingan Siswa</span>
+              </h4>
+
+              <form onSubmit={handleSubmitCounselorNote} className="space-y-3.5 text-xs">
+                <div className="space-y-1">
+                  <label className="block text-slate-500 font-semibold mb-1">Target Siswa Bimbingan <span className="text-rose-500">*</span></label>
+                  <select
+                    value={targetStudentId}
+                    onChange={(e) => setTargetStudentId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer text-slate-700 font-medium"
+                  >
+                    <option value="">-- Pilih Siswa Binaan --</option>
+                    {myStudents.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({classes.find(c => c.id === s.classId)?.name || s.classId})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-slate-500 font-semibold mb-1">Catatan Pembinaan &amp; Saran Akademik <span className="text-rose-500">*</span></label>
+                  <textarea
+                    required
+                    rows={3}
+                    placeholder="Ketik rincian hasil bimbingan, permasalahan, atau saran pengembangan..."
+                    value={noteContent}
+                    onChange={(e) => setNoteContent(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-slate-500 font-semibold mb-1">Rencana Tindak Lanjut</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Ketik kesepakatan tindak lanjut bimbingan..."
+                    value={followUpContent}
+                    onChange={(e) => setFollowUpContent(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-slate-500 font-semibold mb-1">Status Pembinaan</label>
+                  <select
+                    value={counselingStatus}
+                    onChange={(e) => setCounselingStatus(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer text-slate-700"
+                  >
+                    <option value="Dalam Pemantauan">Dalam Pemantauan</option>
+                    <option value="Perlu Perhatian">Perlu Perhatian Khusus</option>
+                    <option value="Selesai">Bimbingan Selesai / Tuntas</option>
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Terbitkan Catatan Bimbingan</span>
+                </button>
+              </form>
+            </div>
+
+            <div className="lg:col-span-2 bg-white rounded-xl p-5 border shadow-sm space-y-4">
+              <h4 className="font-bold text-slate-800 flex items-center gap-2 pb-2 border-b">
+                <Activity className="w-5 h-5 text-indigo-600" />
+                <span>Riwayat Sesi Bimbingan Siswa Binaan</span>
+              </h4>
+
+              <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                {counselorNotes.filter(n => myStudents.some(s => s.id === n.studentId)).length === 0 ? (
+                  <p className="text-slate-400 text-xs italic text-center py-12">Belum ada catatan bimbingan terbit.</p>
+                ) : (
+                  counselorNotes
+                    .filter(n => myStudents.some(s => s.id === n.studentId))
+                    .slice()
+                    .reverse()
+                    .map((note) => {
+                      const student = students.find(s => s.id === note.studentId);
+                      return (
+                        <div key={note.id} className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 space-y-2 text-xs">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-bold text-slate-800">{student?.name}</p>
+                              <p className="text-[10px] text-slate-400">Tgl: {note.date} &bull; Oleh: {note.recordedBy}</p>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${
+                              note.status === 'Perlu Perhatian' ? 'bg-rose-100 text-rose-800' :
+                              note.status === 'Selesai' ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800'
+                            }`}>
+                              {note.status}
+                            </span>
+                          </div>
+                          <p className="text-slate-700 leading-relaxed font-medium">"{note.notes}"</p>
+                          {note.followUp && <p className="text-[10px] text-indigo-600 font-semibold">Tindak Lanjut: {note.followUp}</p>}
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Jurnal Bimbingan Guru Wali */}
             <div className="bg-white rounded-2xl p-6 border shadow-sm space-y-4">
@@ -1114,11 +1342,97 @@ export default function GuruWaliPanel({
 
       {/* PESAN TAB */}
       {activeTab === 'pesan' && (
-        <div className="bg-white rounded-xl border shadow-sm p-5 space-y-5">
-          <div>
-            <h3 className="font-bold text-slate-800 text-base">Konsultasi Interaktif Wali Murid</h3>
-            <p className="text-xs text-slate-500">Balas pertanyaan atau pesan konsultasi langsung yang dikirimkan oleh orang tua siswa binaan Anda.</p>
+        <div className="space-y-6">
+          {/* Card Kirim Pesan Baru ke Orang Tua */}
+          <div className="bg-white rounded-2xl border shadow-sm p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b pb-3">
+              <div>
+                <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                  <Send className="w-4 h-4 text-indigo-600" />
+                  Kirim Pesan / Pengumuman ke Orang Tua Siswa Binaan
+                </h3>
+                <p className="text-xs text-slate-500">Pesan ini akan otomatis masuk dan tersinkronisasi ke akun Orang Tua / Wali murid yang bersangkutan.</p>
+              </div>
+              <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[11px] font-bold rounded-lg border border-indigo-100 self-start sm:self-auto">
+                Real-time Terhubung
+              </span>
+            </div>
+
+            <form onSubmit={handleSendNewParentMessage} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    Pilih Siswa Binaan <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={newMsgStudentId}
+                    onChange={(e) => setNewMsgStudentId(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-slate-700 cursor-pointer"
+                  >
+                    <option value="">-- Pilih Siswa Binaan --</option>
+                    {myStudents.map((s) => {
+                      const cName = classes.find((c) => c.id === s.classId)?.name || s.classId;
+                      return (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({cName}) - Wali: {s.parentName || 'Orang Tua'}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-slate-600 font-semibold mb-1">
+                    Nama Wali & Kontak Siswa
+                  </label>
+                  {(() => {
+                    const selStudent = myStudents.find((s) => s.id === newMsgStudentId);
+                    return (
+                      <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 text-xs font-medium">
+                        {selStudent ? (
+                          <span>
+                            Wali: <strong>{selStudent.parentName || 'Orang Tua Siswa'}</strong> &bull; Telp: {selStudent.parentPhone || '-'}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">Pilih siswa di sebelah kiri</span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Isi Pesan / Informasi Pembinaan <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="Ketik pesan, informasi kehadiran, perkembangan belajar, atau undangan konsultasi untuk orang tua siswa..."
+                  value={newMsgContent}
+                  onChange={(e) => setNewMsgContent(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 focus:bg-white border rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Kirim Pesan ke Orang Tua</span>
+                </button>
+              </div>
+            </form>
           </div>
+
+          <div className="bg-white rounded-xl border shadow-sm p-5 space-y-5">
+            <div>
+              <h3 className="font-bold text-slate-800 text-base">Konsultasi Interaktif Wali Murid</h3>
+              <p className="text-xs text-slate-500">Balas pertanyaan atau pesan konsultasi langsung yang dikirimkan oleh orang tua siswa binaan Anda.</p>
+            </div>
 
           <div className="space-y-4 max-h-[550px] overflow-y-auto pr-1">
             {parentMessages.filter(m => myStudents.some(s => s.id === m.studentId)).length === 0 ? (
@@ -1183,6 +1497,7 @@ export default function GuruWaliPanel({
                 })
             )}
           </div>
+        </div>
         </div>
       )}
     </div>

@@ -586,28 +586,18 @@ export default function PiketPanel({
   useEffect(() => {
     setDownloadActions([
       {
-        label: 'Cetak Rekap Harian (PDF Langsung)',
-        onClick: () => setIsPrintModalOpen(true),
-        type: 'pdf',
-      },
-      {
-        label: 'Laporan Rekap Harian (Filter Tanggal PDF)',
-        onClick: () => setExportModal({ isOpen: true, type: 'rekap-harian', title: 'Cetak / Unduh Rekap Laporan Harian Piket' }),
-        type: 'pdf',
-      },
-      {
-        label: 'Ekspor Kehadiran Siswa (Excel)',
-        onClick: () => setExportModal({ isOpen: true, type: 'kehadiran', title: 'Unduh Rekap Kehadiran Piket' }),
+        label: 'Rekap Kehadiran (Filter Tanggal / Waktu)',
+        onClick: () => setExportModal({ isOpen: true, type: 'kehadiran', title: 'Unduh Rekap Kehadiran Siswa (Filter Tanggal/Waktu)' }),
         type: 'excel',
       },
       {
-        label: 'Ekspor Kedisiplinan & Pelanggaran (Excel)',
-        onClick: () => setExportModal({ isOpen: true, type: 'kedisiplinan', title: 'Unduh Rekap Kedisiplinan Piket' }),
+        label: 'Jurnal Harian Piket (Filter Tanggal / Waktu)',
+        onClick: () => setExportModal({ isOpen: true, type: 'jurnal', title: 'Unduh Jurnal Harian Piket (Filter Tanggal/Waktu)' }),
         type: 'excel',
       },
       {
-        label: 'Ekspor Jurnal Harian Guru Piket (Excel)',
-        onClick: () => setExportModal({ isOpen: true, type: 'jurnal', title: 'Unduh Jurnal Harian Piket' }),
+        label: 'Jurnal Pelanggaran Siswa (Filter Tanggal / Waktu)',
+        onClick: () => setExportModal({ isOpen: true, type: 'kedisiplinan', title: 'Unduh Jurnal Pelanggaran Kedisiplinan Siswa (Filter Tanggal/Waktu)' }),
         type: 'excel',
       },
     ]);
@@ -882,14 +872,25 @@ export default function PiketPanel({
                   todayViolations.slice().reverse().map((v) => {
                     const student = students.find((s) => s.id === v.studentId);
                     const type = violationTypes.find((vt) => vt.id === v.violationTypeId);
+                    const category = type?.category || (v.points >= 20 ? 'Berat' : v.points >= 10 ? 'Sedang' : 'Ringan');
+                    const typeName = type?.name || (v.notes ? v.notes : 'Pelanggaran Kedisiplinan Siswa');
+                    const categoryBadgeColor = 
+                      category === 'Berat' ? 'bg-rose-100 text-rose-700 border-rose-200' :
+                      category === 'Sedang' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                      'bg-sky-100 text-sky-700 border-sky-200';
                     return (
                       <div key={v.id} className="py-2.5 flex justify-between items-start">
-                        <div className="space-y-0.5">
+                        <div className="space-y-1">
                           <p className="text-sm font-semibold text-slate-800">{student?.name || 'Siswa'}</p>
-                          <p className="text-xs text-slate-500">[{type?.category}] {type?.name}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${categoryBadgeColor}`}>
+                              [{category}]
+                            </span>
+                            <span className="text-xs text-slate-600 font-medium">{typeName}</span>
+                          </div>
                           <p className="text-[10px] text-slate-400 italic">"{v.notes}" • Dicatat: {v.recordedBy}</p>
                         </div>
-                        <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">
+                        <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded shrink-0">
                           +{v.points} Pts
                         </span>
                       </div>

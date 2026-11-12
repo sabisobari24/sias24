@@ -14,6 +14,9 @@ import AttendanceQrScannerModal from './common/AttendanceQrScannerModal';
 import SettingKartuPelajar from './common/SettingKartuPelajar';
 import { AdminEcoTiketPanel } from './eco/AdminEcoTiketPanel';
 import StudentPermitMonitoringPanel from './common/StudentPermitMonitoringPanel';
+import ExamCardGeneratorModal from './common/ExamCardGeneratorModal';
+import AdminPelatihPanel from './admin/AdminPelatihPanel';
+import AdminOrangTuaPanel from './admin/AdminOrangTuaPanel';
 import { printBatchStudentCards } from '../utils/qrHelper';
 import { syncCollection, saveDocument } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
@@ -55,8 +58,8 @@ interface AdminPanelProps {
   headmasterName: string;
   headmasterLogoRight?: string;
   onUpdateHeadmasterName: (name: string, logoLeft?: string, logoRight?: string, extraFields?: any) => void;
-  activeTabOverride?: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | null;
-  onTabChange?: (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa') => void;
+  activeTabOverride?: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua' | null;
+  onTabChange?: (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua') => void;
   onSwitchRole?: (role: 'admin' | 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'guru_wali' | 'tendik', userObj?: Teacher) => void;
   studentAchievements?: StudentAchievement[];
   onAddStudentAchievement?: (ach: Omit<StudentAchievement, 'id'>) => void;
@@ -180,14 +183,17 @@ export default function AdminPanel({
   onAddViolation,
   onDeleteViolation,
 }: AdminPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa'>('ringkasan');
+  const [internalActiveTab, setInternalActiveTab] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua'>('ringkasan');
   const activeTab = activeTabOverride ? activeTabOverride : internalActiveTab;
-  const setActiveTab = (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa') => {
+  const setActiveTab = (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua') => {
     setInternalActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
   const [globalSearch, setGlobalSearch] = useState('');
   const [studentClassFilter, setStudentClassFilter] = useState<string>('all');
+
+  // Exam Card Generator Modal state for CBT
+  const [isExamCardModalOpen, setIsExamCardModalOpen] = useState(false);
 
   // Student Card & QR Attendance Scanner states
   const [selectedCardStudent, setSelectedCardStudent] = useState<Student | null>(null);
@@ -1723,8 +1729,19 @@ export default function AdminPanel({
           { label: 'Duta ECo (Excel)', onClick: () => handleExportEcoLeaderboard('excel'), type: 'excel' as const },
           { label: 'Duta ECo (PDF)', onClick: () => handleExportEcoLeaderboard('pdf'), type: 'pdf' as const },
         ];
+      case 'pelatih':
+        return [
+          { label: 'Daftar Pelatih (Excel)', onClick: () => handleExportGuru('excel'), type: 'excel' as const },
+          { label: 'Daftar Pelatih (PDF)', onClick: () => handleExportGuru('pdf'), type: 'pdf' as const },
+        ];
+      case 'orang-tua':
+        return [
+          { label: 'Data Orang Tua (Excel)', onClick: () => handleExportSiswa('excel'), type: 'excel' as const },
+          { label: 'Data Orang Tua (PDF)', onClick: () => handleExportSiswa('pdf'), type: 'pdf' as const },
+        ];
       case 'setting-cbt':
         return [
+          { label: 'Cetak Kartu Ujian CBT (PDF)', onClick: () => setIsExamCardModalOpen(true), type: 'pdf' as const },
           { label: 'Nilai CBT (Excel)', onClick: () => handleExportCbtGrades('excel'), type: 'excel' as const },
           { label: 'Nilai CBT (PDF)', onClick: () => handleExportCbtGrades('pdf'), type: 'pdf' as const },
         ];
@@ -1765,6 +1782,18 @@ export default function AdminPanel({
           title: 'Data Guru & Tenaga Kependidikan',
           desc: 'Kelola direktori dewan guru, penugasan wali kelas, hak akses portal, dan NIP/NUPTK.'
         };
+      case 'pelatih':
+        return {
+          badge: 'Manajemen Pembinaan Ekstrakurikuler',
+          title: 'Data Pelatih & Seluruh Dashboard Ekskul',
+          desc: 'Kelola akun pelatih, anggota siswa, absensi latihan, jurnal dokumentasi, nilai, dan prestasi.'
+        };
+      case 'orang-tua':
+        return {
+          badge: 'Layanan Komite & Kemitraan Sekolah',
+          title: 'Manajemen Data Orang Tua Murid',
+          desc: 'Kelola kontak wali murid, NIK, reset kata sandi, dan broadcast pesan resmi sekolah.'
+        };
       case 'database-settings':
         return {
           badge: 'Konfigurasi Sistem & Rombel',
@@ -1773,9 +1802,9 @@ export default function AdminPanel({
         };
       case 'setting-cbt':
         return {
-          badge: 'Ujian Berbasis Komputer',
-          title: 'Jadwal & Pengaturan Ujian CBT',
-          desc: 'Kelola jadwal sesi ujian, token akses, bank soal, dan sinkronisasi nilai CBT.'
+          badge: 'Asesmen & Ujian Berbasis Komputer',
+          title: 'Computer Based Test (CBT)',
+          desc: 'Kelola jadwal sesi ujian, cetak kartu tanda peserta ujian (A4/B4), token pengawas, dan nilai CBT.'
         };
       case 'validasi-akun':
         return {
@@ -3282,13 +3311,27 @@ export default function AdminPanel({
                           </select>
                           <button
                             onClick={() => {
+                              const targetWalasId = editingHomeroomTeacherId || '';
                               if (onUpdateClass) {
                                 onUpdateClass({
                                   ...cls,
-                                  homeroomTeacherId: editingHomeroomTeacherId || undefined
+                                  homeroomTeacherId: targetWalasId
                                 });
                               }
+                              if (targetWalasId && onUpdateTeacher) {
+                                const assigned = teachers.find(t => t.id === targetWalasId);
+                                if (assigned) {
+                                  onUpdateTeacher({
+                                    ...assigned,
+                                    classId: cls.id,
+                                    role: assigned.role === 'guru' ? 'wali_kelas' : assigned.role,
+                                    roles: assigned.roles ? Array.from(new Set([...assigned.roles, 'wali_kelas'])) : ['guru', 'wali_kelas']
+                                  });
+                                }
+                              }
                               setEditingClassId(null);
+                              setSuccessMsg(`Wali kelas untuk ${cls.name} berhasil diperbarui!`);
+                              setTimeout(() => setSuccessMsg(''), 3500);
                             }}
                             className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 p-1 rounded cursor-pointer"
                             title="Simpan"
@@ -4124,11 +4167,23 @@ export default function AdminPanel({
           <div className="space-y-6">
             <div className="bg-gradient-to-r from-purple-100 to-indigo-100 border border-purple-200 p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
               <div className="space-y-1">
-                <span className="text-[10px] bg-purple-600 text-white font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">CBT Scheduling Engine</span>
-                <h3 className="text-lg font-bold text-slate-800">Setting Jadwal Ujian CBT</h3>
+                <span className="text-[10px] bg-purple-600 text-white font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">CBT Examination Hub</span>
+                <h3 className="text-lg font-black text-slate-800">Computer Based Test (CBT)</h3>
                 <p className="text-xs text-slate-600">
-                  Buat dan tautkan soal ujian Google Form untuk kelas tertentu. Jadwal ujian hanya akan tampil secara otomatis di akun siswa yang bersangkutan.
+                  Manajemen sesi ujian digital, tautan soal Exambro/Google Form, PIN pengawas, serta pencetakan kartu tanda peserta ujian resmi.
                 </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsExamCardModalOpen(true)}
+                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer active:scale-95"
+                  title="Generate & Cetak Kartu Ujian Siswa Otomatis Berdasarkan Kelas (Format A4/B4)"
+                >
+                  <CreditCard className="w-4 h-4 text-amber-300" />
+                  <span>Cetak Kartu Ujian Siswa</span>
+                </button>
               </div>
             </div>
 
@@ -4816,24 +4871,7 @@ export default function AdminPanel({
                   Sistem pencatatan terpadu untuk Prestasi Akademik (Di-input oleh Admin) &amp; Non-Akademik (Di-input oleh Pelatih Ekskul).
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleDownloadAchievements('excel')}
-                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>Unduh Excel</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownloadAchievements('pdf')}
-                  className="px-3.5 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-bold transition-all border border-white/30 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>Cetak PDF</span>
-                </button>
-              </div>
+
             </div>
 
             {/* Metrics */}
@@ -5918,8 +5956,46 @@ export default function AdminPanel({
           />
         )}
 
+        {/* Tab Data Pelatih & Ekskul */}
+        {activeTab === 'pelatih' && (
+          <AdminPelatihPanel
+            teachers={teachers}
+            students={students}
+            classes={classes}
+            onAddTeacher={onAddTeacher}
+            onUpdateTeacher={onUpdateTeacher}
+            onDeleteTeacher={onDeleteTeacher}
+            studentAchievements={studentAchievements}
+            onAddStudentAchievement={onAddStudentAchievement}
+            onDeleteStudentAchievement={onDeleteStudentAchievement}
+            headmasterName={headmasterName}
+          />
+        )}
+
+        {/* Tab Data Orang Tua */}
+        {activeTab === 'orang-tua' && (
+          <AdminOrangTuaPanel
+            students={students}
+            classes={classes}
+            onUpdateStudent={onUpdateStudent}
+            headmasterName={headmasterName}
+          />
+        )}
+
         </div>
       </div>
+
+      {/* CBT Exam Card Generator Modal */}
+      <ExamCardGeneratorModal
+        isOpen={isExamCardModalOpen}
+        onClose={() => setIsExamCardModalOpen(false)}
+        students={students}
+        classes={classes}
+        examSchedules={examSchedules}
+        headmasterName={headmasterName}
+        schoolName={schoolTitleInput}
+        initialClassId={studentClassFilter}
+      />
 
       {/* Student ID Card Modal with NISN QR */}
       <StudentIdCardModal

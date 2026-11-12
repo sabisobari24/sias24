@@ -804,20 +804,6 @@ export default function SiswaPanel({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {getSiswaDownloadConfig().map((btn, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={btn.onClick}
-                className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shadow-xs"
-                title={btn.label}
-              >
-                <FileText className="w-3.5 h-3.5 text-blue-600" />
-                <span>{btn.label}</span>
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
