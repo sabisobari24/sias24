@@ -2706,7 +2706,10 @@ export default function App({ initialMode }: AppProps = {}) {
       homeroomTeacherId: updatedClass.homeroomTeacherId || ''
     };
     setClasses((prev) => {
-      const next = prev.map((i) => i.id === sanitizedClass.id ? { ...i, ...sanitizedClass } : i);
+      const exists = prev.some((i) => i.id === sanitizedClass.id);
+      const next = exists
+        ? prev.map((i) => i.id === sanitizedClass.id ? { ...i, ...sanitizedClass } : i)
+        : [...prev, sanitizedClass];
       safeLocalStorageSet('siakad_classes', JSON.stringify(next));
       return next;
     });

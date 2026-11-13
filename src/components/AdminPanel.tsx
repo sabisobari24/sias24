@@ -1148,12 +1148,25 @@ export default function AdminPanel({
   // Handle class submit
   const handleClassSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const newId = classForm.name.trim();
+    const trimmedName = classForm.name.trim();
+    if (!trimmedName) return;
+    const newId = trimmedName;
     onAddClass({
       id: newId,
-      name: classForm.name,
+      name: trimmedName,
       homeroomTeacherId: classForm.homeroomTeacherId,
     });
+    if (classForm.homeroomTeacherId && onUpdateTeacher) {
+      const assigned = teachers.find(t => t.id === classForm.homeroomTeacherId);
+      if (assigned) {
+        onUpdateTeacher({
+          ...assigned,
+          classId: newId,
+          role: assigned.role === 'guru' ? 'wali_kelas' : assigned.role,
+          roles: assigned.roles ? Array.from(new Set([...assigned.roles, 'wali_kelas'])) : ['guru', 'wali_kelas']
+        });
+      }
+    }
     setSuccessMsg('Kelas baru berhasil ditambahkan!');
     setIsAddingClass(false);
     setClassForm({ name: '', homeroomTeacherId: teachers.find(t => t.role === 'wali_kelas')?.id || '' });
@@ -3523,23 +3536,36 @@ export default function AdminPanel({
                             ))}
                           </select>
                           <button
+                            type="button"
                             onClick={() => {
                               const targetWalasId = editingHomeroomTeacherId || '';
+                              const previousWalasId = cls.homeroomTeacherId || '';
                               if (onUpdateClass) {
                                 onUpdateClass({
                                   ...cls,
                                   homeroomTeacherId: targetWalasId
                                 });
                               }
-                              if (targetWalasId && onUpdateTeacher) {
-                                const assigned = teachers.find(t => t.id === targetWalasId);
-                                if (assigned) {
-                                  onUpdateTeacher({
-                                    ...assigned,
-                                    classId: cls.id,
-                                    role: assigned.role === 'guru' ? 'wali_kelas' : assigned.role,
-                                    roles: assigned.roles ? Array.from(new Set([...assigned.roles, 'wali_kelas'])) : ['guru', 'wali_kelas']
-                                  });
+                              if (onUpdateTeacher) {
+                                if (previousWalasId && previousWalasId !== targetWalasId) {
+                                  const prevTeacher = teachers.find(t => t.id === previousWalasId);
+                                  if (prevTeacher && prevTeacher.classId === cls.id) {
+                                    onUpdateTeacher({
+                                      ...prevTeacher,
+                                      classId: ''
+                                    });
+                                  }
+                                }
+                                if (targetWalasId) {
+                                  const assigned = teachers.find(t => t.id === targetWalasId);
+                                  if (assigned) {
+                                    onUpdateTeacher({
+                                      ...assigned,
+                                      classId: cls.id,
+                                      role: assigned.role === 'guru' ? 'wali_kelas' : assigned.role,
+                                      roles: assigned.roles ? Array.from(new Set([...assigned.roles, 'wali_kelas'])) : ['guru', 'wali_kelas']
+                                    });
+                                  }
                                 }
                               }
                               setEditingClassId(null);
@@ -3552,6 +3578,7 @@ export default function AdminPanel({
                             <Check className="w-3.5 h-3.5" />
                           </button>
                           <button
+                            type="button"
                             onClick={() => setEditingClassId(null)}
                             className="bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 py-1 rounded text-[10px] cursor-pointer font-medium"
                           >

@@ -25,7 +25,15 @@ service cloud.firestore {
 
     // Path Variable Hardening (Anti-ID Poisoning & Directory Traversal)
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\. ]+$') && id != '.' && id != '..';
+    }
+
+    // Class IDs frequently contain spaces, hyphens, en-dashes, parentheses, or dots (e.g. 'Kelas IX-A', 'Kelas 9.1')
+    function isValidClassId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 &&
+        !id.matches('.*[/<>\\\\"\'`].*') &&
+        id != '.' && id != '..' &&
+        isCleanText(id);
     }
 
     // Exact verified Super Admin email allowlist or admins/{uid} lookup
@@ -46,7 +54,7 @@ service cloud.firestore {
     }
 
     function isSafeOptionalText(data, field, maxLen) {
-      return !(field in data) || (data[field] is string && data[field].size() <= maxLen && isCleanText(data[field]));
+      return !(field in data) || data[field] == null || (data[field] is string && data[field].size() <= maxLen && isCleanText(data[field]));
     }
 
     // ========================================================================
@@ -80,24 +88,26 @@ service cloud.firestore {
           'ekskulId', 'ekskulName', 'subject', 'avatarUrl', 'born', 'hobby',
           'motto', 'phone', 'createdAt', 'updatedAt'
         ]) &&
-        data.id is string && data.id.size() <= 128 &&
+        data.id is string && data.id.size() > 0 && data.id.size() <= 128 && isCleanText(data.id) &&
         data.name is string && data.name.size() > 0 && data.name.size() <= 150 && isCleanText(data.name) &&
-        data.nip is string && data.nip.size() <= 30 &&
+        data.nip is string && data.nip.size() <= 50 &&
         data.role is string && data.role.size() <= 30 &&
         isSafeOptionalText(data, 'email', 100) &&
+        isSafeOptionalText(data, 'classId', 128) &&
         isSafeOptionalText(data, 'phone', 30) &&
         isSafeOptionalText(data, 'motto', 500) &&
-        (!('roles' in data) || (data.roles is list && data.roles.size() <= 10));
+        (!('roles' in data) || data.roles == null || (data.roles is list && data.roles.size() <= 10));
     }
 
     function isValidClass(data) {
       return data.keys().hasAll(['id', 'name']) &&
         data.keys().hasOnly(['id', 'name', 'level', 'academicYear', 'homeroomTeacherId', 'totalStudents', 'createdAt', 'updatedAt']) &&
-        data.id is string && data.id.size() <= 128 &&
-        data.name is string && data.name.size() > 0 && data.name.size() <= 50 && isCleanText(data.name) &&
+        data.id is string && data.id.size() > 0 && data.id.size() <= 128 && isCleanText(data.id) &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 80 && isCleanText(data.name) &&
+        isSafeOptionalText(data, 'homeroomTeacherId', 128) &&
         isSafeOptionalText(data, 'level', 20) &&
         isSafeOptionalText(data, 'academicYear', 30) &&
-        (!('totalStudents' in data) || data.totalStudents is number);
+        (!('totalStudents' in data) || data.totalStudents == null || data.totalStudents is number);
     }
 
     function isValidAttendance(data) {
@@ -298,7 +308,7 @@ service cloud.firestore {
         isAdmin() ||
         (
           (existing().role == 'admin' || incoming().role != 'admin') &&
-          (!('roles' in incoming()) || !('admin' in incoming().roles) || existing().role == 'admin')
+          (!('roles' in incoming()) || !('admin' in incoming().roles) || existing().role == 'admin' || ('roles' in existing() && 'admin' in existing().roles))
         )
       );
       allow delete: if isValidId(teacherId) && (isAdmin() || existing().role != 'admin');
@@ -307,8 +317,8 @@ service cloud.firestore {
     // 6. Classes Collection
     match /classes/{classId} {
       allow get, list: if true;
-      allow create, update: if isValidId(classId) && isValidClass(incoming());
-      allow delete: if isValidId(classId);
+      allow create, update: if isValidClassId(classId) && isValidClass(incoming());
+      allow delete: if isValidClassId(classId);
     }
 
     // 7. Attendance Collection
