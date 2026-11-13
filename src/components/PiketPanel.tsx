@@ -40,6 +40,7 @@ import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF, printHTML } from '../utils/printHelper';
 import { downloadDocx } from '../utils/docxExport';
 import { useDownload } from '../context/DownloadContext';
+import { ExportDateRange, filterItemsByDateRange, getRangeFileSuffix, getRangeTitleSuffix } from '../utils/exportDateFilter';
 import ConfirmModal from './ConfirmModal';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import ExportDateFilterModal from './ExportDateFilterModal';
@@ -90,6 +91,7 @@ interface PiketPanelProps {
   onUpdateEcoReward?: (reward: EcoReward) => Promise<void> | void;
   onDeleteEcoReward?: (id: string) => Promise<void> | void;
   onUpdateEcoRedemptionStatus?: (id: string, status: 'Selesai' | 'Menunggu' | 'Ditolak', notes?: string) => Promise<void> | void;
+  onDeleteEcoRedemption?: (id: string) => Promise<void> | void;
   onUpdateEcoConfig?: (config: EcoConfig) => Promise<void> | void;
   schoolName?: string;
 }
@@ -133,6 +135,7 @@ export default function PiketPanel({
   onUpdateEcoReward,
   onDeleteEcoReward,
   onUpdateEcoRedemptionStatus,
+  onDeleteEcoRedemption,
   onUpdateEcoConfig,
   schoolName,
 }: PiketPanelProps) {
@@ -594,42 +597,118 @@ export default function PiketPanel({
   const todayAbsentTeachers = absentTeachers.filter((t) => t.date === todayStr);
   const todayEvents = importantEvents.filter((ev) => ev.date === todayStr);
 
+  const handleDownloadPermitsPiket = (range: ExportDateRange | undefined, format: 'excel' | 'pdf' | 'docx') => {
+    const filtered = filterItemsByDateRange(permits || [], p => p.date, range);
+    const headers = ['No', 'Tanggal', 'Jam Keluar', 'Jam Kembali', 'Durasi', 'NISN', 'Nama Siswa', 'Kelas', 'Jenis Izin', 'Tujuan', 'Status', 'Petugas'];
+    const rows = filtered.map((p, idx) => {
+      const stu = students.find(s => s.id === p.studentId);
+      const cls = classes.find(c => c.id === p.classId);
+      return [
+        idx + 1,
+        p.date || '-',
+        p.timeOut || '-',
+        p.timeIn || 'Belum Kembali',
+        p.durationMinutes !== undefined ? `${p.durationMinutes} menit` : '-',
+        stu?.nisn || p.nisn || '-',
+        p.studentName || stu?.name || '-',
+        cls?.name || p.classId || '-',
+        p.type,
+        p.destination || p.reason || '-',
+        p.status,
+        p.approvedBy || '-',
+      ];
+    });
+    const suffix = getRangeFileSuffix(range);
+    const title = `Buku Kendali Izin Siswa (Guru Piket)${getRangeTitleSuffix(range)}`;
+    if (format === 'excel') {
+      downloadExcel(`buku_kendali_izin_piket${suffix}.xlsx`, headers, rows, 'Izin Siswa');
+      setSuccessMsg('Data Buku Kendali Izin Siswa berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`buku_kendali_izin_piket${suffix}.docx`, title, headers, rows, headmasterName);
+      setSuccessMsg('Data Buku Kendali Izin Siswa berhasil diunduh (Word .docx)!');
+    } else {
+      printTablePDF(title, headers, rows, headmasterName);
+      setSuccessMsg('Dokumen Buku Kendali Izin Siswa siap dicetak / PDF!');
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  const handleDownloadEcoPiket = (range: ExportDateRange | undefined, format: 'excel' | 'pdf' | 'docx') => {
+    const filtered = filterItemsByDateRange(ecoDeposits || [], d => d.date, range);
+    const headers = ['Tanggal', 'Nama Siswa', 'Kelas', 'Kategori Sampah', 'Volume', 'Poin', 'Status', 'Pencatat'];
+    const rows = filtered.map(d => [d.date, d.studentName, d.classId, d.categoryName, `${d.quantity} ${d.unit}`, d.pointsEarned, d.status, d.recordedBy]);
+    const suffix = getRangeFileSuffix(range);
+    const title = `Rekapitulasi Setoran ECo-Tiket (Piket)${getRangeTitleSuffix(range)}`;
+    if (format === 'excel') {
+      downloadExcel(`setoran_eco_tiket_piket${suffix}.xlsx`, headers, rows, 'ECo-Tiket');
+      setSuccessMsg('Rekap ECo-Tiket berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`setoran_eco_tiket_piket${suffix}.docx`, title, headers, rows, headmasterName);
+      setSuccessMsg('Rekap ECo-Tiket berhasil diunduh (Word .docx)!');
+    } else {
+      printTablePDF(title, headers, rows, headmasterName);
+      setSuccessMsg('Rekap ECo-Tiket siap dicetak / PDF!');
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
   const { setDownloadActions, clearDownloadActions } = useDownload();
 
   useEffect(() => {
-    setDownloadActions([
+    const allActions = [
       {
+        keys: ['absensi-piket', 'verifikasi-mandiri'],
         label: 'Rekap Kehadiran Piket',
         formats: {
-          docx: () => handleDownloadKehadiranPiket('', '', 'docx'),
-          pdf: () => handleDownloadKehadiranPiket('', '', 'pdf'),
-          excel: () => handleDownloadKehadiranPiket('', '', 'excel'),
+          docx: (range?: ExportDateRange) => handleDownloadKehadiranPiket(range?.startDate || '', range?.endDate || '', 'docx'),
+          pdf: (range?: ExportDateRange) => handleDownloadKehadiranPiket(range?.startDate || '', range?.endDate || '', 'pdf'),
+          excel: (range?: ExportDateRange) => handleDownloadKehadiranPiket(range?.startDate || '', range?.endDate || '', 'excel'),
         },
       },
       {
+        keys: ['guru-absen', 'kejadian-piket'],
         label: 'Jurnal Harian Piket',
         formats: {
-          docx: () => handleDownloadJurnalHarianPiket('', '', 'docx'),
-          pdf: () => handleDownloadJurnalHarianPiket('', '', 'pdf'),
-          excel: () => handleDownloadJurnalHarianPiket('', '', 'excel'),
+          docx: (range?: ExportDateRange) => handleDownloadJurnalHarianPiket(range?.startDate || '', range?.endDate || '', 'docx'),
+          pdf: (range?: ExportDateRange) => handleDownloadJurnalHarianPiket(range?.startDate || '', range?.endDate || '', 'pdf'),
+          excel: (range?: ExportDateRange) => handleDownloadJurnalHarianPiket(range?.startDate || '', range?.endDate || '', 'excel'),
         },
       },
       {
+        keys: ['pintu-depan'],
         label: 'Jurnal Pelanggaran Siswa',
         formats: {
-          docx: () => handleDownloadKedisiplinanPiket('', '', 'docx'),
-          pdf: () => handleDownloadKedisiplinanPiket('', '', 'pdf'),
-          excel: () => handleDownloadKedisiplinanPiket('', '', 'excel'),
+          docx: (range?: ExportDateRange) => handleDownloadKedisiplinanPiket(range?.startDate || '', range?.endDate || '', 'docx'),
+          pdf: (range?: ExportDateRange) => handleDownloadKedisiplinanPiket(range?.startDate || '', range?.endDate || '', 'pdf'),
+          excel: (range?: ExportDateRange) => handleDownloadKedisiplinanPiket(range?.startDate || '', range?.endDate || '', 'excel'),
         },
       },
       {
-        label: 'Unduh dengan Filter Tanggal',
-        onClick: () => setExportModal({ isOpen: true, type: 'kehadiran', title: 'Unduh Rekap Kehadiran Siswa (Filter Tanggal/Waktu)' }),
-        type: 'pdf',
+        keys: ['izin-siswa'],
+        label: 'Buku Kendali Izin Siswa',
+        formats: {
+          docx: (range?: ExportDateRange) => handleDownloadPermitsPiket(range, 'docx'),
+          pdf: (range?: ExportDateRange) => handleDownloadPermitsPiket(range, 'pdf'),
+          excel: (range?: ExportDateRange) => handleDownloadPermitsPiket(range, 'excel'),
+        },
       },
-    ]);
+      {
+        keys: ['eco-tiket'],
+        label: 'Setoran ECo-Tiket',
+        formats: {
+          docx: (range?: ExportDateRange) => handleDownloadEcoPiket(range, 'docx'),
+          pdf: (range?: ExportDateRange) => handleDownloadEcoPiket(range, 'pdf'),
+          excel: (range?: ExportDateRange) => handleDownloadEcoPiket(range, 'excel'),
+        },
+      },
+    ];
+    const priorityIdx = allActions.findIndex(a => a.keys.includes(activeTab));
+    const ordered = priorityIdx > 0
+      ? [allActions[priorityIdx], ...allActions.filter((_, i) => i !== priorityIdx)]
+      : allActions;
+    setDownloadActions(ordered.map(({ label, formats }) => ({ label, formats })));
     return () => clearDownloadActions();
-  }, [attendance, violations, absentTeachers, importantEvents]);
+  }, [activeTab, attendance, violations, absentTeachers, importantEvents, permits, ecoDeposits]);
 
   return (
     <div className="space-y-6">
@@ -662,69 +741,116 @@ export default function PiketPanel({
         }
       `}</style>
 
-      {/* Piket Header */}
-      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-teal-700 rounded-3xl p-5 sm:p-6 text-white shadow-md flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-        <div className="space-y-1 min-w-0 flex-1 max-w-xl">
-          <div className="inline-flex items-center gap-2">
-            <span className="bg-emerald-950/40 text-emerald-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-emerald-400/30">
-              Portal Guru Piket Harian
+      {/* Piket Header: Full hero only on native Piket tabs to avoid double banners */}
+      {activeTab === 'izin-siswa' || activeTab === 'eco-tiket' ? (
+        <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider">
+              Portal Piket
             </span>
+            <span className="text-xs font-bold text-slate-800 truncate">{teacher.name}</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight">{teacher.name}</h1>
-          <p className="text-emerald-100 text-xs sm:text-sm">
-            NIP: {teacher.nip || '-'} &bull; Petugas Piket &amp; Presensi Sekolah
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('izin-siswa')}
+              className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'izin-siswa'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              <DoorOpen className="w-3.5 h-3.5" />
+              <span>Izin Siswa &amp; Toilet</span>
+              {permits.filter(p => p.status === 'keluar').length > 0 && (
+                <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                  {permits.filter(p => p.status === 'keluar').length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('eco-tiket')}
+              className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'eco-tiket'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              <Leaf className="w-3.5 h-3.5" />
+              <span>ECo-Tiket &amp; Sampah</span>
+              {ecoDeposits.filter(d => d.status === 'Menunggu').length > 0 && (
+                <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                  {ecoDeposits.filter(d => d.status === 'Menunggu').length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsScannerModalOpen(true)}
+              className="flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 px-3 py-1.5 rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>Pos Scanner QR Absen</span>
+            </button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
-          <button
-            type="button"
-            onClick={() => setActiveTab('izin-siswa')}
-            className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer active:scale-95 ${
-              activeTab === 'izin-siswa'
-                ? 'bg-amber-400 text-slate-950 ring-2 ring-white'
-                : 'bg-emerald-950/40 hover:bg-emerald-950/60 text-white border border-emerald-400/40'
-            }`}
-            title="Buku Kendali Izin Siswa, Toilet & Pulang Cepat"
-          >
-            <DoorOpen className="w-4 h-4 text-amber-300" />
-            <span>Izin Siswa &amp; Toilet</span>
-            {permits.filter(p => p.status === 'keluar').length > 0 && (
-              <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full ml-1 animate-pulse">
-                {permits.filter(p => p.status === 'keluar').length} Di Luar
+      ) : (
+        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-teal-700 rounded-3xl p-5 sm:p-6 text-white shadow-md flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+          <div className="space-y-1 min-w-0 flex-1 max-w-xl">
+            <div className="inline-flex items-center gap-2">
+              <span className="bg-emerald-950/40 text-emerald-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-emerald-400/30">
+                Portal Guru Piket Harian
               </span>
-            )}
-          </button>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight">{teacher.name}</h1>
+            <p className="text-emerald-100 text-xs sm:text-sm">
+              NIP: {teacher.nip || '-'} &bull; Petugas Piket &amp; Presensi Sekolah
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
+            <button
+              type="button"
+              onClick={() => setActiveTab('izin-siswa')}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer active:scale-95 bg-emerald-950/40 hover:bg-emerald-950/60 text-white border border-emerald-400/40"
+              title="Buku Kendali Izin Siswa, Toilet & Pulang Cepat"
+            >
+              <DoorOpen className="w-4 h-4 text-amber-300" />
+              <span>Izin Siswa &amp; Toilet</span>
+              {permits.filter(p => p.status === 'keluar').length > 0 && (
+                <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full ml-1 animate-pulse">
+                  {permits.filter(p => p.status === 'keluar').length} Di Luar
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('eco-tiket')}
-            className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer active:scale-95 ${
-              activeTab === 'eco-tiket'
-                ? 'bg-emerald-300 text-slate-950 ring-2 ring-white'
-                : 'bg-emerald-950/40 hover:bg-emerald-950/60 text-white border border-emerald-400/40'
-            }`}
-            title="Kelola ECo-Tiket & Bank Sampah Digital"
-          >
-            <Leaf className="w-4 h-4 text-emerald-300" />
-            <span>ECo-Tiket &amp; Sampah</span>
-            {ecoDeposits.filter(d => d.status === 'Menunggu').length > 0 && (
-              <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full ml-1 animate-pulse">
-                {ecoDeposits.filter(d => d.status === 'Menunggu').length}
-              </span>
-            )}
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('eco-tiket')}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer active:scale-95 bg-emerald-950/40 hover:bg-emerald-950/60 text-white border border-emerald-400/40"
+              title="Kelola ECo-Tiket & Bank Sampah Digital"
+            >
+              <Leaf className="w-4 h-4 text-emerald-300" />
+              <span>ECo-Tiket &amp; Sampah</span>
+              {ecoDeposits.filter(d => d.status === 'Menunggu').length > 0 && (
+                <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full ml-1 animate-pulse">
+                  {ecoDeposits.filter(d => d.status === 'Menunggu').length}
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setIsScannerModalOpen(true)}
-            className="flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer active:scale-95"
-            title="Buka Pos Scanner QR / Barcode Absensi Siswa"
-          >
-            <Zap className="w-4 h-4 text-slate-950" />
-            <span>Pos Scanner QR Absen</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setIsScannerModalOpen(true)}
+              className="flex items-center justify-center gap-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer active:scale-95"
+              title="Buka Pos Scanner QR / Barcode Absensi Siswa"
+            >
+              <Zap className="w-4 h-4 text-slate-950" />
+              <span>Pos Scanner QR Absen</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Alerts */}
       {successMsg && (
@@ -793,6 +919,7 @@ export default function PiketPanel({
             onUpdateReward={onUpdateEcoReward}
             onDeleteReward={onDeleteEcoReward}
             onUpdateRedemptionStatus={onUpdateEcoRedemptionStatus}
+            onDeleteRedemption={onDeleteEcoRedemption}
             onUpdateConfig={onUpdateEcoConfig}
           />
         )}

@@ -32,6 +32,7 @@ import {
   EcoConfig 
 } from '../../types';
 import { EcoCertificateModal } from './EcoCertificateModal';
+import ConfirmModal from '../ConfirmModal';
 
 interface EcoTiketPanelProps {
   student: Student;
@@ -70,6 +71,10 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
   const [isCertModalOpen, setIsCertModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
+  const [confirmRedeem, setConfirmRedeem] = useState<{ isOpen: boolean; reward: EcoReward | null }>({
+    isOpen: false,
+    reward: null
+  });
 
   // Form states for self-deposit request
   const [selectedCategory, setSelectedCategory] = useState<string>(categories[0]?.id || '');
@@ -262,20 +267,7 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
   };
 
   // Handle Redeem Reward
-  const handleRedeemReward = async (reward: EcoReward) => {
-    if (activePoints < reward.pointsRequired) {
-      showError(`Poin Anda belum cukup. Butuh ${reward.pointsRequired} Poin, saldo Anda ${activePoints} Poin.`);
-      return;
-    }
-    if (reward.stock <= 0) {
-      showError('Maaf, stok hadiah ini saat ini sedang habis.');
-      return;
-    }
-
-    if (!confirm(`Konfirmasi penukaran: Tukar ${reward.pointsRequired} Poin ECo-Tiket dengan "${reward.name}"?`)) {
-      return;
-    }
-
+  const executeRedeemReward = async (reward: EcoReward) => {
     try {
       if (onRedeemReward) {
         await onRedeemReward({
@@ -298,6 +290,19 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
     }
   };
 
+  const handleRedeemReward = (reward: EcoReward) => {
+    if (activePoints < reward.pointsRequired) {
+      showError(`Poin Anda belum cukup. Butuh ${reward.pointsRequired} Poin, saldo Anda ${activePoints} Poin.`);
+      return;
+    }
+    if (reward.stock <= 0) {
+      showError('Maaf, stok hadiah ini saat ini sedang habis.');
+      return;
+    }
+
+    setConfirmRedeem({ isOpen: true, reward });
+  };
+
   return (
     <div className="space-y-6">
       {/* Toast Notifications */}
@@ -315,42 +320,32 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
         </div>
       )}
 
-      {/* DUTA KEBERSIHAN CELEBRATION BANNER (IF QUALIFIED) */}
+      {/* DUTA KEBERSIHAN CELEBRATION CALLOUT (IF QUALIFIED) */}
       {isDutaKebersihan && (
-        <div className="relative overflow-hidden bg-gradient-to-r from-emerald-800 via-teal-700 to-green-800 rounded-3xl p-6 sm:p-7 text-white shadow-xl border-2 border-emerald-400/40">
-          <div className="absolute -right-6 -bottom-6 w-44 h-44 bg-yellow-400/10 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none text-9xl">🌿</div>
-
-          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-5">
-            <div className="flex items-center gap-4 text-center md:text-left">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-yellow-300 to-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-lg border-2 border-yellow-200">
-                <Crown className="w-9 h-9" />
-              </div>
-              <div className="space-y-1">
-                <div className="inline-flex items-center gap-1.5 bg-yellow-400/20 text-yellow-300 border border-yellow-400/30 px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Penghargaan Tertinggi Sekolah</span>
-                </div>
-                <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-                  Selamat! Anda Dinobatkan Sebagai Duta Kebersihan
-                </h2>
-                <p className="text-xs text-emerald-100 max-w-xl leading-relaxed">
-                  Peringkat #{myRank} se-sekolah dengan total raihan <strong>{totalEarnedPoints} Poin ECo-Tiket</strong>. Piagam kehormatan resmi telah diterbitkan langsung oleh Kepala Sekolah.
-                </p>
-              </div>
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 sm:p-5 text-slate-900 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 text-center md:text-left">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-300 to-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-sm border border-yellow-200">
+              <Crown className="w-6 h-6" />
             </div>
-
-            <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto">
-              <button
-                type="button"
-                onClick={() => setIsCertModalOpen(true)}
-                className="w-full md:w-auto flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-400 to-amber-400 hover:from-yellow-300 hover:to-amber-300 text-slate-950 font-black text-xs px-5 py-3 rounded-2xl shadow-lg transition-all active:scale-95 cursor-pointer"
-              >
-                <Printer className="w-4 h-4 text-slate-950" />
-                <span>Lihat &amp; Cetak Piagam Resmi</span>
-              </button>
+            <div className="space-y-0.5">
+              <div className="inline-flex items-center gap-1.5 text-amber-800 text-[11px] font-black uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Duta Kebersihan Resmi Sekolah &bull; Peringkat #{myRank}</span>
+              </div>
+              <p className="text-xs text-slate-700 max-w-xl leading-relaxed">
+                Selamat! Total raihan <strong>{totalEarnedPoints} Poin ECo-Tiket</strong>. Piagam kehormatan resmi telah diterbitkan oleh Kepala Sekolah.
+              </p>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsCertModalOpen(true)}
+            className="w-full md:w-auto flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer shrink-0"
+          >
+            <Printer className="w-4 h-4 text-slate-950" />
+            <span>Lihat &amp; Cetak Piagam Resmi</span>
+          </button>
         </div>
       )}
 
@@ -939,6 +934,18 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
           headmasterNip,
           schoolName
         }}
+      />
+
+      <ConfirmModal
+        isOpen={confirmRedeem.isOpen && !!confirmRedeem.reward}
+        title="Konfirmasi Penukaran Hadiah"
+        message={confirmRedeem.reward ? `Tukar ${confirmRedeem.reward.pointsRequired} Poin ECo-Tiket dengan hadiah "${confirmRedeem.reward.name}"?` : ''}
+        confirmText="Ya, Tukarkan Poin"
+        isDanger={false}
+        onConfirm={() => {
+          if (confirmRedeem.reward) executeRedeemReward(confirmRedeem.reward);
+        }}
+        onCancel={() => setConfirmRedeem({ isOpen: false, reward: null })}
       />
     </div>
   );

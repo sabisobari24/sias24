@@ -73,6 +73,12 @@ import { downloadExcel } from '../utils/excelExport';
 import { downloadDocx } from '../utils/docxExport';
 import { useDownload } from '../context/DownloadContext';
 import { getEffectiveSchoolLogo, getEffectiveRegionalLogo } from '../utils/schoolLogoHelper';
+import {
+  ExportDateRange,
+  filterItemsByDateRange,
+  getRangeFileSuffix,
+  getRangeTitleSuffix
+} from '../utils/exportDateFilter';
 
 // LOGIKA PENGHEMATAN KUOTA: Mengompresi ukuran gambar di sisi klien (browser siswa) menjadi maksimal 100 KB sebelum diupload
 export function compressImageBase64(canvas: HTMLCanvasElement, maxKb: number = 100): string {
@@ -702,56 +708,72 @@ export default function SiswaPanel({
     return sched.targetClassId === student.classId || sched.targetClassId === studentClass?.name;
   });
 
-  const handleExportPrestasi = (format: 'docx' | 'pdf' | 'excel') => {
+  const handleExportPrestasi = (format: 'docx' | 'pdf' | 'excel', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(myAchievements, a => a.date, range);
     const headers = ["Judul Prestasi", "Kategori", "Tingkat", "Peringkat", "Tanggal"];
-    const rows = myAchievements.map((a) => [a.title, a.category, `Tingkat ${a.level}`, a.rank || a.level, a.date]);
-    const title = `Rekapitulasi Raihan Prestasi Siswa - ${student.name}`;
+    const rows = filtered.map((a) => [a.title, a.category, `Tingkat ${a.level}`, a.rank || a.level, a.date]);
+    const title = `Rekapitulasi Raihan Prestasi Siswa - ${student.name}${getRangeTitleSuffix(range)}`;
     const safeName = student.name.replace(/\s+/g, '_');
+    const suffix = getRangeFileSuffix(range);
     if (format === 'docx') {
-      downloadDocx(`Rekap_Prestasi_${safeName}.docx`, title, headers, rows, headmasterName);
+      downloadDocx(`Rekap_Prestasi_${safeName}${suffix}.docx`, title, headers, rows, headmasterName);
     } else if (format === 'excel') {
-      downloadExcel(`Rekap_Prestasi_${safeName}.xlsx`, headers, rows, 'Prestasi Siswa');
+      downloadExcel(`Rekap_Prestasi_${safeName}${suffix}.xlsx`, headers, rows, 'Prestasi Siswa');
     } else {
       printTablePDF(title, headers, rows, headmasterName);
     }
   };
 
-  const handleExportPresensiSiswa = (format: 'docx' | 'pdf' | 'excel') => {
+  const handleExportPresensiSiswa = (format: 'docx' | 'pdf' | 'excel', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(studentAttendance, a => a.date, range);
     const headers = ["Tanggal", "Status", "Keterangan"];
-    const rows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
-    const title = `Rekap Presensi Kehadiran Siswa - ${student.name}`;
+    const rows = filtered.map(a => [a.date, a.status, a.notes || '-']);
+    const title = `Rekap Presensi Kehadiran Siswa - ${student.name}${getRangeTitleSuffix(range)}`;
     const safeName = student.name.replace(/\s+/g, '_');
+    const suffix = getRangeFileSuffix(range);
     if (format === 'docx') {
-      downloadDocx(`Rekap_Presensi_${safeName}.docx`, title, headers, rows, headmasterName);
+      downloadDocx(`Rekap_Presensi_${safeName}${suffix}.docx`, title, headers, rows, headmasterName);
     } else if (format === 'excel') {
-      downloadExcel(`Rekap_Presensi_${safeName}.xlsx`, headers, rows, 'Presensi Siswa');
+      downloadExcel(`Rekap_Presensi_${safeName}${suffix}.xlsx`, headers, rows, 'Presensi Siswa');
     } else {
       printTablePDF(title, headers, rows, headmasterName);
     }
   };
 
-  const getSiswaDownloadConfig = () => {
-    return [
-      {
-        label: 'Rekap Prestasi Siswa',
-        formats: {
-          docx: () => handleExportPrestasi('docx'),
-          pdf: () => handleExportPrestasi('pdf'),
-          excel: () => handleExportPrestasi('excel'),
-        },
-      },
-      {
-        label: 'Rekap Presensi Siswa',
-        formats: {
-          docx: () => handleExportPresensiSiswa('docx'),
-          pdf: () => handleExportPresensiSiswa('pdf'),
-          excel: () => handleExportPresensiSiswa('excel'),
-        },
-      }
-    ];
+  const handleExportNilaiCbtSiswa = (format: 'docx' | 'pdf' | 'excel', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(matchedGrades, g => g.date, range);
+    const headers = ["Tanggal", "Mata Pelajaran", "Jenis Ujian", "Nilai", "Status"];
+    const rows = filtered.map(g => [g.date, g.subject, g.examType, g.score, g.status]);
+    const title = `Riwayat Nilai Computare Base Test (CBT) - ${student.name}${getRangeTitleSuffix(range)}`;
+    const safeName = student.name.replace(/\s+/g, '_');
+    const suffix = getRangeFileSuffix(range);
+    if (format === 'docx') {
+      downloadDocx(`Nilai_CBT_${safeName}${suffix}.docx`, title, headers, rows, headmasterName);
+    } else if (format === 'excel') {
+      downloadExcel(`Nilai_CBT_${safeName}${suffix}.xlsx`, headers, rows, 'Nilai CBT');
+    } else {
+      printTablePDF(title, headers, rows, headmasterName);
+    }
   };
 
-  const { setDownloadActions, clearDownloadActions } = useDownload();
+  const handleExportPelanggaranSiswa = (format: 'docx' | 'pdf' | 'excel', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(studentViolations, v => v.date, range);
+    const headers = ["Tanggal", "Jenis Pelanggaran", "Poin", "Catatan", "Pencatat"];
+    const rows = filtered.map(v => {
+      const vt = violationTypes.find(t => t.id === v.violationTypeId);
+      return [v.date, vt?.name || 'Pelanggaran Khusus', v.points, v.notes || '-', v.recordedBy];
+    });
+    const title = `Catatan Kedisiplinan & Pelanggaran Siswa - ${student.name}${getRangeTitleSuffix(range)}`;
+    const safeName = student.name.replace(/\s+/g, '_');
+    const suffix = getRangeFileSuffix(range);
+    if (format === 'docx') {
+      downloadDocx(`Catatan_Kedisiplinan_${safeName}${suffix}.docx`, title, headers, rows, headmasterName);
+    } else if (format === 'excel') {
+      downloadExcel(`Catatan_Kedisiplinan_${safeName}${suffix}.xlsx`, headers, rows, 'Kedisiplinan');
+    } else {
+      printTablePDF(title, headers, rows, headmasterName);
+    }
+  };
 
   // Eco-Tiket Calculations for this student
   const myEcoDeposits = (ecoDeposits || []).filter(d => d.studentId === student.id || (student.nisn && d.studentId === student.nisn));
@@ -762,6 +784,79 @@ export default function SiswaPanel({
     .filter(r => r.status === 'Selesai' || r.status === 'Menunggu')
     .reduce((sum, r) => sum + (r.pointsSpent || 0), 0);
   const activeEcoPoints = Math.max(0, totalEarnedEcoPoints - totalSpentEcoPoints);
+
+  const handleExportEcoTiketSiswa = (format: 'docx' | 'pdf' | 'excel', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(myEcoDeposits, d => d.date, range);
+    const headers = ["Tanggal", "Kategori Sampah", "Volume", "Poin", "Status", "Pencatat"];
+    const rows = filtered.map(d => [d.date, d.categoryName, `${d.quantity} ${d.unit}`, d.pointsEarned, d.status, d.recordedBy]);
+    const title = `Riwayat Setoran ECo-Tiket - ${student.name}${getRangeTitleSuffix(range)}`;
+    const safeName = student.name.replace(/\s+/g, '_');
+    const suffix = getRangeFileSuffix(range);
+    if (format === 'docx') {
+      downloadDocx(`Riwayat_ECoTiket_${safeName}${suffix}.docx`, title, headers, rows, headmasterName);
+    } else if (format === 'excel') {
+      downloadExcel(`Riwayat_ECoTiket_${safeName}${suffix}.xlsx`, headers, rows, 'ECo-Tiket Saya');
+    } else {
+      printTablePDF(title, headers, rows, headmasterName);
+    }
+  };
+
+  const getSiswaDownloadConfig = () => {
+    const allActions = [
+      {
+        key: 'prestasi',
+        label: 'Rekap Prestasi Siswa',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportPrestasi('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportPrestasi('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportPrestasi('excel', range),
+        },
+      },
+      {
+        key: 'absensi',
+        label: 'Rekap Presensi Siswa',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportPresensiSiswa('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportPresensiSiswa('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportPresensiSiswa('excel', range),
+        },
+      },
+      {
+        key: 'cbt-ujian',
+        label: 'Riwayat Nilai CBT Saya',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportNilaiCbtSiswa('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportNilaiCbtSiswa('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportNilaiCbtSiswa('excel', range),
+        },
+      },
+      {
+        key: 'pelanggaran',
+        label: 'Catatan Kedisiplinan & Poin',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportPelanggaranSiswa('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportPelanggaranSiswa('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportPelanggaranSiswa('excel', range),
+        },
+      },
+      {
+        key: 'eco-tiket',
+        label: 'Riwayat Setoran ECo-Tiket',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportEcoTiketSiswa('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportEcoTiketSiswa('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportEcoTiketSiswa('excel', range),
+        },
+      },
+    ];
+    const priorityIdx = allActions.findIndex(a => a.key === activeTab);
+    const ordered = priorityIdx > 0
+      ? [allActions[priorityIdx], ...allActions.filter((_, i) => i !== priorityIdx)]
+      : allActions;
+    return ordered.map(({ label, formats }) => ({ label, formats }));
+  };
+
+  const { setDownloadActions, clearDownloadActions } = useDownload();
 
   // Leaderboard ranking to determine Duta Kebersihan
   const isDutaKebersihan = React.useMemo(() => {
@@ -791,49 +886,51 @@ export default function SiswaPanel({
   useEffect(() => {
     setDownloadActions(getSiswaDownloadConfig());
     return () => clearDownloadActions();
-  }, [student.id, myAchievements.length, studentAttendance.length]);
+  }, [activeTab, student.id, myAchievements.length, studentAttendance.length, matchedGrades.length, studentViolations.length, myEcoDeposits.length]);
 
   return (
     <div className="space-y-6">
-      {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
-        <div className="absolute top-0 right-0 transform translate-x-12 -translate-y-12 w-48 h-48 bg-white/10 rounded-full blur-2xl"></div>
-        <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex flex-col md:flex-row items-center gap-6">
-            <img
-              src={student.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120"}
-              alt={student.name}
-              className="w-20 h-20 rounded-full border-4 border-white/30 object-cover shadow-lg"
-            />
-            <div className="text-center md:text-left space-y-1">
-              <p className="text-blue-100 text-sm font-medium tracking-wide uppercase">Selamat Datang di Portal Siswa</p>
-              <h1 className="text-2xl font-bold tracking-tight">{student.name}</h1>
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-blue-100 text-sm">
-                  NISN: {student.nisn} &bull; {studentClass?.name || 'Belum Masuk Kelas'}
-                </p>
-                {isDutaKebersihan && (
-                  <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 font-black text-[11px] px-2.5 py-0.5 rounded-full shadow-md border border-yellow-200">
-                    <Crown className="w-3.5 h-3.5 text-amber-900" />
-                    <span>👑 DUTA KEBERSIHAN RESMI</span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsEcoCertOpen(true);
-                      }}
-                      className="bg-slate-900 text-white hover:bg-slate-800 text-[10px] font-bold px-2 py-0.5 rounded-full cursor-pointer ml-1"
-                    >
-                      Lihat Piagam
-                    </button>
-                  </span>
-                )}
+      {/* Welcome Banner: Hidden on sub-modules that provide their own dedicated header banner */}
+      {!['elearning', 'eco-tiket'].includes(activeTab) && (
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
+          <div className="absolute top-0 right-0 transform translate-x-12 -translate-y-12 w-48 h-48 bg-white/10 rounded-full blur-2xl"></div>
+          <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex flex-col md:flex-row items-center gap-6">
+              <img
+                src={student.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120"}
+                alt={student.name}
+                className="w-20 h-20 rounded-full border-4 border-white/30 object-cover shadow-lg"
+              />
+              <div className="text-center md:text-left space-y-1">
+                <p className="text-blue-100 text-sm font-medium tracking-wide uppercase">Selamat Datang di Portal Siswa</p>
+                <h1 className="text-2xl font-bold tracking-tight">{student.name}</h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-blue-100 text-sm">
+                    NISN: {student.nisn} &bull; {studentClass?.name || 'Belum Masuk Kelas'}
+                  </p>
+                  {isDutaKebersihan && (
+                    <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 font-black text-[11px] px-2.5 py-0.5 rounded-full shadow-md border border-yellow-200">
+                      <Crown className="w-3.5 h-3.5 text-amber-900" />
+                      <span>👑 DUTA KEBERSIHAN RESMI</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsEcoCertOpen(true);
+                        }}
+                        className="bg-slate-900 text-white hover:bg-slate-800 text-[10px] font-bold px-2 py-0.5 rounded-full cursor-pointer ml-1"
+                      >
+                        Lihat Piagam
+                      </button>
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
+          </div>
         </div>
-      </div>
+      )}
 
       {/* PROFIL TAB SUMMARY WIDGETS */}
       {activeTab === 'profil' && (

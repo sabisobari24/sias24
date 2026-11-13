@@ -119,28 +119,32 @@ export default function ProfileEditModal({
         return;
       }
 
-      // Verify current password
-      let realCurrentPassword = '';
-      if (activeRole === 'orang_tua') {
-        realCurrentPassword = activeUser.parentPassword || 'ortu123';
-      } else if (activeRole === 'siswa') {
-        realCurrentPassword = activeUser.password || 'siswa123';
-      } else if (activeRole === 'admin') {
-        realCurrentPassword = activeUser.password || 'sobari123';
+      // Verify current password strictly
+      const savedPassword = activeRole === 'orang_tua' ? activeUser.parentPassword : activeUser.password;
+      const hasCustomPassword = Boolean(savedPassword && String(savedPassword).trim() !== '');
+
+      if (hasCustomPassword) {
+        if (currentPassword !== String(savedPassword).trim()) {
+          setErrorMsg('Kata sandi saat ini salah.');
+          return;
+        }
       } else {
-        realCurrentPassword = activeUser.password || 'guru123';
-      }
+        let initialDefaultPassword = '';
+        if (activeRole === 'orang_tua') {
+          initialDefaultPassword = 'ortu123';
+        } else if (activeRole === 'siswa') {
+          initialDefaultPassword = 'siswa123';
+        } else if (activeRole === 'admin') {
+          initialDefaultPassword = 'sobari123';
+        } else {
+          initialDefaultPassword = 'guru123';
+        }
+        const idFallback = activeRole === 'orang_tua' ? activeUser.parentNik : (activeRole === 'siswa' ? activeUser.nisn : activeUser.nip);
 
-      // Allow fallback if user has default password of NIP/NISN/NIK
-      const defaultPass = activeRole === 'orang_tua' ? activeUser.parentNik : (activeRole === 'siswa' ? activeUser.nisn : activeUser.nip);
-
-      if (
-        currentPassword !== realCurrentPassword && 
-        currentPassword !== defaultPass &&
-        !(activeRole === 'admin' && currentPassword === 'admin123')
-      ) {
-        setErrorMsg('Kata sandi saat ini salah.');
-        return;
+        if (currentPassword !== initialDefaultPassword && (!idFallback || currentPassword !== idFallback)) {
+          setErrorMsg('Kata sandi saat ini salah.');
+          return;
+        }
       }
 
       if (!newPassword) {

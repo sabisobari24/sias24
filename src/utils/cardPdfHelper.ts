@@ -5,6 +5,30 @@ import QRCode from 'qrcode';
 import { Student, SchoolClass } from '../types';
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from './schoolLogoHelper';
 
+const escapeHtml = (val: unknown): string => {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+const isSafeMediaUrl = (url: unknown, fallback: string = ''): string => {
+  if (!url || typeof url !== 'string') return fallback;
+  const trimmed = url.trim();
+  if (
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('/') ||
+    /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(trimmed)
+  ) {
+    return escapeHtml(trimmed);
+  }
+  return fallback;
+};
+
 export interface CardColorPreset {
   id: string;
   name: string;
@@ -389,38 +413,58 @@ async function createCardElements(
   frontEl.style.backgroundColor = '#ffffff';
 
   const safeWatermarkOpacity = Math.min(config.watermarkOpacity, 0.08);
+  const safeLogoUrl = isSafeMediaUrl(logoDataUrl, '');
+  const safeAvatarUrl = isSafeMediaUrl(avatarDataUrl, '');
+  const safeQrUrl = isSafeMediaUrl(qrDataUrl, '');
+  const safeCustomBgUrl = isSafeMediaUrl(config.customBgImage, '');
+  const safeSchoolName = escapeHtml(config.schoolName);
+  const safeCardTitle = escapeHtml(config.cardTitle);
+  const safeCardValidity = escapeHtml(config.cardValidity);
+  const safeCardSubtitle = escapeHtml(config.cardSubtitle);
+  const safeBackTitle = escapeHtml(config.backTitle || 'KETENTUAN & TATA TERTIB KARTU');
+  const safeFooterNote = escapeHtml(config.footerNote);
+  const safeSchoolAddress = escapeHtml(config.schoolAddress);
+  const safeSchoolContact = escapeHtml(config.schoolContact);
+  const safeIssueDate = escapeHtml(config.issueDate);
+  const safeHeadmasterName = escapeHtml(config.headmasterName);
+  const safeHeadmasterNip = escapeHtml(config.headmasterNip);
+  const safeStudentName = escapeHtml(student.name);
+  const safeStudentNisn = escapeHtml(student.nisn || '-');
+  const safeStudentIdOrNisn = escapeHtml(student.nisn || student.id);
+  const safeStudentGender = escapeHtml(student.gender || '-');
+  const safeClassName = escapeHtml(className);
 
   frontEl.innerHTML = `
     <!-- Header: min-height 84px with generous vertical breathing room for font ascent -->
     <div style="min-height: 84px; background: ${config.preset.headerCss}; border-bottom: 3.5px solid ${config.preset.borderCss}; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box;">
       <div style="display: flex; align-items: center; gap: 16px; min-width: 0; flex: 1;">
         <div style="width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-          <img src="${logoDataUrl}" alt="Logo Sekolah" style="max-width: 56px; max-height: 56px; object-fit: contain;" />
+          <img src="${safeLogoUrl}" alt="Logo Sekolah" style="max-width: 56px; max-height: 56px; object-fit: contain;" />
         </div>
         <div style="min-width: 0; flex: 1;">
           <div style="font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; line-height: 1.35; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-            ${config.schoolName}
+            ${safeSchoolName}
           </div>
           <div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 700; color: #fef08a; text-transform: uppercase; letter-spacing: 0.8px; line-height: 1.3;">
-            ${config.cardTitle}
+            ${safeCardTitle}
           </div>
         </div>
       </div>
     </div>
 
     <!-- Body: 426px with balanced layout -->
-    <div style="flex: 1; padding: 18px 24px 14px 24px; display: flex; gap: 24px; background: ${config.bgType === 'custom_image' && config.customBgImage ? `url(${config.customBgImage}) center/cover no-repeat` : config.preset.bodyCss}; position: relative; box-sizing: border-box;">
+    <div style="flex: 1; padding: 18px 24px 14px 24px; display: flex; gap: 24px; background: ${config.bgType === 'custom_image' && safeCustomBgUrl ? `url('${safeCustomBgUrl}') center/cover no-repeat` : config.preset.bodyCss}; position: relative; box-sizing: border-box;">
       ${config.showWatermark ? `
         <!-- Watermark precisely centered on the whole card -->
         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 210px; height: 210px; display: flex; align-items: center; justify-content: center; opacity: ${safeWatermarkOpacity}; pointer-events: none; z-index: 0;">
-          <img src="${logoDataUrl}" style="width: 100%; height: 100%; object-fit: contain; filter: grayscale(100%); background: transparent;" />
+          <img src="${safeLogoUrl}" style="width: 100%; height: 100%; object-fit: contain; filter: grayscale(100%); background: transparent;" />
         </div>
       ` : ''}
 
       <!-- Left: Photo Column -->
       <div style="width: 170px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; position: relative; z-index: 1;">
         <div style="width: 170px; height: 215px; border-radius: 12px; border: 2.5px solid #1e1b4b; overflow: hidden; background: #e2e8f0; box-shadow: 0 4px 10px rgba(0,0,0,0.12);">
-          <img src="${avatarDataUrl}" alt="${student.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+          <img src="${safeAvatarUrl}" alt="${safeStudentName}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
         </div>
         ${student.isKjpRecipient ? `
           <div style="width: 170px; margin-top: 8px; background: #059669; color: #ffffff; font-size: 12.5px; font-weight: 800; padding: 5px 0; border-radius: 8px; text-align: center; letter-spacing: 0.5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
@@ -428,7 +472,7 @@ async function createCardElements(
           </div>
         ` : `
           <div style="width: 170px; margin-top: 10px; text-align: center; font-size: 11px; font-weight: 700; color: #4338ca; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); padding: 5px 6px; border-radius: 6px; box-sizing: border-box;">
-            ${config.cardValidity}
+            ${safeCardValidity}
           </div>
         `}
       </div>
@@ -439,22 +483,22 @@ async function createCardElements(
           <tr>
             <td style="width: 90px; color: #64748b; font-weight: 600; font-size: 14px; padding: 4px 0; vertical-align: top;">Nama</td>
             <td style="width: 14px; color: #64748b; font-size: 14px; padding: 4px 0; vertical-align: top;">:</td>
-            <td style="font-weight: 900; color: #0f172a; font-size: 17px; text-transform: uppercase; padding: 4px 0; vertical-align: top; line-height: 1.25; word-break: break-word;">${student.name}</td>
+            <td style="font-weight: 900; color: #0f172a; font-size: 17px; text-transform: uppercase; padding: 4px 0; vertical-align: top; line-height: 1.25; word-break: break-word;">${safeStudentName}</td>
           </tr>
           <tr>
             <td style="color: #64748b; font-weight: 600; font-size: 14px; padding: 4px 0; vertical-align: top;">NISN</td>
             <td style="color: #64748b; font-size: 14px; padding: 4px 0; vertical-align: top;">:</td>
-            <td style="font-size: 16px; font-weight: 800; color: #1e1b4b; letter-spacing: 0.5px; padding: 4px 0; vertical-align: top;">${student.nisn || '-'}</td>
+            <td style="font-size: 16px; font-weight: 800; color: #1e1b4b; letter-spacing: 0.5px; padding: 4px 0; vertical-align: top;">${safeStudentNisn}</td>
           </tr>
           <tr>
             <td style="color: #64748b; font-weight: 600; font-size: 14px; padding: 4px 0; vertical-align: top;">Kelas</td>
             <td style="color: #64748b; font-size: 14px; padding: 4px 0; vertical-align: top;">:</td>
-            <td style="font-weight: 700; font-size: 15px; color: #334155; padding: 4px 0; vertical-align: top;">${className}</td>
+            <td style="font-weight: 700; font-size: 15px; color: #334155; padding: 4px 0; vertical-align: top;">${safeClassName}</td>
           </tr>
           <tr>
             <td style="color: #64748b; font-weight: 600; font-size: 14px; padding: 4px 0; vertical-align: top;">Gender</td>
             <td style="color: #64748b; font-size: 14px; padding: 4px 0; vertical-align: top;">:</td>
-            <td style="font-weight: 600; font-size: 14.5px; color: #475569; padding: 4px 0; vertical-align: top;">${student.gender || '-'}</td>
+            <td style="font-weight: 600; font-size: 14.5px; color: #475569; padding: 4px 0; vertical-align: top;">${safeStudentGender}</td>
           </tr>
           <tr>
             <td style="color: #64748b; font-weight: 600; font-size: 13.5px; padding: 4px 0; vertical-align: top;">Status</td>
@@ -468,7 +512,7 @@ async function createCardElements(
           <!-- Larger Elegant QR Code Block on LEFT (Posisi Semula, Ukuran Lebih Besar & Jelas) -->
           <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
             <div style="width: 100px; height: 100px; border: 2px solid ${config.preset.borderCss}; border-radius: 12px; background: #ffffff; padding: 5px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); box-sizing: border-box; display: flex; align-items: center; justify-content: center;">
-              <img src="${qrDataUrl}" alt="QR Absensi" style="width: 100%; height: 100%; object-fit: contain; display: block;" />
+              <img src="${safeQrUrl}" alt="QR Absensi" style="width: 100%; height: 100%; object-fit: contain; display: block;" />
             </div>
             <div style="font-family: Arial, Helvetica, sans-serif;">
               <div style="font-size: 13px; font-weight: 900; color: #0f172a; letter-spacing: 0.5px; text-transform: uppercase;">QR ABSENSI</div>
@@ -482,10 +526,10 @@ async function createCardElements(
             <div style="font-size: 12.5px; font-weight: 600; color: #334155; line-height: 1.2;">Kepala Sekolah,</div>
             <div style="height: 32px; display: flex; align-items: center; justify-content: flex-end; font-style: italic; font-size: 11px; color: #94a3b8;">[ TTD &amp; Cap ]</div>
             <div style="font-size: 14px; font-weight: 800; color: #0f172a; border-bottom: 1.5px solid #0f172a; display: inline-block; padding-bottom: 2px; line-height: 1.2;">
-              ${config.headmasterName}
+              ${safeHeadmasterName}
             </div>
             <div style="font-size: 11.5px; font-weight: 600; color: #475569; margin-top: 4px; line-height: 1.2;">
-              NIP. ${config.headmasterNip}
+              NIP. ${safeHeadmasterNip}
             </div>
           </div>
         </div>
@@ -494,7 +538,7 @@ async function createCardElements(
 
     <!-- Bottom Ribbon: 30px with clear, vertically centered text -->
     <div style="height: 30px; background: #0f172a; border-top: 1px solid rgba(251, 191, 36, 0.4); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif;">
-      <span style="font-size: 11px; font-weight: 500; color: #94a3b8; line-height: 1;">${config.cardSubtitle}</span>
+      <span style="font-size: 11px; font-weight: 500; color: #94a3b8; line-height: 1;">${safeCardSubtitle}</span>
       <span style="font-size: 11px; font-weight: 800; color: #fde047; letter-spacing: 0.5px; line-height: 1;">KARTU RESMI</span>
     </div>
   `;
@@ -519,14 +563,14 @@ async function createCardElements(
     ${config.showWatermark ? `
       <!-- Watermark precisely centered on the back card -->
       <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 210px; height: 210px; display: flex; align-items: center; justify-content: center; opacity: ${safeWatermarkOpacity * 0.75}; pointer-events: none; z-index: 0;">
-        <img src="${logoDataUrl}" style="width: 100%; height: 100%; object-fit: contain; filter: grayscale(100%); background: transparent;" />
+        <img src="${safeLogoUrl}" style="width: 100%; height: 100%; object-fit: contain; filter: grayscale(100%); background: transparent;" />
       </div>
     ` : ''}
 
     <!-- Header Belakang: Elegant cleanly aligned accent bar -->
     <div style="border-bottom: 2.5px solid ${config.preset.borderCss}; padding-bottom: 8px; position: relative; z-index: 1; text-align: center;">
       <div style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 800; color: ${config.preset.accentColor || '#1e1b4b'}; text-transform: uppercase; letter-spacing: 0.8px;">
-        ${config.backTitle || 'KETENTUAN & TATA TERTIB KARTU'}
+        ${safeBackTitle}
       </div>
     </div>
 
@@ -536,19 +580,19 @@ async function createCardElements(
         ${config.rules.map((r, i) => `
           <div style="font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 1.45; color: #1e293b; display: flex; gap: 10px; align-items: flex-start;">
             <span style="color: ${config.preset.accentColor || '#4338ca'}; font-weight: 800; font-size: 13px; flex-shrink: 0;">${i + 1}.</span>
-            <span style="flex: 1; font-weight: 500;">${r.replace(/^\d+[\.\)]\s*/, '')}</span>
+            <span style="flex: 1; font-weight: 500;">${escapeHtml(r.replace(/^\d+[\.\)]\s*/, ''))}</span>
           </div>
         `).join('')}
       </div>
 
-      ${config.footerNote ? `
+      ${safeFooterNote ? `
         <div style="font-family: Arial, Helvetica, sans-serif; font-size: 11.5px; font-style: italic; color: #475569; margin-top: 8px; padding: 6px 12px; background: rgba(0,0,0,0.025); border-left: 3px solid ${config.preset.borderCss}; border-radius: 4px;">
-          ${config.footerNote}
+          ${safeFooterNote}
         </div>
       ` : ''}
 
       <div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #64748b; margin-top: 4px; padding-left: 4px;">
-        ${config.schoolAddress} &bull; ${config.schoolContact}
+        ${safeSchoolAddress} &bull; ${safeSchoolContact}
       </div>
     </div>
 
@@ -556,19 +600,19 @@ async function createCardElements(
     <div style="border-top: 1.5px dashed #cbd5e1; padding-top: 10px; position: relative; z-index: 1; display: flex; align-items: flex-end; justify-content: space-between;">
       <div style="font-family: Arial, Helvetica, sans-serif;">
         <div style="font-size: 10.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">NOMOR INDUK SISWA NASIONAL (NISN)</div>
-        <div style="font-size: 20px; font-weight: 900; letter-spacing: 2px; color: #0f172a; margin-top: 3px;">${student.nisn || student.id}</div>
+        <div style="font-size: 20px; font-weight: 900; letter-spacing: 2px; color: #0f172a; margin-top: 3px;">${safeStudentIdOrNisn}</div>
         <div style="font-size: 10.5px; color: #64748b; margin-top: 3px;">Berlaku selama tercatat sebagai siswa aktif</div>
       </div>
 
       <div style="text-align: right; font-family: Arial, Helvetica, sans-serif; min-width: 210px;">
-        <div style="font-size: 11px; color: #475569; margin-bottom: 2px;">${config.issueDate}</div>
+        <div style="font-size: 11px; color: #475569; margin-bottom: 2px;">${safeIssueDate}</div>
         <div style="font-size: 12.5px; font-weight: 600; color: #1e293b; line-height: 1.2;">Kepala Sekolah,</div>
         <div style="height: 30px; display: flex; align-items: center; justify-content: flex-end; font-style: italic; font-size: 10.5px; color: #94a3b8;">[ TTD &amp; Cap ]</div>
         <div style="font-size: 13.5px; font-weight: 800; color: #0f172a; border-bottom: 1.5px solid #0f172a; display: inline-block; padding-bottom: 2px; line-height: 1.2;">
-          ${config.headmasterName}
+          ${safeHeadmasterName}
         </div>
         <div style="font-size: 11px; font-weight: 600; color: #475569; margin-top: 4px; line-height: 1.2;">
-          NIP. ${config.headmasterNip}
+          NIP. ${safeHeadmasterNip}
         </div>
       </div>
     </div>

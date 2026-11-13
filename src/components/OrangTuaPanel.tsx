@@ -6,6 +6,7 @@ import { downloadExcel } from '../utils/excelExport';
 import { downloadDocx } from '../utils/docxExport';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import { useDownload } from '../context/DownloadContext';
+import { ExportDateRange, filterItemsByDateRange, getRangeFileSuffix, getRangeTitleSuffix } from '../utils/exportDateFilter';
 
 interface OrangTuaPanelProps {
   student: Student;
@@ -82,11 +83,12 @@ export default function OrangTuaPanel({
     setNewMessage('');
   };
 
-  const handleExportPresensiAnak = (format: 'docx' | 'pdf' | 'excel') => {
+  const handleExportPresensiAnak = (format: 'docx' | 'pdf' | 'excel', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(studentAttendance, (a) => a.date, range);
     const headers = ["Tanggal", "Status", "Keterangan"];
-    const rows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
-    const title = `Rekap Kehadiran Siswa - ${student.name}`;
-    const safeName = student.name.replace(/\s+/g, '_');
+    const rows = filtered.map(a => [a.date, a.status, a.notes || '-']);
+    const title = `Rekap Kehadiran Siswa - ${student.name}${getRangeTitleSuffix(range)}`;
+    const safeName = `${student.name.replace(/\s+/g, '_')}${getRangeFileSuffix(range)}`;
     if (format === 'docx') {
       downloadDocx(`Presensi_${safeName}.docx`, title, headers, rows, headmasterName);
     } else if (format === 'excel') {
@@ -96,11 +98,12 @@ export default function OrangTuaPanel({
     }
   };
 
-  const handleExportKedisiplinanAnak = (format: 'docx' | 'pdf' | 'excel') => {
-    const headers = ["Tanggal", "Pelanggaran", "Poin"];
-    const rows = studentViolations.map(v => [v.date, violationTypes.find(vt => vt.id === v.violationTypeId)?.name || 'Pelanggaran', `${v.points} Poin`]);
-    const title = `Catatan Kedisiplinan Siswa - ${student.name}`;
-    const safeName = student.name.replace(/\s+/g, '_');
+  const handleExportKedisiplinanAnak = (format: 'docx' | 'pdf' | 'excel', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(studentViolations, (v) => v.date, range);
+    const headers = ["Tanggal", "Pelanggaran", "Poin", "Keterangan"];
+    const rows = filtered.map(v => [v.date, violationTypes.find(vt => vt.id === v.violationTypeId)?.name || 'Pelanggaran', `${v.points} Poin`, v.notes || '-']);
+    const title = `Catatan Kedisiplinan Siswa - ${student.name}${getRangeTitleSuffix(range)}`;
+    const safeName = `${student.name.replace(/\s+/g, '_')}${getRangeFileSuffix(range)}`;
     if (format === 'docx') {
       downloadDocx(`Kedisiplinan_${safeName}.docx`, title, headers, rows, headmasterName);
     } else if (format === 'excel') {
@@ -110,25 +113,101 @@ export default function OrangTuaPanel({
     }
   };
 
-  const getParentDownloadConfig = () => {
-    return [
-      {
-        label: 'Presensi Anak',
-        formats: {
-          docx: () => handleExportPresensiAnak('docx'),
-          pdf: () => handleExportPresensiAnak('pdf'),
-          excel: () => handleExportPresensiAnak('excel'),
-        },
-      },
-      {
-        label: 'Catatan Kedisiplinan',
-        formats: {
-          docx: () => handleExportKedisiplinanAnak('docx'),
-          pdf: () => handleExportKedisiplinanAnak('pdf'),
-          excel: () => handleExportKedisiplinanAnak('excel'),
-        },
-      }
+  const handleExportCatatanAnak = (format: 'docx' | 'pdf' | 'excel', range?: ExportDateRange) => {
+    const combined = [
+      ...studentHomeroomNotes.map(n => ({ date: n.date, sumber: 'Wali Kelas', catatan: n.notes, tindakLanjut: n.academicProgress || '-', petugas: n.recordedBy })),
+      ...studentCounselorNotes.map(n => ({ date: n.date, sumber: 'Guru BK / Wali', catatan: n.notes, tindakLanjut: n.followUp || '-', petugas: n.recordedBy })),
     ];
+    const filtered = filterItemsByDateRange(combined, (c) => c.date, range);
+    const headers = ["Tanggal", "Sumber Catatan", "Isi Catatan", "Tindak Lanjut / Akademik", "Pencatat"];
+    const rows = filtered.map(c => [c.date, c.sumber, c.catatan, c.tindakLanjut, c.petugas]);
+    const title = `Catatan Bimbingan & Wali Kelas - ${student.name}${getRangeTitleSuffix(range)}`;
+    const safeName = `${student.name.replace(/\s+/g, '_')}${getRangeFileSuffix(range)}`;
+    if (format === 'docx') downloadDocx(`Catatan_Guru_${safeName}.docx`, title, headers, rows, headmasterName);
+    else if (format === 'excel') downloadExcel(`Catatan_Guru_${safeName}.xlsx`, headers, rows, 'Catatan Guru');
+    else printTablePDF(title, headers, rows, headmasterName);
+  };
+
+  const handleExportPrestasiAnak = (format: 'docx' | 'pdf' | 'excel', range?: ExportDateRange) => {
+    const myAchs = studentAchievements.filter((a) => a.studentId === student.id || a.studentName.toLowerCase() === student.name.toLowerCase());
+    const filtered = filterItemsByDateRange(myAchs, (a) => a.date, range);
+    const headers = ["Judul Prestasi", "Kategori", "Tingkat", "Peringkat", "Tanggal"];
+    const rows = filtered.map(a => [a.title, a.category, a.level, a.rank || '-', a.date]);
+    const title = `Rekap Prestasi Anak - ${student.name}${getRangeTitleSuffix(range)}`;
+    const safeName = `${student.name.replace(/\s+/g, '_')}${getRangeFileSuffix(range)}`;
+    if (format === 'docx') downloadDocx(`Prestasi_${safeName}.docx`, title, headers, rows, headmasterName);
+    else if (format === 'excel') downloadExcel(`Prestasi_${safeName}.xlsx`, headers, rows, 'Prestasi Anak');
+    else printTablePDF(title, headers, rows, headmasterName);
+  };
+
+  const handleExportKomunikasiOrtu = (format: 'docx' | 'pdf' | 'excel', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(studentMessages, (m) => m.date, range);
+    const headers = ["Tanggal", "Pengirim", "Pesan", "Balasan Sekolah"];
+    const rows = filtered.map(m => [
+      m.date,
+      m.senderName || 'Orang Tua',
+      m.message,
+      m.replies && m.replies.length > 0 ? m.replies.map(r => `${r.senderName}: ${r.message}`).join(' | ') : 'Belum dibalas'
+    ]);
+    const title = `Riwayat Komunikasi Wali Murid - ${student.name}${getRangeTitleSuffix(range)}`;
+    const safeName = `${student.name.replace(/\s+/g, '_')}${getRangeFileSuffix(range)}`;
+    if (format === 'docx') downloadDocx(`Komunikasi_${safeName}.docx`, title, headers, rows, headmasterName);
+    else if (format === 'excel') downloadExcel(`Komunikasi_${safeName}.xlsx`, headers, rows, 'Komunikasi Sekolah');
+    else printTablePDF(title, headers, rows, headmasterName);
+  };
+
+  const getParentDownloadConfig = () => {
+    const presensiAction = {
+      label: 'Presensi Anak',
+      formats: {
+        docx: (range?: ExportDateRange) => handleExportPresensiAnak('docx', range),
+        pdf: (range?: ExportDateRange) => handleExportPresensiAnak('pdf', range),
+        excel: (range?: ExportDateRange) => handleExportPresensiAnak('excel', range),
+      },
+    };
+    const disiplinAction = {
+      label: 'Catatan Kedisiplinan',
+      formats: {
+        docx: (range?: ExportDateRange) => handleExportKedisiplinanAnak('docx', range),
+        pdf: (range?: ExportDateRange) => handleExportKedisiplinanAnak('pdf', range),
+        excel: (range?: ExportDateRange) => handleExportKedisiplinanAnak('excel', range),
+      },
+    };
+    const catatanAction = {
+      label: 'Catatan Guru & Konseling BK',
+      formats: {
+        docx: (range?: ExportDateRange) => handleExportCatatanAnak('docx', range),
+        pdf: (range?: ExportDateRange) => handleExportCatatanAnak('pdf', range),
+        excel: (range?: ExportDateRange) => handleExportCatatanAnak('excel', range),
+      },
+    };
+    const prestasiAction = {
+      label: 'Prestasi Akademik & Non-Akademik',
+      formats: {
+        docx: (range?: ExportDateRange) => handleExportPrestasiAnak('docx', range),
+        pdf: (range?: ExportDateRange) => handleExportPrestasiAnak('pdf', range),
+        excel: (range?: ExportDateRange) => handleExportPrestasiAnak('excel', range),
+      },
+    };
+    const pesanAction = {
+      label: 'Riwayat Komunikasi Sekolah',
+      formats: {
+        docx: (range?: ExportDateRange) => handleExportKomunikasiOrtu('docx', range),
+        pdf: (range?: ExportDateRange) => handleExportKomunikasiOrtu('pdf', range),
+        excel: (range?: ExportDateRange) => handleExportKomunikasiOrtu('excel', range),
+      },
+    };
+
+    const allActions = [presensiAction, disiplinAction, catatanAction, prestasiAction, pesanAction];
+    const priorityMap: Record<string, typeof presensiAction> = {
+      profil: prestasiAction,
+      absensi: presensiAction,
+      pelanggaran: disiplinAction,
+      catatan: catatanAction,
+      komunikasi: pesanAction,
+    };
+    const primary = priorityMap[activeTab] || presensiAction;
+    return [primary, ...allActions.filter(a => a !== primary)];
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
@@ -136,7 +215,7 @@ export default function OrangTuaPanel({
   useEffect(() => {
     setDownloadActions(getParentDownloadConfig());
     return () => clearDownloadActions();
-  }, [student.id, studentAttendance.length, studentViolations.length]);
+  }, [activeTab, student.id, studentAttendance.length, studentViolations.length, studentHomeroomNotes.length, studentCounselorNotes.length, studentAchievements.length, studentMessages.length]);
 
   return (
     <div className="space-y-6">

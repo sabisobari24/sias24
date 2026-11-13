@@ -14,6 +14,7 @@ import { downloadExcel } from '../../utils/excelExport';
 import { printTablePDF } from '../../utils/printHelper';
 import { downloadDocx } from '../../utils/docxExport';
 import StudentIdCardActivityScannerModal from './StudentIdCardActivityScannerModal';
+import ConfirmModal from '../ConfirmModal';
 import {
   DoorOpen,
   Clock,
@@ -111,6 +112,7 @@ export default function StudentPermitMonitoringPanel({
 
   // Notification feedback
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string>('');
+  const [pendingDeletePermit, setPendingDeletePermit] = useState<StudentPermitLog | null>(null);
 
   // 1. Live active permits (Siswa yang sedang di luar kelas saat ini)
   const activeOutPermits = useMemo(() => {
@@ -874,11 +876,7 @@ export default function StudentPermitMonitoringPanel({
                         {onDeletePermit && (
                           <button
                             type="button"
-                            onClick={() => {
-                              if (confirm(`Hapus catatan izin ${p.studentName}?`)) {
-                                onDeletePermit(p.id);
-                              }
-                            }}
+                            onClick={() => setPendingDeletePermit(p)}
                             className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                             title="Hapus Catatan Izin"
                           >
@@ -1253,6 +1251,21 @@ export default function StudentPermitMonitoringPanel({
         onAddEcoDeposit={onAddEcoDeposit}
         operatorName={operatorName}
         initialMode={scannerInitialMode}
+      />
+
+      <ConfirmModal
+        isOpen={!!pendingDeletePermit}
+        title="Hapus Catatan Izin Siswa"
+        message={pendingDeletePermit ? `Hapus catatan izin keluar atas nama ${pendingDeletePermit.studentName} (${pendingDeletePermit.date}) secara permanen?` : ''}
+        confirmText="Ya, Hapus"
+        onConfirm={() => {
+          if (pendingDeletePermit && onDeletePermit) {
+            onDeletePermit(pendingDeletePermit.id);
+            setActionSuccessMsg(`Catatan izin ${pendingDeletePermit.studentName} berhasil dihapus.`);
+            setTimeout(() => setActionSuccessMsg(''), 3500);
+          }
+        }}
+        onCancel={() => setPendingDeletePermit(null)}
       />
     </div>
   );

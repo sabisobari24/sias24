@@ -143,21 +143,25 @@ export function sanitizeData(data: any): any {
     return null;
   }
   if (typeof data === 'string') {
-    // If it's a data URL image, skip heavy string regexes to avoid UI freeze and corruption
-    if (data.startsWith('data:image/')) {
+    // Allow safe raster data URL images directly without expensive regexes
+    if (/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(data)) {
       return data;
     }
-    // Purge dangerous scripts, event handlers, and deface URLs
+    // Purge dangerous tags, inline event handlers, dangerous URI schemes, and deface URLs
     return data
       .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
       .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, '')
-      .replace(/onerror\s*=\s*["'][^"']*["']/gi, '')
-      .replace(/onload\s*=\s*["'][^"']*["']/gi, '')
-      .replace(/onclick\s*=\s*["'][^"']*["']/gi, '')
-      .replace(/javascript\s*:/gi, 'blocked-js:')
+      .replace(/<svg[\s\S]*?>[\s\S]*?<\/svg>/gi, '')
+      .replace(/<object[\s\S]*?>[\s\S]*?<\/object>/gi, '')
+      .replace(/<embed[\s\S]*?>[\s\S]*?<\/embed>/gi, '')
+      .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+      .replace(/<form[\s\S]*?>[\s\S]*?<\/form>/gi, '')
+      .replace(/<\/?(?:script|iframe|svg|object|embed|style|link|meta|form)[^>]*>/gi, '')
+      .replace(/\bon[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(/(javascript|vbscript)\s*:/gi, 'blocked-uri:')
+      .replace(/data\s*:\s*text\/html/gi, 'blocked-data:')
       .replace(/dhimasganteng\.netlify\.app[^\s"'>]*/gi, '')
-      .replace(/deface\.js/gi, '')
-      .replace(/<\/?script[^>]*>/gi, '');
+      .replace(/deface\.js/gi, '');
   }
   if (Array.isArray(data)) {
     return data.map(sanitizeData);

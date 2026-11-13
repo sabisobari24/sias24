@@ -227,9 +227,10 @@
         "contactText": { "type": "string", "maxLength": 300 },
         "docNumber": { "type": "string", "maxLength": 100 },
         "cardTitle": { "type": "string", "maxLength": 200 },
-        "presetId": { "type": "string", "maxLength": 50 }
-      },
-      "required": ["id"]
+        "presetId": { "type": "string", "maxLength": 50 },
+        "initialized": { "type": "boolean" },
+        "initializedAt": { "type": "string", "maxLength": 50 }
+      }
     },
     "AggregatedRealtimeContainer": {
       "title": "Aggregated Realtime Data Container",
@@ -241,6 +242,91 @@
         "lastUpdated": { "type": "string", "maxLength": 50 }
       },
       "required": ["items"]
+    },
+    "EcoWasteCategory": {
+      "title": "Eco Waste Category",
+      "description": "Kategori jenis sampah program ECo-Tiket Adiwiyata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "unit": { "type": "string", "maxLength": 30 },
+        "pointsPerUnit": { "type": "number" }
+      },
+      "required": ["id", "name", "pointsPerUnit"]
+    },
+    "EcoWasteDeposit": {
+      "title": "Eco Waste Deposit",
+      "description": "Catatan setoran sampah siswa",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "categoryId": { "type": "string", "maxLength": 128 },
+        "quantity": { "type": "number" },
+        "pointsEarned": { "type": "number" },
+        "date": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "maxLength": 30 }
+      },
+      "required": ["id", "studentId", "pointsEarned"]
+    },
+    "EcoReward": {
+      "title": "Eco Reward",
+      "description": "Katalog hadiah ECo-Tiket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "pointsRequired": { "type": "number" },
+        "stock": { "type": "number" }
+      },
+      "required": ["id", "name", "pointsRequired"]
+    },
+    "EcoRedemption": {
+      "title": "Eco Redemption",
+      "description": "Riwayat penukaran poin ECo-Tiket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "pointsSpent": { "type": "number" },
+        "date": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "maxLength": 30 }
+      },
+      "required": ["id", "studentId", "pointsSpent"]
+    },
+    "EcoConfig": {
+      "title": "Eco Config",
+      "description": "Konfigurasi ECo-Tiket dan Duta Kebersihan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "pointsPerViolationPoint": { "type": "number" },
+        "minPointsAmbassador": { "type": "number" }
+      }
+    },
+    "StudentPermitLog": {
+      "title": "Student Permit Log",
+      "description": "Buku kendali izin siswa keluar kelas, toilet, dan pulang cepat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "maxLength": 50 },
+        "date": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "maxLength": 30 }
+      },
+      "required": ["id", "studentId", "type"]
+    },
+    "EkskulMember": {
+      "title": "Ekskul Member",
+      "description": "Daftar anggota ekstrakurikuler berdasarkan ID ekskul",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "memberIds": { "type": "array" }
+      },
+      "required": ["id", "memberIds"]
     }
   },
   "firestore": {
@@ -303,6 +389,10 @@
     "/aggregated_messages/{chatId}": {
       "schema": "AggregatedRealtimeContainer",
       "description": "Pesan teragregasi"
+    },
+    "/ekskul_members/{id}": {
+      "schema": "EkskulMember",
+      "description": "Keanggotaan ekstrakurikuler siswa"
     },
     "/eco_categories/{id}": {
       "schema": "EcoWasteCategory",

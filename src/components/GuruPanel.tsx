@@ -35,6 +35,12 @@ import ELearningPanel from './ELearningPanel';
 import { useDownload } from '../context/DownloadContext';
 import StudentPermitMonitoringPanel from './common/StudentPermitMonitoringPanel';
 import { AdminEcoTiketPanel } from './eco/AdminEcoTiketPanel';
+import {
+  ExportDateRange,
+  filterItemsByDateRange,
+  getRangeFileSuffix,
+  getRangeTitleSuffix
+} from '../utils/exportDateFilter';
 
 interface GuruPanelProps {
   teacher: Teacher;
@@ -89,6 +95,7 @@ interface GuruPanelProps {
   onUpdateEcoReward?: (reward: EcoReward) => Promise<void> | void;
   onDeleteEcoReward?: (id: string) => Promise<void> | void;
   onUpdateEcoRedemptionStatus?: (id: string, status: 'Selesai' | 'Menunggu' | 'Ditolak', notes?: string) => Promise<void> | void;
+  onDeleteEcoRedemption?: (id: string) => Promise<void> | void;
   onUpdateEcoConfig?: (config: EcoConfig) => Promise<void> | void;
   schoolName?: string;
 }
@@ -144,6 +151,7 @@ export default function GuruPanel({
   onUpdateEcoReward,
   onDeleteEcoReward,
   onUpdateEcoRedemptionStatus,
+  onDeleteEcoRedemption,
   onUpdateEcoConfig,
   schoolName,
 }: GuruPanelProps) {
@@ -739,7 +747,8 @@ export default function GuruPanel({
   const handleSubmitViolation = (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetStudentId) {
-      alert('Silakan pilih siswa terlebih dahulu.');
+      setSuccessMsg('Silakan pilih siswa terlebih dahulu.');
+      setTimeout(() => setSuccessMsg(''), 4000);
       return;
     }
     const type = violationTypes.find((vt) => vt.id === selectedViolationTypeId);
@@ -760,10 +769,14 @@ export default function GuruPanel({
   };
 
   // Export Handlers
-  const handleExportPresensiGuru = (format: 'excel' | 'pdf' | 'docx') => {
+  const handleExportPresensiGuru = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
     const classObj = classes.find(c => c.id === selectedClassId);
     const className = classObj ? classObj.name : selectedClassId;
-    const classAttendance = attendance.filter(a => a.classId === selectedClassId);
+    const classAttendance = filterItemsByDateRange(
+      attendance.filter(a => a.classId === selectedClassId),
+      a => a.date,
+      range
+    );
     
     const headers = ["Tanggal", "Nama Siswa", "NISN", "Kelas", "Status Kehadiran", "Catatan Khusus", "Pencatat"];
     const rows = classAttendance.map(a => {
@@ -779,26 +792,27 @@ export default function GuruPanel({
       ];
     });
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Jurnal Kehadiran Kelas ${className}${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel(`jurnal_kehadiran_kelas_${className.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Jurnal Kehadiran');
+      downloadExcel(`jurnal_kehadiran_kelas_${className.replace(/\s+/g, '_')}${suffix}.xlsx`, headers, rows, 'Jurnal Kehadiran');
       setSuccessMsg(`Berhasil mengunduh Jurnal Kehadiran Kelas ${className} (Excel .xlsx)!`);
     } else if (format === 'docx') {
-      downloadDocx(`jurnal_kehadiran_kelas_${className.replace(/\s+/g, '_')}.docx`, `Jurnal Kehadiran Kelas ${className}`, headers, rows, headmasterName);
+      downloadDocx(`jurnal_kehadiran_kelas_${className.replace(/\s+/g, '_')}${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg(`Berhasil mengunduh Jurnal Kehadiran Kelas ${className} (Word .docx)!`);
     } else {
-      printTablePDF(`Jurnal Kehadiran Kelas ${className}`, headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg(`Jurnal Kehadiran Kelas ${className} berhasil dicetak / disimpan ke PDF!`);
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportTeachingJournal = (format: 'excel' | 'pdf' | 'docx') => {
-    const myJournals = teachingJournals.filter(j => j.teacherId === teacher.id);
-    
-    if (myJournals.length === 0) {
-      alert('Anda belum memiliki jurnal mengajar harian yang tersimpan.');
-      return;
-    }
+  const handleExportTeachingJournal = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const myJournals = filterItemsByDateRange(
+      teachingJournals.filter(j => j.teacherId === teacher.id),
+      j => j.date,
+      range
+    );
 
     const headers = ["Tanggal", "Kelas", "Mata Pelajaran", "Materi / KD", "Siswa Hadir", "Siswa Absen", "Catatan Kegiatan"];
     const rows = myJournals.map(j => {
@@ -814,21 +828,27 @@ export default function GuruPanel({
       ];
     });
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Jurnal Mengajar Harian Guru - ${teacher.name}${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel(`Jurnal_Mengajar_Guru_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Jurnal Mengajar');
+      downloadExcel(`Jurnal_Mengajar_Guru_${teacher.name.replace(/\s+/g, '_')}${suffix}.xlsx`, headers, rows, 'Jurnal Mengajar');
       setSuccessMsg(`Berhasil mengunduh Jurnal Mengajar Harian Anda (Excel .xlsx)!`);
     } else if (format === 'docx') {
-      downloadDocx(`Jurnal_Mengajar_Guru_${teacher.name.replace(/\s+/g, '_')}.docx`, `Jurnal Mengajar Harian Guru - ${teacher.name}`, headers, rows, headmasterName);
+      downloadDocx(`Jurnal_Mengajar_Guru_${teacher.name.replace(/\s+/g, '_')}${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg(`Berhasil mengunduh Jurnal Mengajar Harian Anda (Word .docx)!`);
     } else {
-      printTablePDF(`Jurnal Mengajar Harian Guru - ${teacher.name}`, headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg(`Jurnal Mengajar Anda berhasil dicetak / disimpan ke PDF!`);
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPelanggaranGuru = (format: 'excel' | 'pdf' | 'docx') => {
-    const myViolations = violations.filter(v => v.recordedBy === teacher.name);
+  const handleExportPelanggaranGuru = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const myViolations = filterItemsByDateRange(
+      violations.filter(v => v.recordedBy === teacher.name),
+      v => v.date,
+      range
+    );
     const headers = ["Tanggal", "Nama Siswa", "Kelas", "Jenis Pelanggaran", "Poin", "Catatan", "Pencatat"];
     const rows = myViolations.map(v => {
       const s = students.find(std => std.id === v.studentId);
@@ -844,22 +864,32 @@ export default function GuruPanel({
       ];
     });
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Laporan Penegakan Kedisiplinan oleh ${teacher.name}${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel(`laporan_pelanggaran_oleh_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Laporan Pelanggaran');
+      downloadExcel(`laporan_pelanggaran_oleh_${teacher.name.replace(/\s+/g, '_')}${suffix}.xlsx`, headers, rows, 'Laporan Pelanggaran');
       setSuccessMsg('Berhasil mengunduh rekapan catatan kedisiplinan (Excel .xlsx)!');
     } else if (format === 'docx') {
-      downloadDocx(`laporan_pelanggaran_oleh_${teacher.name.replace(/\s+/g, '_')}.docx`, `Laporan Penegakan Kedisiplinan oleh ${teacher.name}`, headers, rows, headmasterName);
+      downloadDocx(`laporan_pelanggaran_oleh_${teacher.name.replace(/\s+/g, '_')}${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg('Berhasil mengunduh rekapan catatan kedisiplinan (Word .docx)!');
     } else {
-      printTablePDF(`Laporan Penegakan Kedisiplinan oleh ${teacher.name}`, headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg('Rekapitulasi penegakan kedisiplinan berhasil dicetak / disimpan ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportRiwayatGuru = (format: 'excel' | 'pdf' | 'docx') => {
-    const myAttendance = attendance.filter(a => a.recordedBy === teacher.name);
-    const myViolations = violations.filter(v => v.recordedBy === teacher.name);
+  const handleExportRiwayatGuru = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const myAttendance = filterItemsByDateRange(
+      attendance.filter(a => a.recordedBy === teacher.name),
+      a => a.date,
+      range
+    );
+    const myViolations = filterItemsByDateRange(
+      violations.filter(v => v.recordedBy === teacher.name),
+      v => v.date,
+      range
+    );
     
     const headers = ["Kategori Log", "Tanggal", "Siswa / Subjek", "Detail Status / Pelanggaran", "Catatan Khusus"];
     const rows: (string | number)[][] = [
@@ -886,21 +916,27 @@ export default function GuruPanel({
       })
     ];
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Riwayat Aktivitas & Laporan Entri Guru - ${teacher.name}${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel(`riwayat_entri_guru_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Riwayat Entri');
+      downloadExcel(`riwayat_entri_guru_${teacher.name.replace(/\s+/g, '_')}${suffix}.xlsx`, headers, rows, 'Riwayat Entri');
       setSuccessMsg('Berhasil mengunduh Riwayat Laporan Entri Anda (Excel .xlsx)!');
     } else if (format === 'docx') {
-      downloadDocx(`riwayat_entri_guru_${teacher.name.replace(/\s+/g, '_')}.docx`, `Riwayat Aktivitas & Laporan Entri Guru - ${teacher.name}`, headers, rows, headmasterName);
+      downloadDocx(`riwayat_entri_guru_${teacher.name.replace(/\s+/g, '_')}${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg('Berhasil mengunduh Riwayat Laporan Entri Anda (Word .docx)!');
     } else {
-      printTablePDF(`Riwayat Aktivitas & Laporan Entri Guru - ${teacher.name}`, headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg('Riwayat Laporan Anda berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportVerifikasiMapel = (format: 'excel' | 'pdf' | 'docx') => {
-    const selfRecords = attendance.filter(a => a.isSelfAttendance);
+  const handleExportVerifikasiMapel = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const selfRecords = filterItemsByDateRange(
+      attendance.filter(a => a.isSelfAttendance),
+      a => a.date,
+      range
+    );
     const headers = ["Tanggal", "Waktu Check-In", "Nama Siswa", "Kelas", "Status Diajukan", "Verifikasi Guru Mapel", "Keterangan"];
     const rows = selfRecords.map(a => {
       const s = students.find(std => std.id === a.studentId);
@@ -916,22 +952,25 @@ export default function GuruPanel({
       ];
     });
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Rekapitulasi Verifikasi Presensi Mandiri Siswa${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel('rekap_verifikasi_absensi_mandiri.xlsx', headers, rows, 'Verifikasi Mandiri');
+      downloadExcel(`rekap_verifikasi_absensi_mandiri${suffix}.xlsx`, headers, rows, 'Verifikasi Mandiri');
       setSuccessMsg('Berhasil mengunduh Rekap Verifikasi Absensi Mandiri (Excel .xlsx)!');
     } else if (format === 'docx') {
-      downloadDocx('rekap_verifikasi_absensi_mandiri.docx', 'Rekapitulasi Verifikasi Presensi Mandiri Siswa', headers, rows, headmasterName);
+      downloadDocx(`rekap_verifikasi_absensi_mandiri${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg('Berhasil mengunduh Rekap Verifikasi Absensi Mandiri (Word .docx)!');
     } else {
-      printTablePDF('Rekapitulasi Verifikasi Presensi Mandiri Siswa', headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg('Dokumen Verifikasi Absensi berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportJadwalUjian = (format: 'excel' | 'pdf' | 'docx') => {
+  const handleExportJadwalUjian = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(examSchedules, e => e.date, range);
     const headers = ["Tanggal", "Jam Ujian", "Mata Pelajaran", "Target Kelas", "Jenis Evaluasi", "Ruangan / Tempat"];
-    const rows = examSchedules.map(e => [
+    const rows = filtered.map(e => [
       e.date,
       e.time || '-',
       e.subject,
@@ -940,22 +979,25 @@ export default function GuruPanel({
       e.room || 'Ruang CBT'
     ]);
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Jadwal Pelaksanaan Evaluasi & Ujian CBT${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel('jadwal_evaluasi_cbt_sekolah.xlsx', headers, rows, 'Jadwal Ujian');
+      downloadExcel(`jadwal_evaluasi_cbt_sekolah${suffix}.xlsx`, headers, rows, 'Jadwal Ujian');
       setSuccessMsg('Jadwal Evaluasi Ujian CBT berhasil diunduh (Excel .xlsx)!');
     } else if (format === 'docx') {
-      downloadDocx('jadwal_evaluasi_cbt_sekolah.docx', 'Jadwal Pelaksanaan Evaluasi & Ujian CBT', headers, rows, headmasterName);
+      downloadDocx(`jadwal_evaluasi_cbt_sekolah${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg('Jadwal Evaluasi Ujian CBT berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF('Jadwal Pelaksanaan Evaluasi & Ujian CBT', headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg('Jadwal Ujian berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportBankSoal = (format: 'excel' | 'pdf' | 'docx') => {
+  const handleExportBankSoal = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(teacherBanks, b => b.createdAt, range);
     const headers = ["Judul Bank Soal", "Mata Pelajaran", "Tingkat Kelas", "Jumlah Soal", "Tanggal Dibuat", "Author"];
-    const rows = teacherBanks.map(b => [
+    const rows = filtered.map(b => [
       b.title,
       b.subject,
       b.classId || (b as any).gradeClass || 'Semua Tingkat',
@@ -964,25 +1006,28 @@ export default function GuruPanel({
       teacher.name
     ]);
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Daftar Bank Soal CBT - ${teacher.name}${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel(`bank_soal_cbt_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Bank Soal');
+      downloadExcel(`bank_soal_cbt_${teacher.name.replace(/\s+/g, '_')}${suffix}.xlsx`, headers, rows, 'Bank Soal');
       setSuccessMsg('Daftar Bank Soal CBT berhasil diunduh (Excel .xlsx)!');
     } else if (format === 'docx') {
-      downloadDocx(`bank_soal_cbt_${teacher.name.replace(/\s+/g, '_')}.docx`, `Daftar Bank Soal CBT - ${teacher.name}`, headers, rows, headmasterName);
+      downloadDocx(`bank_soal_cbt_${teacher.name.replace(/\s+/g, '_')}${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg('Daftar Bank Soal CBT berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF(`Daftar Bank Soal CBT - ${teacher.name}`, headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg('Daftar Bank Soal berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportGuruWaliView = (format: 'excel' | 'pdf' | 'docx') => {
+  const handleExportGuruWaliView = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
     const myWaliStudents = students.filter(s => s.guruWaliTeacherId === teacher.id);
+    const scopedNotes = filterItemsByDateRange(counselorNotes, n => n.date, range);
     const headers = ["NISN", "Nama Siswa", "Kelas", "Kategori Bimbingan", "Catatan Perkembangan", "Bakat & Minat"];
     const rows = myWaliStudents.map(s => {
       const c = classes.find(cls => cls.id === s.classId);
-      const note = counselorNotes.filter(n => n.studentId === s.id).pop();
+      const note = scopedNotes.filter(n => n.studentId === s.id).pop();
       return [
         s.nisn,
         s.name,
@@ -993,131 +1038,171 @@ export default function GuruPanel({
       ];
     });
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Laporan Pendampingan Akademik Guru Wali - ${teacher.name}${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel(`pendampingan_guru_wali_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Guru Wali');
+      downloadExcel(`pendampingan_guru_wali_${teacher.name.replace(/\s+/g, '_')}${suffix}.xlsx`, headers, rows, 'Guru Wali');
       setSuccessMsg('Laporan Pendampingan Guru Wali berhasil diunduh (Excel .xlsx)!');
     } else if (format === 'docx') {
-      downloadDocx(`pendampingan_guru_wali_${teacher.name.replace(/\s+/g, '_')}.docx`, `Laporan Pendampingan Akademik Guru Wali - ${teacher.name}`, headers, rows, headmasterName);
+      downloadDocx(`pendampingan_guru_wali_${teacher.name.replace(/\s+/g, '_')}${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg('Laporan Pendampingan Guru Wali berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF(`Laporan Pendampingan Akademik Guru Wali - ${teacher.name}`, headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg('Laporan Guru Wali berhasil dicetak ke PDF!');
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  const handleExportPermitsGuru = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(permits || [], p => p.date, range);
+    const headers = ['No', 'Tanggal', 'Jam Keluar', 'Jam Kembali', 'NISN', 'Nama Siswa', 'Kelas', 'Jenis Izin', 'Tujuan', 'Status', 'Petugas'];
+    const rows = filtered.map((p, idx) => [
+      idx + 1,
+      p.date || '-',
+      p.timeOut || '-',
+      p.timeIn || 'Belum Kembali',
+      p.nisn || students.find(s => s.id === p.studentId)?.nisn || '-',
+      p.studentName || students.find(s => s.id === p.studentId)?.name || '-',
+      classes.find(c => c.id === p.classId)?.name || p.classId || '-',
+      p.type,
+      p.destination || p.reason || '-',
+      p.status,
+      p.approvedBy || '-',
+    ]);
+    const suffix = getRangeFileSuffix(range);
+    const title = `Buku Kendali Izin Siswa${getRangeTitleSuffix(range)}`;
+    if (format === 'excel') {
+      downloadExcel(`buku_kendali_izin_siswa${suffix}.xlsx`, headers, rows, 'Izin Siswa');
+      setSuccessMsg('Log Izin Siswa berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`buku_kendali_izin_siswa${suffix}.docx`, title, headers, rows, headmasterName);
+      setSuccessMsg('Log Izin Siswa berhasil diunduh (Word .docx)!');
+    } else {
+      printTablePDF(title, headers, rows, headmasterName);
+      setSuccessMsg('Dokumen Log Izin Siswa siap dicetak / PDF!');
+    }
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  const handleExportEcoDepositsGuru = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(ecoDeposits || [], d => d.date, range);
+    const headers = ['Tanggal', 'Nama Siswa', 'Kelas', 'Jenis Sampah', 'Volume', 'Poin', 'Status', 'Pencatat'];
+    const rows = filtered.map(d => [d.date, d.studentName, d.classId, d.categoryName, `${d.quantity} ${d.unit}`, d.pointsEarned, d.status, d.recordedBy]);
+    const suffix = getRangeFileSuffix(range);
+    const title = `Rekapitulasi Setoran ECo-Tiket${getRangeTitleSuffix(range)}`;
+    if (format === 'excel') {
+      downloadExcel(`rekap_setoran_eco_tiket${suffix}.xlsx`, headers, rows, 'ECo-Tiket');
+      setSuccessMsg('Rekap Setoran ECo-Tiket berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`rekap_setoran_eco_tiket${suffix}.docx`, title, headers, rows, headmasterName);
+      setSuccessMsg('Rekap Setoran ECo-Tiket berhasil diunduh (Word .docx)!');
+    } else {
+      printTablePDF(title, headers, rows, headmasterName);
+      setSuccessMsg('Rekap Setoran ECo-Tiket siap dicetak / PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
   // Helper for dynamic contextual download config based on activeTab
   const getContextualDownloadConfig = () => {
-    switch (activeTab) {
-      case 'presensi': {
-        const clsName = classes.find(c => c.id === selectedClassId)?.name || 'Kelas';
-        return [
-          {
-            label: `Presensi ${clsName}`,
-            formats: {
-              docx: () => handleExportPresensiGuru('docx'),
-              pdf: () => handleExportPresensiGuru('pdf'),
-              excel: () => handleExportPresensiGuru('excel'),
-            },
-          },
-        ];
-      }
-      case 'pelanggaran': {
-        return [
-          {
-            label: 'Laporan Pelanggaran',
-            formats: {
-              docx: () => handleExportPelanggaranGuru('docx'),
-              pdf: () => handleExportPelanggaranGuru('pdf'),
-              excel: () => handleExportPelanggaranGuru('excel'),
-            },
-          },
-        ];
-      }
-      case 'jurnal-harian': {
-        return [
-          {
-            label: 'Jurnal Mengajar Guru',
-            formats: {
-              docx: () => handleExportTeachingJournal('docx'),
-              pdf: () => handleExportTeachingJournal('pdf'),
-              excel: () => handleExportTeachingJournal('excel'),
-            },
-          },
-        ];
-      }
-      case 'riwayat': {
-        return [
-          {
-            label: 'Riwayat Laporan Entri',
-            formats: {
-              docx: () => handleExportRiwayatGuru('docx'),
-              pdf: () => handleExportRiwayatGuru('pdf'),
-              excel: () => handleExportRiwayatGuru('excel'),
-            },
-          },
-        ];
-      }
-      case 'verifikasi-mandiri': {
-        return [
-          {
-            label: 'Verifikasi Absensi Mandiri',
-            formats: {
-              docx: () => handleExportVerifikasiMapel('docx'),
-              pdf: () => handleExportVerifikasiMapel('pdf'),
-              excel: () => handleExportVerifikasiMapel('excel'),
-            },
-          },
-        ];
-      }
-      case 'jadwal-ujian': {
-        return [
-          {
-            label: 'Jadwal Ujian CBT',
-            formats: {
-              docx: () => handleExportJadwalUjian('docx'),
-              pdf: () => handleExportJadwalUjian('pdf'),
-              excel: () => handleExportJadwalUjian('excel'),
-            },
-          },
-        ];
-      }
-      case 'bank-soal': {
-        return [
-          {
-            label: 'Daftar Bank Soal CBT',
-            formats: {
-              docx: () => handleExportBankSoal('docx'),
-              pdf: () => handleExportBankSoal('pdf'),
-              excel: () => handleExportBankSoal('excel'),
-            },
-          },
-        ];
-      }
-      case 'guru-wali-view': {
-        return [
-          {
-            label: 'Pendampingan Guru Wali',
-            formats: {
-              docx: () => handleExportGuruWaliView('docx'),
-              pdf: () => handleExportGuruWaliView('pdf'),
-              excel: () => handleExportGuruWaliView('excel'),
-            },
-          },
-        ];
-      }
-      default:
-        return [
-          {
-            label: 'Jurnal Presensi Kelas',
-            formats: {
-              docx: () => handleExportPresensiGuru('docx'),
-              pdf: () => handleExportPresensiGuru('pdf'),
-              excel: () => handleExportPresensiGuru('excel'),
-            },
-          },
-        ];
-    }
+    const clsName = classes.find(c => c.id === selectedClassId)?.name || 'Kelas';
+    const allActions = [
+      {
+        key: 'presensi',
+        label: `Presensi ${clsName}`,
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportPresensiGuru('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportPresensiGuru('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportPresensiGuru('excel', range),
+        },
+      },
+      {
+        key: 'pelanggaran',
+        label: 'Laporan Pelanggaran',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportPelanggaranGuru('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportPelanggaranGuru('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportPelanggaranGuru('excel', range),
+        },
+      },
+      {
+        key: 'jurnal-harian',
+        label: 'Jurnal Mengajar Guru',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportTeachingJournal('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportTeachingJournal('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportTeachingJournal('excel', range),
+        },
+      },
+      {
+        key: 'riwayat',
+        label: 'Riwayat Laporan Entri',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportRiwayatGuru('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportRiwayatGuru('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportRiwayatGuru('excel', range),
+        },
+      },
+      {
+        key: 'verifikasi-mandiri',
+        label: 'Verifikasi Absensi Mandiri',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportVerifikasiMapel('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportVerifikasiMapel('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportVerifikasiMapel('excel', range),
+        },
+      },
+      {
+        key: 'jadwal-ujian',
+        label: 'Jadwal Ujian CBT',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportJadwalUjian('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportJadwalUjian('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportJadwalUjian('excel', range),
+        },
+      },
+      {
+        key: 'bank-soal',
+        label: 'Daftar Bank Soal CBT',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportBankSoal('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportBankSoal('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportBankSoal('excel', range),
+        },
+      },
+      {
+        key: 'guru-wali-view',
+        label: 'Pendampingan Guru Wali',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportGuruWaliView('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportGuruWaliView('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportGuruWaliView('excel', range),
+        },
+      },
+      {
+        key: 'izin-siswa',
+        label: 'Buku Kendali Izin Siswa',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportPermitsGuru('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportPermitsGuru('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportPermitsGuru('excel', range),
+        },
+      },
+      {
+        key: 'eco-tiket',
+        label: 'Setoran ECo-Tiket',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportEcoDepositsGuru('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportEcoDepositsGuru('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportEcoDepositsGuru('excel', range),
+        },
+      },
+    ];
+    const priorityIdx = allActions.findIndex(a => a.key === activeTab);
+    const ordered = priorityIdx > 0
+      ? [allActions[priorityIdx], ...allActions.filter((_, i) => i !== priorityIdx)]
+      : allActions;
+    return ordered.map(({ label, formats }) => ({ label, formats }));
   };
 
   const downloadButtons = getContextualDownloadConfig();
@@ -1126,7 +1211,7 @@ export default function GuruPanel({
   useEffect(() => {
     setDownloadActions(downloadButtons);
     return () => clearDownloadActions();
-  }, [activeTab, selectedClassId, attendanceDate]);
+  }, [activeTab, selectedClassId, attendanceDate, attendance.length, violations.length, teachingJournals.length, examSchedules.length, teacherBanks.length, permits.length, ecoDeposits.length]);
 
   // Calculate roles this teacher holds
   const qualifiedRoles: { role: string; label: string }[] = [
@@ -1147,59 +1232,98 @@ export default function GuruPanel({
 
   return (
     <div className="space-y-6">
-      {/* Teacher Header */}
-      <div className="bg-gradient-to-r from-teal-600 via-cyan-700 to-teal-800 rounded-3xl p-5 sm:p-6 text-white shadow-md">
-        <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
-          <div className="space-y-1 min-w-0 flex-1 max-w-xl">
-            <div className="inline-flex items-center gap-2">
-              <span className="bg-teal-950/40 text-teal-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-teal-400/30">
-                Portal Guru Pengajar
-              </span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight">{teacher.name}</h1>
-            <p className="text-teal-100 text-xs sm:text-sm">NIP: {teacher.nip}</p>
+      {/* Teacher Header: Hide full gradient banner when sub-module has its own dedicated hero banner */}
+      {['elearning', 'izin-siswa', 'eco-tiket'].includes(activeTab) ? (
+        <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider">
+              Portal Guru
+            </span>
+            <span className="text-xs font-bold text-slate-800 truncate">{teacher.name}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setActiveTab('izin-siswa')}
-              className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 ${
+              className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'izin-siswa'
-                  ? 'bg-amber-400 text-slate-950 ring-2 ring-white font-black'
-                  : 'bg-teal-950/40 hover:bg-teal-950/60 text-white border border-teal-400/30'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}
-              title="Buku Kendali Izin Siswa, Toilet & Pulang Cepat"
             >
-              <DoorOpen className="w-3.5 h-3.5 text-amber-300" />
+              <DoorOpen className="w-3.5 h-3.5" />
               <span>Izin Siswa &amp; Toilet</span>
               {permits.filter(p => p.status === 'keluar').length > 0 && (
-                <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
-                  {permits.filter(p => p.status === 'keluar').length} Di Luar
+                <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                  {permits.filter(p => p.status === 'keluar').length}
                 </span>
               )}
             </button>
-
             <button
               type="button"
               onClick={() => setActiveTab('eco-tiket')}
-              className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 ${
+              className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'eco-tiket'
-                  ? 'bg-emerald-300 text-slate-950 ring-2 ring-white font-black'
-                  : 'bg-teal-950/40 hover:bg-teal-950/60 text-white border border-teal-400/30'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}
-              title="Kelola ECo-Tiket & Bank Sampah Digital"
             >
-              <Leaf className="w-3.5 h-3.5 text-emerald-300" />
+              <Leaf className="w-3.5 h-3.5" />
               <span>ECo-Tiket &amp; Sampah</span>
               {ecoDeposits.filter(d => d.status === 'Menunggu').length > 0 && (
-                <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
+                <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full">
                   {ecoDeposits.filter(d => d.status === 'Menunggu').length}
                 </span>
               )}
             </button>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-gradient-to-r from-teal-600 via-cyan-700 to-teal-800 rounded-3xl p-5 sm:p-6 text-white shadow-md">
+          <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+            <div className="space-y-1 min-w-0 flex-1 max-w-xl">
+              <div className="inline-flex items-center gap-2">
+                <span className="bg-teal-950/40 text-teal-200 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-teal-400/30">
+                  Portal Guru Pengajar
+                </span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight">{teacher.name}</h1>
+              <p className="text-teal-100 text-xs sm:text-sm">NIP: {teacher.nip}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveTab('izin-siswa')}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 bg-teal-950/40 hover:bg-teal-950/60 text-white border border-teal-400/30"
+                title="Buku Kendali Izin Siswa, Toilet & Pulang Cepat"
+              >
+                <DoorOpen className="w-3.5 h-3.5 text-amber-300" />
+                <span>Izin Siswa &amp; Toilet</span>
+                {permits.filter(p => p.status === 'keluar').length > 0 && (
+                  <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
+                    {permits.filter(p => p.status === 'keluar').length} Di Luar
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('eco-tiket')}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 bg-teal-950/40 hover:bg-teal-950/60 text-white border border-teal-400/30"
+                title="Kelola ECo-Tiket & Bank Sampah Digital"
+              >
+                <Leaf className="w-3.5 h-3.5 text-emerald-300" />
+                <span>ECo-Tiket &amp; Sampah</span>
+                {ecoDeposits.filter(d => d.status === 'Menunggu').length > 0 && (
+                  <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
+                    {ecoDeposits.filter(d => d.status === 'Menunggu').length}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {successMsg && (
         <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 p-4 rounded-xl flex items-center gap-2.5 font-medium shadow-sm transition-all animate-bounce">
@@ -2573,6 +2697,7 @@ export default function GuruPanel({
             onUpdateReward={onUpdateEcoReward}
             onDeleteReward={onDeleteEcoReward}
             onUpdateRedemptionStatus={onUpdateEcoRedemptionStatus}
+            onDeleteRedemption={onDeleteEcoRedemption}
             onUpdateConfig={onUpdateEcoConfig}
           />
         )}

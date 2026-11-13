@@ -30,6 +30,7 @@ import {
 import { downloadExcel } from '../../utils/excelExport';
 import { printTablePDF } from '../../utils/printHelper';
 import { downloadDocx } from '../../utils/docxExport';
+import ConfirmModal from '../ConfirmModal';
 
 interface AttendanceSession {
   id: string;
@@ -105,6 +106,18 @@ export default function AdminPelatihPanel({
   // Selected Ekskul for Deep Inspection & Full Management
   const [selectedEkskulId, setSelectedEkskulId] = useState<string>('pramuka');
   const [coachSubTab, setCoachSubTab] = useState<'pelatih-list' | 'anggota' | 'absensi' | 'jurnal' | 'nilai' | 'prestasi'>('pelatih-list');
+  const [errorMsg, setErrorMsg] = useState<string>('');
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   // Coach modal states
   const [isCoachModalOpen, setIsCoachModalOpen] = useState(false);
@@ -254,11 +267,16 @@ export default function AdminPelatihPanel({
   };
 
   const handleDeleteCoachClick = (id: string, name: string) => {
-    if (confirm(`Yakin ingin menghapus akun pelatih "${name}"?`)) {
-      onDeleteTeacher(id);
-      setSuccessMsg(`Pelatih "${name}" berhasil dihapus.`);
-      setTimeout(() => setSuccessMsg(''), 3500);
-    }
+    setConfirmState({
+      isOpen: true,
+      title: 'Hapus Akun Pelatih',
+      message: `Yakin ingin menghapus akun pelatih "${name}" secara permanen?`,
+      onConfirm: () => {
+        onDeleteTeacher(id);
+        setSuccessMsg(`Pelatih "${name}" berhasil dihapus.`);
+        setTimeout(() => setSuccessMsg(''), 3500);
+      }
+    });
   };
 
   // Handlers for Members
@@ -289,7 +307,8 @@ export default function AdminPelatihPanel({
   const handleSaveSession = (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionTopic.trim()) {
-      alert('Materi / topik latihan wajib diisi!');
+      setErrorMsg('Materi / topik latihan wajib diisi!');
+      setTimeout(() => setErrorMsg(''), 3500);
       return;
     }
     const sessionId = `sesi-${Date.now()}`;
@@ -308,24 +327,33 @@ export default function AdminPelatihPanel({
         setSessionAttendance({});
         setTimeout(() => setSuccessMsg(''), 3500);
       })
-      .catch(err => alert(`Gagal menyimpan sesi: ${err.message}`));
+      .catch(err => {
+        setErrorMsg(`Gagal menyimpan sesi: ${err.message}`);
+        setTimeout(() => setErrorMsg(''), 4000);
+      });
   };
 
   const handleDeleteSession = (sessionId: string) => {
-    if (confirm('Hapus sesi presensi latihan ini?')) {
-      deleteDocument(`attendance_${selectedEkskulId}`, sessionId)
-        .then(() => {
-          setSuccessMsg('Sesi absensi berhasil dihapus.');
-          setTimeout(() => setSuccessMsg(''), 3000);
-        });
-    }
+    setConfirmState({
+      isOpen: true,
+      title: 'Hapus Sesi Absensi',
+      message: 'Hapus sesi presensi latihan ini secara permanen?',
+      onConfirm: () => {
+        deleteDocument(`attendance_${selectedEkskulId}`, sessionId)
+          .then(() => {
+            setSuccessMsg('Sesi absensi berhasil dihapus.');
+            setTimeout(() => setSuccessMsg(''), 3000);
+          });
+      }
+    });
   };
 
   // Handlers for Jurnal
   const handleSaveJournal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!journalMaterial.trim()) {
-      alert('Materi kegiatan wajib diisi!');
+      setErrorMsg('Materi kegiatan wajib diisi!');
+      setTimeout(() => setErrorMsg(''), 3500);
       return;
     }
     const journalId = `jour-${Date.now()}`;
@@ -350,13 +378,18 @@ export default function AdminPelatihPanel({
   };
 
   const handleDeleteJournal = (journalId: string) => {
-    if (confirm('Hapus catatan jurnal kegiatan ini?')) {
-      deleteDocument(`journals_${selectedEkskulId}`, journalId)
-        .then(() => {
-          setSuccessMsg('Jurnal kegiatan berhasil dihapus.');
-          setTimeout(() => setSuccessMsg(''), 3000);
-        });
-    }
+    setConfirmState({
+      isOpen: true,
+      title: 'Hapus Jurnal Kegiatan',
+      message: 'Hapus catatan jurnal kegiatan ini secara permanen?',
+      onConfirm: () => {
+        deleteDocument(`journals_${selectedEkskulId}`, journalId)
+          .then(() => {
+            setSuccessMsg('Jurnal kegiatan berhasil dihapus.');
+            setTimeout(() => setSuccessMsg(''), 3000);
+          });
+      }
+    });
   };
 
   // Handlers for Nilai
@@ -487,6 +520,13 @@ export default function AdminPelatihPanel({
         <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 p-4 rounded-xl flex items-center gap-2 font-medium">
           <Check className="w-5 h-5 text-emerald-600" />
           <span className="text-xs font-bold">{successMsg}</span>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl flex items-center gap-2 font-medium">
+          <X className="w-5 h-5 text-rose-600" />
+          <span className="text-xs font-bold">{errorMsg}</span>
         </div>
       )}
 
@@ -1049,11 +1089,16 @@ export default function AdminPelatihPanel({
                           <button
                             type="button"
                             onClick={() => {
-                              if (confirm('Hapus capaian prestasi ini?')) {
-                                onDeleteStudentAchievement(a.id);
-                                setSuccessMsg('Prestasi berhasil dihapus.');
-                                setTimeout(() => setSuccessMsg(''), 3000);
-                              }
+                              setConfirmState({
+                                isOpen: true,
+                                title: 'Hapus Prestasi Siswa',
+                                message: `Hapus capaian prestasi "${a.title}" oleh ${a.studentName}?`,
+                                onConfirm: () => {
+                                  onDeleteStudentAchievement(a.id);
+                                  setSuccessMsg('Prestasi berhasil dihapus.');
+                                  setTimeout(() => setSuccessMsg(''), 3000);
+                                }
+                              });
                             }}
                             className="p-1 text-rose-500 hover:bg-rose-50 rounded cursor-pointer"
                           >
@@ -1579,6 +1624,14 @@ export default function AdminPelatihPanel({
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

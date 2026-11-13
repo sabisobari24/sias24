@@ -22,6 +22,7 @@ import TextFormattingToolbar from './common/TextFormattingToolbar';
 import FormattedText from './common/FormattedText';
 import { QuestionBank, CbtQuestion, Teacher, SchoolClass } from '../types';
 import { syncCollection, saveDocument, deleteDocument } from '../lib/firebase';
+import ConfirmModal from './ConfirmModal';
 
 interface BankSoalManagerProps {
   teacher: Teacher;
@@ -53,6 +54,17 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
   // Status flags
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   // Math helper symbols
   const MATH_SYMBOLS = [
@@ -118,20 +130,27 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
   };
 
   // Delete an entire Bank Soal
-  const handleDeleteBank = async (bankId: string) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus seluruh Bank Soal ini beserta semua isinya? Tindakan ini permanen.')) {
-      return;
-    }
-    try {
-      setBanks(prev => prev.filter(b => b.id !== bankId));
-      if (selectedBank?.id === bankId) {
-        setSelectedBank(null);
+  const handleDeleteBank = (bankId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Bank Soal',
+      message: 'Apakah Anda yakin ingin menghapus seluruh Bank Soal ini beserta semua isinya? Tindakan ini permanen.',
+      onConfirm: async () => {
+        try {
+          setBanks(prev => prev.filter(b => b.id !== bankId));
+          if (selectedBank?.id === bankId) {
+            setSelectedBank(null);
+          }
+          await deleteDocument('question_banks', bankId);
+          setSuccessMsg('Bank Soal berhasil dihapus.');
+          setTimeout(() => setSuccessMsg(''), 3000);
+        } catch (err) {
+          console.error(err);
+          setErrorMsg('Gagal menghapus bank soal.');
+          setTimeout(() => setErrorMsg(''), 3500);
+        }
       }
-      await deleteDocument('question_banks', bankId);
-    } catch (err) {
-      console.error(err);
-      alert('Gagal menghapus bank soal.');
-    }
+    });
   };
 
   // Open editor for creating/editing a Bank Soal metadata
@@ -242,28 +261,33 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
   };
 
   // Delete a specific question from the active bank
-  const handleDeleteQuestion = async (questionId: string) => {
+  const handleDeleteQuestion = (questionId: string) => {
     if (!selectedBank) return;
-    if (!window.confirm('Apakah Anda yakin ingin menghapus soal ini dari Bank Soal?')) {
-      return;
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Butir Soal',
+      message: 'Apakah Anda yakin ingin menghapus soal ini dari Bank Soal?',
+      onConfirm: async () => {
+        const updatedQuestions = selectedBank.questions.filter(q => q.id !== questionId);
+        const updatedBank = {
+          ...selectedBank,
+          questions: updatedQuestions
+        };
 
-    const updatedQuestions = selectedBank.questions.filter(q => q.id !== questionId);
-    const updatedBank = {
-      ...selectedBank,
-      questions: updatedQuestions
-    };
+        setSelectedBank(updatedBank);
+        setBanks(prev => prev.map(b => b.id === updatedBank.id ? updatedBank : b));
 
-    // Update local state immediately
-    setSelectedBank(updatedBank);
-    setBanks(prev => prev.map(b => b.id === updatedBank.id ? updatedBank : b));
-
-    try {
-      await saveDocument('question_banks', selectedBank.id, updatedBank);
-    } catch (err) {
-      console.error(err);
-      alert('Gagal menghapus soal.');
-    }
+        try {
+          await saveDocument('question_banks', selectedBank.id, updatedBank);
+          setSuccessMsg('Soal berhasil dihapus.');
+          setTimeout(() => setSuccessMsg(''), 3000);
+        } catch (err) {
+          console.error(err);
+          setErrorMsg('Gagal menghapus soal.');
+          setTimeout(() => setErrorMsg(''), 3500);
+        }
+      }
+    });
   };
 
   // Convert uploaded image file to base64 safely with client-side compression (< 100 KB)
@@ -958,6 +982,13 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
         </div>
       )}
 
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

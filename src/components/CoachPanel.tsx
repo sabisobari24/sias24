@@ -38,6 +38,8 @@ import { Student, Teacher, WebSectionContent, WebExtracurricular, StudentAchieve
 import { INITIAL_WEB_CONTENT } from '../data/initialWebContent';
 import { WebIcon } from './website/WebIcon';
 import { useDownload } from '../context/DownloadContext';
+import UnifiedDownloadMenu from './UnifiedDownloadMenu';
+import { ExportDateRange, filterItemsByDateRange, getRangeFileSuffix, getRangeTitleSuffix } from '../utils/exportDateFilter';
 
 interface CoachPanelProps {
   activeUser: Teacher;
@@ -850,12 +852,13 @@ export default function CoachPanel({
     printHTML(htmlContent);
   };
 
-  const handleDownloadExcelGrades = () => {
+  const handleDownloadExcelGrades = (range?: ExportDateRange) => {
     const activeMembers = students.filter(s => memberIds.includes(s.id));
     const ekskulName = currentEkskul.name;
-    const headers = ['No', 'Nama Siswa', 'Kelas', 'Nilai Angka', 'Predikat', 'Sikap', 'Catatan Perkembangan'];
+    const filteredGrades = filterItemsByDateRange(studentGrades, (g) => g.updatedAt, range);
+    const headers = ['No', 'Nama Siswa', 'Kelas', 'Nilai Angka', 'Predikat', 'Sikap', 'Catatan Perkembangan', 'Tanggal Update'];
     const rows = activeMembers.map((m, idx) => {
-      const g = studentGrades.find(grade => grade.studentId === m.id);
+      const g = filteredGrades.find(grade => grade.studentId === m.id);
       return [
         idx + 1,
         m.name,
@@ -863,25 +866,27 @@ export default function CoachPanel({
         g ? g.score : '-',
         g ? g.predicate : '-',
         g ? g.attitude : '-',
-        g && g.notes ? g.notes : '-'
+        g && g.notes ? g.notes : '-',
+        g && g.updatedAt ? g.updatedAt.split('T')[0] : '-'
       ];
     });
 
     downloadExcel(
-      `rekap_nilai_ekskul_${ekskulName.toLowerCase().replace(/\s+/g, '_')}.xlsx`,
+      `rekap_nilai_ekskul_${ekskulName.toLowerCase().replace(/\s+/g, '_')}${getRangeFileSuffix(range)}.xlsx`,
       headers,
       rows,
       `Nilai ${ekskulName.slice(0, 24)}`
     );
   };
 
-  const handleDownloadDocxGrades = () => {
+  const handleDownloadDocxGrades = (range?: ExportDateRange) => {
     const activeMembers = students.filter(s => memberIds.includes(s.id));
     const ekskulName = currentEkskul.name;
+    const filteredGrades = filterItemsByDateRange(studentGrades, (g) => g.updatedAt, range);
     const headmasterName = localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.';
     const headers = ['No', 'Nama Siswa', 'Kelas', 'Nilai Angka', 'Predikat', 'Sikap', 'Catatan Perkembangan'];
     const rows = activeMembers.map((m, idx) => {
-      const g = studentGrades.find(grade => grade.studentId === m.id);
+      const g = filteredGrades.find(grade => grade.studentId === m.id);
       return [
         idx + 1,
         m.name,
@@ -894,19 +899,17 @@ export default function CoachPanel({
     });
 
     downloadDocx(
-      `rekap_nilai_ekskul_${ekskulName.toLowerCase().replace(/\s+/g, '_')}.docx`,
-      `Laporan Rekapitulasi Nilai Ekstrakurikuler ${ekskulName}`,
+      `rekap_nilai_ekskul_${ekskulName.toLowerCase().replace(/\s+/g, '_')}${getRangeFileSuffix(range)}.docx`,
+      `Laporan Rekapitulasi Nilai Ekstrakurikuler ${ekskulName}${getRangeTitleSuffix(range)}`,
       headers,
       rows,
       headmasterName
     );
   };
 
-  const handleDownloadAttendanceRecap = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
-    if (attendanceList.length === 0) return;
-    
-    // Sort oldest first
-    const sortedSessions = [...attendanceList].sort((a, b) => a.date.localeCompare(b.date));
+  const handleDownloadAttendanceRecap = (format: 'excel' | 'pdf' | 'docx' = 'excel', range?: ExportDateRange) => {
+    const filteredSessions = filterItemsByDateRange(attendanceList, (s) => s.date, range);
+    const sortedSessions = [...filteredSessions].sort((a, b) => a.date.localeCompare(b.date));
     
     const headers = [
       'No',
@@ -956,21 +959,57 @@ export default function CoachPanel({
     });
 
     const slug = currentEkskul.name.toLowerCase().replace(/\s+/g, '_');
-    const title = `Rekapitulasi Kehadiran Ekskul ${currentEkskul.name}`;
+    const title = `Rekapitulasi Kehadiran Ekskul ${currentEkskul.name}${getRangeTitleSuffix(range)}`;
     const headmasterName = localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.';
 
     if (format === 'docx') {
-      downloadDocx(`rekap_kehadiran_ekskul_${slug}.docx`, title, headers, rows, headmasterName);
+      downloadDocx(`rekap_kehadiran_ekskul_${slug}${getRangeFileSuffix(range)}.docx`, title, headers, rows, headmasterName);
     } else if (format === 'pdf') {
       printTablePDF(title, headers, rows, headmasterName);
     } else {
       downloadExcel(
-        `rekap_kehadiran_ekskul_${slug}.xlsx`,
+        `rekap_kehadiran_ekskul_${slug}${getRangeFileSuffix(range)}.xlsx`,
         headers,
         rows,
         `Presensi ${currentEkskul.name.slice(0, 25)}`
       );
     }
+  };
+
+  const handleDownloadJournals = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(journals, (j) => j.date, range);
+    const headers = ['No', 'Tanggal', 'Materi Latihan', 'Catatan / Deskripsi', 'Jumlah Hadir'];
+    const rows = filtered.map((j, idx) => [idx + 1, j.date, j.material, j.notes || '-', j.attendeesCount]);
+    const slug = currentEkskul.name.toLowerCase().replace(/\s+/g, '_');
+    const title = `Jurnal Kegiatan Ekskul ${currentEkskul.name}${getRangeTitleSuffix(range)}`;
+    const headmasterName = localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.';
+    if (format === 'docx') downloadDocx(`jurnal_ekskul_${slug}${getRangeFileSuffix(range)}.docx`, title, headers, rows, headmasterName);
+    else if (format === 'pdf') printTablePDF(title, headers, rows, headmasterName);
+    else downloadExcel(`jurnal_ekskul_${slug}${getRangeFileSuffix(range)}.xlsx`, headers, rows, 'Jurnal Ekskul');
+  };
+
+  const handleDownloadMembers = (format: 'excel' | 'pdf' | 'docx') => {
+    const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Jenis Kelamin', 'No. HP'];
+    const rows = memberStudents.map((s, idx) => [idx + 1, s.nisn || '-', s.name, s.classId || '-', s.gender || '-', s.phone || '-']);
+    const slug = currentEkskul.name.toLowerCase().replace(/\s+/g, '_');
+    const title = `Daftar Anggota Ekskul ${currentEkskul.name}`;
+    const headmasterName = localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.';
+    if (format === 'docx') downloadDocx(`anggota_ekskul_${slug}.docx`, title, headers, rows, headmasterName);
+    else if (format === 'pdf') printTablePDF(title, headers, rows, headmasterName);
+    else downloadExcel(`anggota_ekskul_${slug}.xlsx`, headers, rows, 'Anggota Ekskul');
+  };
+
+  const handleDownloadCoachAchievements = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const ekskulAchs = studentAchievements.filter(a => a.category === 'Non Akademik');
+    const filtered = filterItemsByDateRange(ekskulAchs, (a) => a.date, range);
+    const headers = ['No', 'Tanggal', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Tingkat', 'Peringkat', 'Pencatat'];
+    const rows = filtered.map((a, idx) => [idx + 1, a.date, a.studentName, a.classId, a.title, a.level, a.rank || '-', a.recordedBy]);
+    const slug = currentEkskul.name.toLowerCase().replace(/\s+/g, '_');
+    const title = `Daftar Prestasi Non-Akademik Ekskul ${currentEkskul.name}${getRangeTitleSuffix(range)}`;
+    const headmasterName = localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.';
+    if (format === 'docx') downloadDocx(`prestasi_ekskul_${slug}${getRangeFileSuffix(range)}.docx`, title, headers, rows, headmasterName);
+    else if (format === 'pdf') printTablePDF(title, headers, rows, headmasterName);
+    else downloadExcel(`prestasi_ekskul_${slug}${getRangeFileSuffix(range)}.xlsx`, headers, rows, 'Prestasi Ekskul');
   };
 
   // Handle Local Photo Selection Base64 helper
@@ -991,33 +1030,60 @@ export default function CoachPanel({
   // Get active student members
   const memberStudents = students.filter(s => memberIds.includes(s.id));
 
-  // Contextual download config for Coach Panel
+  // Contextual download config for Coach Panel (all datasets available; active tab first)
   const getCoachDownloadConfig = () => {
     const attendanceAction = {
       label: 'Rekap Kehadiran Ekskul',
       formats: {
-        docx: () => handleDownloadAttendanceRecap('docx'),
-        pdf: () => handleDownloadAttendanceRecap('pdf'),
-        excel: () => handleDownloadAttendanceRecap('excel'),
+        docx: (range?: ExportDateRange) => handleDownloadAttendanceRecap('docx', range),
+        pdf: (range?: ExportDateRange) => handleDownloadAttendanceRecap('pdf', range),
+        excel: (range?: ExportDateRange) => handleDownloadAttendanceRecap('excel', range),
       },
     };
     const gradesAction = {
       label: 'Rekap Nilai Ekskul',
       formats: {
-        docx: handleDownloadDocxGrades,
-        pdf: handleDownloadPDFGrades,
-        excel: handleDownloadExcelGrades,
+        docx: (range?: ExportDateRange) => handleDownloadDocxGrades(range),
+        pdf: (_range?: ExportDateRange) => handleDownloadPDFGrades(),
+        excel: (range?: ExportDateRange) => handleDownloadExcelGrades(range),
+      },
+    };
+    const membersAction = {
+      label: 'Daftar Anggota Ekskul',
+      formats: {
+        docx: () => handleDownloadMembers('docx'),
+        pdf: () => handleDownloadMembers('pdf'),
+        excel: () => handleDownloadMembers('excel'),
+      },
+    };
+    const journalsAction = {
+      label: 'Jurnal Latihan & Materi Ekskul',
+      formats: {
+        docx: (range?: ExportDateRange) => handleDownloadJournals('docx', range),
+        pdf: (range?: ExportDateRange) => handleDownloadJournals('pdf', range),
+        excel: (range?: ExportDateRange) => handleDownloadJournals('excel', range),
+      },
+    };
+    const achievementsAction = {
+      label: 'Daftar Prestasi Non-Akademik',
+      formats: {
+        docx: (range?: ExportDateRange) => handleDownloadCoachAchievements('docx', range),
+        pdf: (range?: ExportDateRange) => handleDownloadCoachAchievements('pdf', range),
+        excel: (range?: ExportDateRange) => handleDownloadCoachAchievements('excel', range),
       },
     };
 
-    switch (activeTab) {
-      case 'absensi':
-        return [attendanceAction];
-      case 'nilai':
-        return [gradesAction];
-      default:
-        return [attendanceAction, gradesAction];
-    }
+    const allActions = [membersAction, attendanceAction, journalsAction, achievementsAction, gradesAction];
+    const priorityMap: Record<string, typeof membersAction> = {
+      anggota: membersAction,
+      absensi: attendanceAction,
+      jurnal: journalsAction,
+      dokumentasi: journalsAction,
+      prestasi: achievementsAction,
+      nilai: gradesAction,
+    };
+    const primary = priorityMap[activeTab] || attendanceAction;
+    return [primary, ...allActions.filter(a => a !== primary)];
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
@@ -1025,7 +1091,7 @@ export default function CoachPanel({
   useEffect(() => {
     setDownloadActions(getCoachDownloadConfig());
     return () => clearDownloadActions();
-  }, [activeTab, attendanceList.length, studentGrades.length, memberIds.length]);
+  }, [activeTab, attendanceList.length, studentGrades.length, memberIds.length, journals.length, studentAchievements.length]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
@@ -1044,79 +1110,12 @@ export default function CoachPanel({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Unified Unduh Dropdown */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsCoachDownloadOpen(!isCoachDownloadOpen)}
-              className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
-              title="Menu Unduh & Ekspor Laporan Ekskul"
-            >
-              <Download className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Unduh</span>
-              <span className="bg-amber-100 text-amber-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                {getCoachDownloadConfig().length}
-              </span>
-              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isCoachDownloadOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {isCoachDownloadOpen && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setIsCoachDownloadOpen(false)} />
-                <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 p-2.5 z-40 text-slate-800 text-xs font-medium">
-                  <div className="px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between mb-1.5">
-                    <span>Menu Unduh &amp; Ekspor</span>
-                    <span className="text-amber-600 font-bold">Pelatih</span>
-                  </div>
-                  <div className="py-1 space-y-2">
-                    {getCoachDownloadConfig().map((action, idx) => (
-                      <div
-                        key={idx}
-                        className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70 space-y-2"
-                      >
-                        <p className="text-[11px] font-extrabold text-slate-800 truncate">{action.label}</p>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              action.formats.docx();
-                              setIsCoachDownloadOpen(false);
-                            }}
-                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
-                          >
-                            <FileText className="w-3 h-3 shrink-0" />
-                            <span>.docx</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              action.formats.pdf();
-                              setIsCoachDownloadOpen(false);
-                            }}
-                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
-                          >
-                            <FileText className="w-3 h-3 shrink-0" />
-                            <span>.pdf</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              action.formats.excel();
-                              setIsCoachDownloadOpen(false);
-                            }}
-                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
-                          >
-                            <FileSpreadsheet className="w-3 h-3 shrink-0" />
-                            <span>.xlsx</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+          {/* Unified Filterable Unduh Dropdown */}
+          <UnifiedDownloadMenu
+            actions={getCoachDownloadConfig()}
+            roleLabel="Pelatih"
+            variant="coach"
+          />
           <span className="bg-emerald-500/20 text-emerald-400 font-black text-[10px] px-3 py-1.5 rounded-full uppercase tracking-wider flex items-center gap-1">
             <Globe className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Tersinkronisasi</span>

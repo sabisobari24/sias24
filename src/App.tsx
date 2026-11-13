@@ -49,14 +49,12 @@ import {
   Sun,
   Moon,
   LayoutDashboard,
-  Download,
-  FileSpreadsheet,
-  ChevronDown,
   Leaf,
   Recycle,
   DoorOpen
 } from 'lucide-react';
 import { useDownload } from './context/DownloadContext';
+import UnifiedDownloadMenu from './components/UnifiedDownloadMenu';
 
 import { getDoc, getDocs, collection, doc, setDoc, writeBatch, deleteDoc, query, where } from 'firebase/firestore';
 import { normalizeClassId, getSchoolClassName } from './utils/classUtils';
@@ -197,7 +195,6 @@ export default function App({ initialMode }: AppProps = {}) {
 
   // Contextual Download Menu for all dashboards
   const { downloadActions } = useDownload();
-  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState<boolean>(false);
 
   // Firebase connection monitor state
   const [dbStatus, setDbStatus] = useState<'online' | 'offline' | 'high_latency'>('online');
@@ -649,12 +646,30 @@ export default function App({ initialMode }: AppProps = {}) {
 
   // Active Session State
   const [activeRole, setActiveRole] = useState<UserRole | null>(() => {
-    const savedRole = localStorage.getItem('siakad_active_role');
-    return savedRole ? (savedRole as UserRole) : null;
+    const validRoles: UserRole[] = ['admin', 'guru', 'wali_kelas', 'bk', 'piket', 'guru_wali', 'pelatih', 'tendik', 'siswa', 'orang_tua'];
+    try {
+      const savedRole = localStorage.getItem('siakad_active_role');
+      if (savedRole && validRoles.includes(savedRole as UserRole)) {
+        return savedRole as UserRole;
+      }
+    } catch { /* ignore */ }
+    return null;
   });
   const [activeUser, setActiveUser] = useState<any>(() => {
-    const savedUser = localStorage.getItem('siakad_active_user');
-    return savedUser ? JSON.parse(savedUser) : null;
+    try {
+      const savedUser = localStorage.getItem('siakad_active_user');
+      if (!savedUser) return null;
+      const parsed = JSON.parse(savedUser);
+      if (parsed && typeof parsed === 'object' && (parsed.id || parsed.nip || parsed.nisn)) {
+        return parsed;
+      }
+    } catch {
+      try {
+        localStorage.removeItem('siakad_active_user');
+        localStorage.removeItem('siakad_active_role');
+      } catch { /* ignore */ }
+    }
+    return null;
   });
 
   // Page mode: 'landing' (index.html) or 'portal' (login.html)
@@ -826,14 +841,37 @@ export default function App({ initialMode }: AppProps = {}) {
     }
   }, [activeUser]);
 
-  // Sync activeUser automatically when teachers or students list changes
+  // Sync activeUser automatically when teachers or students list changes & reject tampered sessions
   useEffect(() => {
-    if (!activeUser) return;
+    if (!activeUser || !activeRole) return;
+
+    const ADMIN_EMAIL_ALLOWLIST = ['sobari.661@guru.smp.belajar.id', 'sobari@sekolah.sch.id'];
 
     if (activeRole !== 'siswa' && activeRole !== 'orang_tua') {
-      const freshTeacher = teachers.find((t) => t.id === activeUser.id || (t.nip && t.nip === activeUser.nip));
+      if (teachers.length === 0) {
+        // Bootstrap fallback only permitted before teachers collection is populated
+        if (activeRole === 'admin' && activeUser.id === 't-sobari') return;
+      }
+
+      const freshTeacher = teachers.find(
+        (t) =>
+          (activeUser.id && t.id === activeUser.id) ||
+          (t.nip && activeUser.nip && t.nip === activeUser.nip) ||
+          (t.email && activeUser.email && t.email.toLowerCase().trim() === String(activeUser.email).toLowerCase().trim())
+      );
+
       if (freshTeacher) {
-        // Keep active avatarUrl if user recently updated it
+        const currentRoles = freshTeacher.roles && freshTeacher.roles.length > 0 ? freshTeacher.roles : [freshTeacher.role];
+        const isRoleAuthorized =
+          currentRoles.includes(activeRole as any) ||
+          (activeRole === 'admin' && ADMIN_EMAIL_ALLOWLIST.includes((freshTeacher.email || '').toLowerCase().trim()));
+
+        if (!isRoleAuthorized) {
+          const fallbackRole = (currentRoles[0] || 'guru') as UserRole;
+          setActiveRole(fallbackRole);
+          safeLocalStorageSet('siakad_active_role', fallbackRole);
+        }
+
         const mergedTeacher = {
           ...freshTeacher,
           avatarUrl: activeUser.avatarUrl || freshTeacher.avatarUrl
@@ -841,25 +879,37 @@ export default function App({ initialMode }: AppProps = {}) {
         if (JSON.stringify(mergedTeacher) !== JSON.stringify(activeUser)) {
           setActiveUser(mergedTeacher);
           safeLocalStorageSet('siakad_active_user', JSON.stringify(mergedTeacher));
-          
-          const currentRoles = freshTeacher.roles && freshTeacher.roles.length > 0 ? freshTeacher.roles : [freshTeacher.role];
-          if (activeRole && !currentRoles.includes(activeRole as any) && !['admin'].includes(activeRole)) {
-            const fallbackRole = (currentRoles[0] || 'guru') as UserRole;
-            setActiveRole(fallbackRole);
-            safeLocalStorageSet('siakad_active_role', fallbackRole);
-          }
+        }
+      } else if (teachers.length > 0) {
+        const userEmail = String(activeUser.email || '').toLowerCase().trim();
+        if (!(activeRole === 'admin' && ADMIN_EMAIL_ALLOWLIST.includes(userEmail))) {
+          setActiveUser(null);
+          setActiveRole(null);
+          localStorage.removeItem('siakad_active_user');
+          localStorage.removeItem('siakad_active_role');
         }
       }
     } else if (activeRole === 'siswa' || activeRole === 'orang_tua') {
-      const freshStudent = students.find((s) => s.id === activeUser.id || (s.nisn && s.nisn === activeUser.nisn));
-      if (freshStudent) {
-        const mergedStudent = {
-          ...freshStudent,
-          avatarUrl: activeUser.avatarUrl || freshStudent.avatarUrl
-        };
-        if (JSON.stringify(mergedStudent) !== JSON.stringify(activeUser)) {
-          setActiveUser(mergedStudent);
-          safeLocalStorageSet('siakad_active_user', JSON.stringify(mergedStudent));
+      if (students.length > 0) {
+        const freshStudent = students.find(
+          (s) =>
+            (activeUser.id && s.id === activeUser.id) ||
+            (s.nisn && activeUser.nisn && s.nisn === activeUser.nisn)
+        );
+        if (freshStudent) {
+          const mergedStudent = {
+            ...freshStudent,
+            avatarUrl: activeUser.avatarUrl || freshStudent.avatarUrl
+          };
+          if (JSON.stringify(mergedStudent) !== JSON.stringify(activeUser)) {
+            setActiveUser(mergedStudent);
+            safeLocalStorageSet('siakad_active_user', JSON.stringify(mergedStudent));
+          }
+        } else {
+          setActiveUser(null);
+          setActiveRole(null);
+          localStorage.removeItem('siakad_active_user');
+          localStorage.removeItem('siakad_active_role');
         }
       }
     }
@@ -927,9 +977,59 @@ export default function App({ initialMode }: AppProps = {}) {
         setLoginError(res.error || 'Gagal masuk dengan Google.');
         return;
       }
+      if (res.user.emailVerified === false) {
+        await signOutUser().catch(() => {});
+        setLoginError('Email Google Anda belum terverifikasi. Silakan verifikasi email terlebih dahulu.');
+        return;
+      }
       const googleEmail = (res.user.email || '').toLowerCase().trim();
+      if (!googleEmail) {
+        setLoginError('Akun Google tidak memiliki alamat email yang valid.');
+        return;
+      }
+
+      const ADMIN_EMAIL_ALLOWLIST = [
+        'sobari.661@guru.smp.belajar.id',
+        'sobari@sekolah.sch.id'
+      ];
+
+      // 1. Match with exact verified Super Admin allowlist
+      if (ADMIN_EMAIL_ALLOWLIST.includes(googleEmail)) {
+        resetLoginRateLimit();
+        const existingAdmin = teachers.find(
+          t => (t.email || '').toLowerCase().trim() === googleEmail || t.role === 'admin' || t.roles?.includes('admin')
+        );
+        const adminUser: Teacher = {
+          ...(existingAdmin || {}),
+          id: existingAdmin?.id || res.user.uid,
+          name: existingAdmin?.name || res.user.displayName || 'Administrator SMPN 50',
+          nip: existingAdmin?.nip || '199504242023211018',
+          email: googleEmail,
+          role: 'admin',
+          roles: Array.from(new Set([...(existingAdmin?.roles || []), 'admin'])) as any,
+          avatarUrl: res.user.photoURL || existingAdmin?.avatarUrl || ''
+        };
+
+        setTeachers(prev => {
+          const exists = prev.some(t => t.id === adminUser.id || t.nip === adminUser.nip);
+          const next = exists
+            ? prev.map(t => (t.id === adminUser.id || t.nip === adminUser.nip) ? adminUser : t)
+            : [...prev, adminUser];
+          safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
+          return next;
+        });
+
+        setActiveRole('admin');
+        setActiveUser(adminUser);
+        setPageMode('portal');
+        safeLocalStorageSet('siakad_active_role', 'admin');
+        safeLocalStorageSet('siakad_active_user', JSON.stringify(adminUser));
+        safeLocalStorageSet('siakad_page_mode', 'portal');
+        setIsLoginModalOpen(false);
+        return;
+      }
       
-      // 1. Match with registered Teachers / Staff
+      // 2. Match strictly by exact registered email in Teachers / Staff
       const matchTeacher = teachers.find(t => (t.email || '').toLowerCase().trim() === googleEmail);
       if (matchTeacher) {
         resetLoginRateLimit();
@@ -945,10 +1045,9 @@ export default function App({ initialMode }: AppProps = {}) {
         return;
       }
 
-      // 2. Match with registered Students / Parents
-      const matchStudent = students.find(s => 
-        (s.parentEmail || '').toLowerCase().trim() === googleEmail ||
-        (s.phone && googleEmail.includes(s.phone))
+      // 3. Match strictly by exact parentEmail in Students / Parents (no loose phone substring match)
+      const matchStudent = students.find(s =>
+        Boolean(s.parentEmail) && (s.parentEmail || '').toLowerCase().trim() === googleEmail
       );
       if (matchStudent) {
         resetLoginRateLimit();
@@ -962,47 +1061,7 @@ export default function App({ initialMode }: AppProps = {}) {
         return;
       }
 
-      // 3. Match administrator or official SMPN 50 domain
-      if (
-        googleEmail.includes('admin') || 
-        googleEmail.includes('smpn50') || 
-        googleEmail.includes('sobari') || 
-        googleEmail.includes('endah') || 
-        googleEmail.includes('kepsek')
-      ) {
-        resetLoginRateLimit();
-        const existingAdmin = teachers.find(t => t.role === 'admin' || t.roles?.includes('admin'));
-        const adminUser: Teacher = {
-          id: existingAdmin?.id || res.user.uid,
-          name: res.user.displayName || existingAdmin?.name || 'Administrator SMPN 50',
-          nip: existingAdmin?.nip || '199504242023211018',
-          email: googleEmail,
-          role: 'admin',
-          roles: ['admin'],
-          avatarUrl: res.user.photoURL || existingAdmin?.avatarUrl || ''
-        };
-
-        // Upsert into teachers array so activeUser sync and profile editing keep working
-        setTeachers(prev => {
-          const exists = prev.some(t => t.id === adminUser.id || t.nip === adminUser.nip);
-          const next = exists 
-            ? prev.map(t => (t.id === adminUser.id || t.nip === adminUser.nip) ? { ...t, email: googleEmail, name: adminUser.name, avatarUrl: adminUser.avatarUrl || t.avatarUrl } : t)
-            : [...prev, adminUser];
-          safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
-          return next;
-        });
-
-        setActiveRole('admin');
-        setActiveUser(adminUser);
-        setPageMode('portal');
-        safeLocalStorageSet('siakad_active_role', 'admin');
-        safeLocalStorageSet('siakad_active_user', JSON.stringify(adminUser));
-        safeLocalStorageSet('siakad_page_mode', 'portal');
-        setIsLoginModalOpen(false);
-        return;
-      }
-
-      setLoginError(`Akun Google (${googleEmail}) terverifikasi, namun belum ditautkan ke data Guru/Staf/Siswa SMPN 50. Silakan hubungi Administrator untuk menautkan email resmi Anda.`);
+      setLoginError(`Akun Google (${googleEmail}) terverifikasi, namun belum ditautkan ke data Guru/Staf/Orang Tua SMPN 50. Silakan hubungi Administrator untuk menautkan email resmi Anda.`);
     } catch (e: any) {
       setIsGoogleSigningIn(false);
       setLoginError(e.message || 'Terjadi kesalahan autentikasi Google.');
@@ -2713,6 +2772,7 @@ export default function App({ initialMode }: AppProps = {}) {
   const handleAddEcoDeposit = async (dep: Omit<EcoWasteDeposit, 'id'>) => {
     const id = `dep-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     const newDep: EcoWasteDeposit = { ...dep, id };
+    untrackDeletedId('eco_deposits', id);
     setEcoDeposits(prev => {
       const updated = [newDep, ...prev];
       safeLocalStorageSet('siakad_eco_deposits', JSON.stringify(updated));
@@ -2726,14 +2786,21 @@ export default function App({ initialMode }: AppProps = {}) {
   };
 
   const handleUpdateEcoDepositStatus = async (id: string, status: 'Diverifikasi' | 'Menunggu' | 'Ditolak', approvedBy: string = 'Admin') => {
+    let updatedTarget: EcoWasteDeposit | null = null;
     setEcoDeposits(prev => {
-      const updated = prev.map(d => d.id === id ? { ...d, status, recordedBy: `${d.recordedBy || 'Siswa'} (Diverifikasi: ${approvedBy})` } : d);
+      const updated = prev.map(d => {
+        if (d.id === id) {
+          updatedTarget = { ...d, status, recordedBy: `${d.recordedBy || 'Siswa'} (Diverifikasi: ${approvedBy})` };
+          return updatedTarget;
+        }
+        return d;
+      });
       safeLocalStorageSet('siakad_eco_deposits', JSON.stringify(updated));
       return updated;
     });
-    const target = ecoDeposits.find(d => d.id === id);
-    if (target) {
-      const updatedDoc = { ...target, status, recordedBy: `${target.recordedBy || 'Siswa'} (Diverifikasi: ${approvedBy})` };
+    const fallbackTarget = updatedTarget || ecoDeposits.find(d => d.id === id);
+    if (fallbackTarget) {
+      const updatedDoc = { ...fallbackTarget, status, recordedBy: updatedTarget ? updatedTarget.recordedBy : `${fallbackTarget.recordedBy || 'Siswa'} (Diverifikasi: ${approvedBy})` };
       try {
         await saveDocument('eco_deposits', id, updatedDoc);
       } catch (err) {
@@ -2743,6 +2810,7 @@ export default function App({ initialMode }: AppProps = {}) {
   };
 
   const handleDeleteEcoDeposit = async (id: string) => {
+    trackDeletedId('eco_deposits', id);
     setEcoDeposits(prev => {
       const updated = prev.filter(d => d.id !== id);
       safeLocalStorageSet('siakad_eco_deposits', JSON.stringify(updated));
@@ -2758,6 +2826,7 @@ export default function App({ initialMode }: AppProps = {}) {
   const handleRedeemEcoReward = async (red: Omit<EcoRedemption, 'id'>) => {
     const id = `red-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     const newRed: EcoRedemption = { ...red, id };
+    untrackDeletedId('eco_redemptions', id);
     setEcoRedemptions(prev => {
       const updated = [newRed, ...prev];
       safeLocalStorageSet('siakad_eco_redemptions', JSON.stringify(updated));
@@ -2797,6 +2866,7 @@ export default function App({ initialMode }: AppProps = {}) {
       notes: `Penebusan ${pointsToRedeem} poin pelanggaran kedisiplinan menggunakan ${ecoPointsSpent} ECo-Points.`,
       approvedBy: 'Sistem Bank Sampah & Kedisiplinan'
     };
+    untrackDeletedId('eco_redemptions', id);
     setEcoRedemptions(prev => {
       const updated = [newRed, ...prev];
       safeLocalStorageSet('siakad_eco_redemptions', JSON.stringify(updated));
@@ -2835,12 +2905,17 @@ export default function App({ initialMode }: AppProps = {}) {
   const handleAddEcoCategory = async (cat: Omit<EcoWasteCategory, 'id'>) => {
     const id = `eco-cat-${Date.now()}`;
     const newCat = { ...cat, id };
+    untrackDeletedId('eco_categories', id);
     setEcoCategories(prev => {
       const updated = [...prev, newCat];
       safeLocalStorageSet('siakad_eco_categories', JSON.stringify(updated));
       return updated;
     });
-    saveDocument('eco_categories', id, newCat).catch(() => {});
+    try {
+      await saveDocument('eco_categories', id, newCat);
+    } catch (err) {
+      console.error("Error adding eco category:", err);
+    }
   };
 
   const handleUpdateEcoCategory = async (cat: EcoWasteCategory) => {
@@ -2849,27 +2924,41 @@ export default function App({ initialMode }: AppProps = {}) {
       safeLocalStorageSet('siakad_eco_categories', JSON.stringify(updated));
       return updated;
     });
-    saveDocument('eco_categories', cat.id, cat).catch(() => {});
+    try {
+      await saveDocument('eco_categories', cat.id, cat);
+    } catch (err) {
+      console.error("Error updating eco category:", err);
+    }
   };
 
   const handleDeleteEcoCategory = async (id: string) => {
+    trackDeletedId('eco_categories', id);
     setEcoCategories(prev => {
       const updated = prev.filter(c => c.id !== id);
       safeLocalStorageSet('siakad_eco_categories', JSON.stringify(updated));
       return updated;
     });
-    deleteDocument('eco_categories', id).catch(() => {});
+    try {
+      await deleteDocument('eco_categories', id);
+    } catch (err) {
+      console.error("Error deleting eco category:", err);
+    }
   };
 
   const handleAddEcoReward = async (reward: Omit<EcoReward, 'id'>) => {
     const id = `eco-rew-${Date.now()}`;
     const newRew = { ...reward, id };
+    untrackDeletedId('eco_rewards', id);
     setEcoRewards(prev => {
       const updated = [...prev, newRew];
       safeLocalStorageSet('siakad_eco_rewards', JSON.stringify(updated));
       return updated;
     });
-    saveDocument('eco_rewards', id, newRew).catch(() => {});
+    try {
+      await saveDocument('eco_rewards', id, newRew);
+    } catch (err) {
+      console.error("Error adding eco reward:", err);
+    }
   };
 
   const handleUpdateEcoReward = async (reward: EcoReward) => {
@@ -2878,27 +2967,61 @@ export default function App({ initialMode }: AppProps = {}) {
       safeLocalStorageSet('siakad_eco_rewards', JSON.stringify(updated));
       return updated;
     });
-    saveDocument('eco_rewards', reward.id, reward).catch(() => {});
+    try {
+      await saveDocument('eco_rewards', reward.id, reward);
+    } catch (err) {
+      console.error("Error updating eco reward:", err);
+    }
   };
 
   const handleDeleteEcoReward = async (id: string) => {
+    trackDeletedId('eco_rewards', id);
     setEcoRewards(prev => {
       const updated = prev.filter(r => r.id !== id);
       safeLocalStorageSet('siakad_eco_rewards', JSON.stringify(updated));
       return updated;
     });
-    deleteDocument('eco_rewards', id).catch(() => {});
+    try {
+      await deleteDocument('eco_rewards', id);
+    } catch (err) {
+      console.error("Error deleting eco reward:", err);
+    }
   };
 
   const handleUpdateEcoRedemptionStatus = async (id: string, status: 'Selesai' | 'Menunggu' | 'Ditolak', notes?: string) => {
+    let updatedTarget: EcoRedemption | null = null;
     setEcoRedemptions(prev => {
-      const updated = prev.map(r => r.id === id ? { ...r, status, notes: notes || r.notes } : r);
+      const updated = prev.map(r => {
+        if (r.id === id) {
+          updatedTarget = { ...r, status, notes: notes || r.notes };
+          return updatedTarget;
+        }
+        return r;
+      });
       safeLocalStorageSet('siakad_eco_redemptions', JSON.stringify(updated));
       return updated;
     });
-    const target = ecoRedemptions.find(r => r.id === id);
+    const target = updatedTarget || ecoRedemptions.find(r => r.id === id);
     if (target) {
-      saveDocument('eco_redemptions', id, { ...target, status, notes: notes || target.notes }).catch(() => {});
+      try {
+        await saveDocument('eco_redemptions', id, { ...target, status, notes: notes || target.notes });
+      } catch (err) {
+        console.error("Error updating eco redemption:", err);
+      }
+    }
+  };
+
+  const handleDeleteEcoRedemption = async (id: string) => {
+    trackDeletedId('eco_redemptions', id);
+    setEcoRedemptions(prev => {
+      const updated = prev.filter(r => r.id !== id);
+      safeLocalStorageSet('siakad_eco_redemptions', JSON.stringify(updated));
+      return updated;
+    });
+    try {
+      await deleteDocument('eco_redemptions', id);
+    } catch (err) {
+      console.error("Error deleting eco redemption:", err);
     }
   };
 
@@ -3686,15 +3809,14 @@ export default function App({ initialMode }: AppProps = {}) {
                                         const isIdMatch = t.nip === trimmedCode || (t.role === 'admin' && trimmedCode === 'admin');
                                         if (!isIdMatch) return false;
 
-                                        const hasCustomPassword = t.password && t.password.trim() !== '';
+                                        const hasCustomPassword = Boolean(t.password && t.password.trim() !== '');
+                                        if (hasCustomPassword) {
+                                          return trimmedPassword === t.password!.trim();
+                                        }
+
                                         const isDefaultAdmin = t.role === 'admin' && (trimmedPassword === 'admin123' || trimmedPassword === t.nip);
                                         const isDefaultTeacher = t.role !== 'admin' && (trimmedPassword === 'guru123' || trimmedPassword === t.nip);
-
-                                        if (hasCustomPassword) {
-                                          return trimmedPassword === t.password.trim() || isDefaultAdmin || isDefaultTeacher;
-                                        } else {
-                                          return isDefaultAdmin || isDefaultTeacher;
-                                        }
+                                        return isDefaultAdmin || isDefaultTeacher;
                                       });
 
                                       if (match) {
@@ -3716,7 +3838,7 @@ export default function App({ initialMode }: AppProps = {}) {
                                         setLoginPassword('');
                                         setIsLoginModalOpen(false);
                                       } else {
-                                        if ((trimmedCode === 'admin' || trimmedCode === '199504242023211018') && trimmedPassword === 'sobari123') {
+                                        if (teachers.length === 0 && (trimmedCode === 'admin' || trimmedCode === '199504242023211018') && trimmedPassword === 'sobari123') {
                                           resetLoginRateLimit();
                                           const sobariAdmin = {
                                             id: 't-sobari',
@@ -3744,8 +3866,9 @@ export default function App({ initialMode }: AppProps = {}) {
                                       }
                                     } else if (loginRole === 'siswa') {
                                       const match = students.find((s) => s.nisn === trimmedCode && (
-                                        (s.password && s.password.trim() !== '' && (trimmedPassword === s.password.trim() || trimmedPassword === 'siswa123' || trimmedPassword === s.nisn)) ||
-                                        ((!s.password || s.password.trim() === '') && (trimmedPassword === 'siswa123' || trimmedPassword === s.nisn))
+                                        (s.password && s.password.trim() !== '')
+                                          ? trimmedPassword === s.password.trim()
+                                          : (trimmedPassword === 'siswa123' || trimmedPassword === s.nisn)
                                       ));
                                       if (match) {
                                         resetLoginRateLimit();
@@ -3765,8 +3888,9 @@ export default function App({ initialMode }: AppProps = {}) {
                                       }
                                     } else if (loginRole === 'orang_tua') {
                                       const match = students.find((s) => s.parentPhone === trimmedCode && (
-                                        (s.parentPassword && s.parentPassword.trim() !== '' && (trimmedPassword === s.parentPassword.trim() || trimmedPassword === 'ortu123' || trimmedPassword === s.parentPhone)) ||
-                                        ((!s.parentPassword || s.parentPassword.trim() === '') && (trimmedPassword === 'ortu123' || trimmedPassword === s.parentPhone))
+                                        (s.parentPassword && s.parentPassword.trim() !== '')
+                                          ? trimmedPassword === s.parentPassword.trim()
+                                          : (trimmedPassword === 'ortu123' || trimmedPassword === s.parentPhone)
                                       ));
                                       if (match) {
                                         resetLoginRateLimit();
@@ -3786,8 +3910,9 @@ export default function App({ initialMode }: AppProps = {}) {
                                       }
                                     } else if (loginRole === 'pelatih') {
                                       const match = teachers.find((t) => (t.role === 'pelatih' || t.roles?.includes('pelatih')) && t.nip === trimmedCode && (
-                                        (t.password && t.password.trim() !== '' && (trimmedPassword === t.password.trim() || trimmedPassword === 'pelatih123' || trimmedPassword === t.nip)) ||
-                                        ((!t.password || t.password.trim() === '') && (trimmedPassword === 'pelatih123' || trimmedPassword === t.nip))
+                                        (t.password && t.password.trim() !== '')
+                                          ? trimmedPassword === t.password.trim()
+                                          : (trimmedPassword === 'pelatih123' || trimmedPassword === t.nip)
                                       ));
                                       if (match) {
                                         resetLoginRateLimit();
@@ -4894,117 +5019,13 @@ export default function App({ initialMode }: AppProps = {}) {
                     </AnimatePresence>
                   </div>
 
-                  {/* Contextual Download Menu in Top Border Bar (adjacent to user name) */}
+                  {/* Contextual Unified Download Menu in Top Border Bar (Filter Waktu, Jenis Data & Format) */}
                   {downloadActions && downloadActions.length > 0 && (
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs border cursor-pointer bg-white hover:bg-slate-50 text-slate-800 border-slate-200/90 hover:border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-100 dark:border-slate-700"
-                        title="Menu Unduh & Ekspor Laporan"
-                      >
-                        <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                        <span className="font-bold">Unduh</span>
-                        <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isDownloadMenuOpen ? 'rotate-180' : ''}`} />
-                      </button>
-
-                      <AnimatePresence>
-                        {isDownloadMenuOpen && (
-                          <>
-                            <div className="fixed inset-0 z-30" onClick={() => setIsDownloadMenuOpen(false)} />
-                            <motion.div
-                              initial={{ opacity: 0, y: -4, scale: 0.96 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: -4, scale: 0.96 }}
-                              transition={{ duration: 0.12 }}
-                              className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 p-2.5 z-40 text-slate-800 dark:text-slate-200 text-xs font-medium"
-                            >
-                              <div className="px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between mb-1.5">
-                                <span>Menu Unduh &amp; Ekspor</span>
-                                <span className="capitalize text-indigo-600 dark:text-indigo-400">{activeRole?.replace('_', ' ')}</span>
-                              </div>
-                              <div className="py-1 space-y-2 max-h-[70vh] overflow-y-auto">
-                                {downloadActions.map((action, idx) =>
-                                  action.formats ? (
-                                    <div
-                                      key={idx}
-                                      className="p-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-900/40 border border-slate-200/70 dark:border-slate-700/60 space-y-2"
-                                    >
-                                      <p className="text-[11px] font-extrabold text-slate-800 dark:text-slate-100 truncate">
-                                        {action.label}
-                                      </p>
-                                      <div className="grid grid-cols-3 gap-1.5">
-                                        {action.formats.docx && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              action.formats?.docx?.();
-                                              setIsDownloadMenuOpen(false);
-                                            }}
-                                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
-                                            title={`Unduh ${action.label} dalam format Word (.docx)`}
-                                          >
-                                            <FileText className="w-3 h-3 shrink-0" />
-                                            <span>.docx</span>
-                                          </button>
-                                        )}
-                                        {action.formats.pdf && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              action.formats?.pdf?.();
-                                              setIsDownloadMenuOpen(false);
-                                            }}
-                                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
-                                            title={`Unduh ${action.label} dalam format PDF (.pdf)`}
-                                          >
-                                            <FileText className="w-3 h-3 shrink-0" />
-                                            <span>.pdf</span>
-                                          </button>
-                                        )}
-                                        {action.formats.excel && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              action.formats?.excel?.();
-                                              setIsDownloadMenuOpen(false);
-                                            }}
-                                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
-                                            title={`Unduh ${action.label} dalam format Excel (.xlsx)`}
-                                          >
-                                            <FileSpreadsheet className="w-3 h-3 shrink-0" />
-                                            <span>.xlsx</span>
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      key={idx}
-                                      type="button"
-                                      onClick={() => {
-                                        action.onClick?.();
-                                        setIsDownloadMenuOpen(false);
-                                      }}
-                                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
-                                    >
-                                      {action.type === 'excel' ? (
-                                        <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
-                                      ) : action.type === 'docx' ? (
-                                        <FileText className="w-4 h-4 text-blue-600 shrink-0" />
-                                      ) : (
-                                        <FileText className="w-4 h-4 text-rose-500 shrink-0" />
-                                      )}
-                                      <span className="truncate">{action.label}</span>
-                                    </button>
-                                  )
-                                )}
-                              </div>
-                            </motion.div>
-                          </>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                    <UnifiedDownloadMenu
+                      actions={downloadActions}
+                      roleLabel={activeRole || 'Portal'}
+                      variant="navbar"
+                    />
                   )}
 
                   {/* Profile info & Mobile Logout */}
@@ -5123,6 +5144,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         onUpdateEcoReward={handleUpdateEcoReward}
                         onDeleteEcoReward={handleDeleteEcoReward}
                         onUpdateEcoRedemptionStatus={handleUpdateEcoRedemptionStatus}
+                        onDeleteEcoRedemption={handleDeleteEcoRedemption}
                         onUpdateEcoConfig={handleUpdateEcoConfig}
                         permits={studentPermits}
                         onAddPermit={handleAddStudentPermit}
@@ -5246,6 +5268,7 @@ export default function App({ initialMode }: AppProps = {}) {
                             onUpdateEcoReward={handleUpdateEcoReward}
                             onDeleteEcoReward={handleDeleteEcoReward}
                             onUpdateEcoRedemptionStatus={handleUpdateEcoRedemptionStatus}
+                            onDeleteEcoRedemption={handleDeleteEcoRedemption}
                             onUpdateEcoConfig={handleUpdateEcoConfig}
                             schoolName={localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA'}
                           />
@@ -5361,6 +5384,7 @@ export default function App({ initialMode }: AppProps = {}) {
                             onUpdateEcoReward={handleUpdateEcoReward}
                             onDeleteEcoReward={handleDeleteEcoReward}
                             onUpdateEcoRedemptionStatus={handleUpdateEcoRedemptionStatus}
+                            onDeleteEcoRedemption={handleDeleteEcoRedemption}
                             onUpdateEcoConfig={handleUpdateEcoConfig}
                             schoolName={localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA'}
                           />
@@ -5433,6 +5457,7 @@ export default function App({ initialMode }: AppProps = {}) {
                             onUpdateEcoReward={handleUpdateEcoReward}
                             onDeleteEcoReward={handleDeleteEcoReward}
                             onUpdateEcoRedemptionStatus={handleUpdateEcoRedemptionStatus}
+                            onDeleteEcoRedemption={handleDeleteEcoRedemption}
                             onUpdateEcoConfig={handleUpdateEcoConfig}
                             permits={studentPermits}
                             onAddPermit={handleAddStudentPermit}

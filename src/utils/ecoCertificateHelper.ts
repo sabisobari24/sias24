@@ -4,6 +4,31 @@
 
 import { Student } from '../types';
 import { getEffectiveSchoolLogo } from './schoolLogoHelper';
+import { printHTML } from './printHelper';
+
+const escapeHtml = (val: unknown): string => {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+const isSafeMediaUrl = (url: unknown, fallback: string = ''): string => {
+  if (!url || typeof url !== 'string') return fallback;
+  const trimmed = url.trim();
+  if (
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('/') ||
+    /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(trimmed)
+  ) {
+    return escapeHtml(trimmed);
+  }
+  return fallback;
+};
 
 export interface EcoAmbassadorCertData {
   studentName: string;
@@ -21,24 +46,34 @@ export interface EcoAmbassadorCertData {
 }
 
 export function printEcoAmbassadorCertificate(data: EcoAmbassadorCertData) {
-  const schoolName = data.schoolName || localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA';
-  const headmasterName = data.headmasterName || 'Dra. Hj. Endah Purwani, M.M.';
-  const headmasterNip = data.headmasterNip || '196711261991032004';
+  const schoolName = escapeHtml(data.schoolName || localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA');
+  const headmasterName = escapeHtml(data.headmasterName || 'Dra. Hj. Endah Purwani, M.M.');
+  const headmasterNip = escapeHtml(data.headmasterNip || '196711261991032004');
   const year = new Date().getFullYear();
-  const certNumber = data.certNumber || `050/PIAGAM-ECO/${year}/${Math.floor(1000 + Math.random() * 9000)}`;
+  const certNumber = escapeHtml(data.certNumber || `050/PIAGAM-ECO/${year}/${Math.floor(1000 + Math.random() * 9000)}`);
 
   const effectiveSchoolLogo = getEffectiveSchoolLogo();
-  const logoLeft = data.logoLeftUrl || localStorage.getItem('siakad_logo_left') || localStorage.getItem('siakad_cert_logo_left') || '/logo-dki.png';
-  const logoRight = (data.schoolLogo && data.schoolLogo !== '/logo.png') 
-    ? data.schoolLogo 
-    : (localStorage.getItem('siakad_logo_right') || effectiveSchoolLogo);
+  const logoLeft = isSafeMediaUrl(data.logoLeftUrl || localStorage.getItem('siakad_logo_left') || localStorage.getItem('siakad_cert_logo_left') || '/logo-dki.png', '/logo-dki.png');
+  const logoRight = isSafeMediaUrl(
+    (data.schoolLogo && data.schoolLogo !== '/logo.png')
+      ? data.schoolLogo
+      : (localStorage.getItem('siakad_logo_right') || effectiveSchoolLogo),
+    '/logo.png'
+  );
+  const safeEffectiveLogo = isSafeMediaUrl(effectiveSchoolLogo, '/logo.png');
+  const safeStudentName = escapeHtml(data.studentName);
+  const safeStudentNisn = escapeHtml(data.studentNisn || '');
+  const safeClassName = escapeHtml(data.className);
+  const safeTotalPoints = escapeHtml(data.totalEcoPoints);
+  const safeTotalDeposits = escapeHtml(data.totalDepositsCount);
+  const safeDateStr = escapeHtml(data.dateStr);
 
   const htmlContent = `
     <!DOCTYPE html>
     <html lang="id">
       <head>
         <meta charset="UTF-8" />
-        <title>PIAGAM DUTA KEBERSIHAN - ${data.studentName}</title>
+        <title>PIAGAM DUTA KEBERSIHAN - ${safeStudentName}</title>
         <style>
           @page {
             size: A4 landscape;
@@ -348,16 +383,16 @@ export function printEcoAmbassadorCertificate(data: EcoAmbassadorCertData) {
                 <p class="title-sub">Duta Kebersihan &amp; Lingkungan Hidup</p>
                 <div class="cert-num">Nomor: ${certNumber}</div>
               </div>
-              <img src="${logoRight}" class="cert-logo-img" alt="Logo Sekolah" onerror="this.src='${effectiveSchoolLogo}'; this.onerror=null;" />
+              <img src="${logoRight}" class="cert-logo-img" alt="Logo Sekolah" onerror="this.src='${safeEffectiveLogo}'; this.onerror=null;" />
             </div>
           </div>
 
           <!-- BODY / RECIPIENT -->
           <div class="content">
             <div class="award-to">Diberikan dengan penuh kehormatan dan apresiasi tinggi kepada:</div>
-            <div class="student-name">${data.studentName}</div>
+            <div class="student-name">${safeStudentName}</div>
             <div class="student-meta">
-              ${data.studentNisn ? `NISN: ${data.studentNisn} &bull; ` : ''}Kelas: ${data.className} &bull; ${schoolName}
+              ${safeStudentNisn ? `NISN: ${safeStudentNisn} &bull; ` : ''}Kelas: ${safeClassName} &bull; ${schoolName}
             </div>
 
             <div class="badge-honor">
@@ -371,8 +406,8 @@ export function printEcoAmbassadorCertificate(data: EcoAmbassadorCertData) {
             </p>
 
             <div class="stats-strip">
-              <div class="stat-pill">Total Akumulasi: <strong>${data.totalEcoPoints} Poin ECo-Tiket</strong></div>
-              <div class="stat-pill">Frekuensi Setor: <strong>${data.totalDepositsCount} Kali</strong></div>
+              <div class="stat-pill">Total Akumulasi: <strong>${safeTotalPoints} Poin ECo-Tiket</strong></div>
+              <div class="stat-pill">Frekuensi Setor: <strong>${safeTotalDeposits} Kali</strong></div>
               <div class="stat-pill">Predikat: <strong>Pahlawan Lingkungan Sekolah</strong></div>
             </div>
           </div>
@@ -398,50 +433,16 @@ export function printEcoAmbassadorCertificate(data: EcoAmbassadorCertData) {
             <!-- Right: Kepala Sekolah -->
             <div class="signature-box">
               <div class="sig-title">
-                Jakarta, ${data.dateStr}<br />Kepala ${schoolName}
+                Jakarta, ${safeDateStr}<br />Kepala ${schoolName}
               </div>
               <div class="sig-name">${headmasterName}</div>
               <div class="sig-nip">NIP. ${headmasterNip}</div>
             </div>
           </div>
         </div>
-
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 300);
-          };
-        </script>
       </body>
     </html>
   `;
 
-  const printWindow = window.open('', '_blank');
-  if (printWindow) {
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-  } else {
-    // Fallback if popup blocked: use hidden iframe
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
-    const doc = iframe.contentWindow?.document || iframe.contentDocument;
-    if (doc) {
-      doc.open();
-      doc.write(htmlContent);
-      doc.close();
-      setTimeout(() => {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-        setTimeout(() => document.body.removeChild(iframe), 2000);
-      }, 500);
-    }
-  }
+  printHTML(htmlContent);
 }

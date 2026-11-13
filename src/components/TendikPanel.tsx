@@ -55,6 +55,7 @@ import { downloadDocx } from '../utils/docxExport';
 import { getSchoolClassName } from '../utils/classUtils';
 import ConfirmModal from './ConfirmModal';
 import ExportDateFilterModal from './ExportDateFilterModal';
+import { ExportDateRange } from '../utils/exportDateFilter';
 
 interface TendikPanelProps {
   teacher: Teacher;
@@ -417,7 +418,8 @@ export default function TendikPanel({
   const handleSavePemberkasan = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pemTitle.trim() || !pemEndDate) {
-      alert('Mohon isi judul jadwal dan tanggal batas waktu.');
+      setErrorMsg('Mohon isi judul jadwal dan tanggal batas waktu.');
+      setTimeout(() => setErrorMsg(''), 4000);
       return;
     }
     const docs = pemDocsInput.split(',').map(d => d.trim()).filter(Boolean);
@@ -441,7 +443,8 @@ export default function TendikPanel({
   const handleSaveNomorSurat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!nsNumber.trim() || !nsSubject.trim()) {
-      alert('Mohon isi nomor surat dan perihal.');
+      setErrorMsg('Mohon isi nomor surat dan perihal.');
+      setTimeout(() => setErrorMsg(''), 4000);
       return;
     }
     onAddNomorSurat({
@@ -472,7 +475,8 @@ export default function TendikPanel({
   const handleSaveInventory = (e: React.FormEvent) => {
     e.preventDefault();
     if (!invItemName.trim()) {
-      alert('Mohon isi nama barang inventaris.');
+      setErrorMsg('Mohon isi nama barang inventaris.');
+      setTimeout(() => setErrorMsg(''), 4000);
       return;
     }
     const codeGen = invCode.trim() || `INV-${invCategory.substring(0,3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
@@ -499,7 +503,8 @@ export default function TendikPanel({
   const handleSaveBosBop = (e: React.FormEvent) => {
     e.preventDefault();
     if (!bbPeriod.trim() || !bbCategory.trim()) {
-      alert('Mohon isi periode laporan dan kategori dana.');
+      setErrorMsg('Mohon isi periode laporan dan kategori dana.');
+      setTimeout(() => setErrorMsg(''), 4000);
       return;
     }
     onAddBosBopReport({
@@ -694,101 +699,67 @@ export default function TendikPanel({
   };
 
   const getTendikDownloadConfig = () => {
-    switch (activeTab) {
-      case 'kjp':
-        return [
-          {
-            label: 'Rekap Siswa KJP Plus',
-            formats: {
-              docx: () => handleExportKjp('', '', 'docx'),
-              pdf: () => handleExportKjp('', '', 'pdf'),
-              excel: () => handleExportKjp('', '', 'excel'),
-            },
-          },
-        ];
-      case 'nomor-surat':
-        return [
-          {
-            label: 'Buku Agenda Nomor Surat',
-            formats: {
-              docx: () => handleExportNomorSurat('', '', 'docx'),
-              pdf: () => handleExportNomorSurat('', '', 'pdf'),
-              excel: () => handleExportNomorSurat('', '', 'excel'),
-            },
-          },
-        ];
-      case 'inventaris':
-        return [
-          {
-            label: 'Aset & Inventaris Sarpras',
-            formats: {
-              docx: () => handleExportInventory('', '', 'docx'),
-              pdf: () => handleExportInventory('', '', 'pdf'),
-              excel: () => handleExportInventory('', '', 'excel'),
-            },
-          },
-        ];
-      case 'peminjaman-barang':
-        return [
-          {
-            label: 'Rekap BA Peminjaman Barang',
-            formats: {
-              docx: () => handleExportLoans('', '', 'docx'),
-              pdf: () => handleExportLoans('', '', 'pdf'),
-              excel: () => handleExportLoans('', '', 'excel'),
-            },
-          },
-        ];
-      case 'pemberkasan':
-        return [
-          {
-            label: 'Agenda Pemberkasan Siswa',
-            formats: {
-              docx: () => handleExportPemberkasan('', '', 'docx'),
-              pdf: () => handleExportPemberkasan('', '', 'pdf'),
-              excel: () => handleExportPemberkasan('', '', 'excel'),
-            },
-          },
-        ];
-      case 'bos-bop':
-        return [
-          {
-            label: 'Laporan Transparansi BOS/BOP',
-            formats: {
-              docx: () => handleExportBosBop('', '', 'docx'),
-              pdf: () => handleExportBosBop('', '', 'pdf'),
-              excel: () => handleExportBosBop('', '', 'excel'),
-            },
-          },
-        ];
-      default:
-        return [
-          {
-            label: 'Rekap Siswa KJP Plus',
-            formats: {
-              docx: () => handleExportKjp('', '', 'docx'),
-              pdf: () => handleExportKjp('', '', 'pdf'),
-              excel: () => handleExportKjp('', '', 'excel'),
-            },
-          },
-          {
-            label: 'Aset & Inventaris Sarpras',
-            formats: {
-              docx: () => handleExportInventory('', '', 'docx'),
-              pdf: () => handleExportInventory('', '', 'pdf'),
-              excel: () => handleExportInventory('', '', 'excel'),
-            },
-          },
-          {
-            label: 'Laporan Transparansi BOS/BOP',
-            formats: {
-              docx: () => handleExportBosBop('', '', 'docx'),
-              pdf: () => handleExportBosBop('', '', 'pdf'),
-              excel: () => handleExportBosBop('', '', 'excel'),
-            },
-          },
-        ];
-    }
+    const allActions = [
+      {
+        key: 'kjp',
+        label: 'Rekap Siswa KJP Plus',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportKjp(range?.startDate || '', range?.endDate || '', 'docx'),
+          pdf: (range?: ExportDateRange) => handleExportKjp(range?.startDate || '', range?.endDate || '', 'pdf'),
+          excel: (range?: ExportDateRange) => handleExportKjp(range?.startDate || '', range?.endDate || '', 'excel'),
+        },
+      },
+      {
+        key: 'nomor-surat',
+        label: 'Buku Agenda Nomor Surat',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportNomorSurat(range?.startDate || '', range?.endDate || '', 'docx'),
+          pdf: (range?: ExportDateRange) => handleExportNomorSurat(range?.startDate || '', range?.endDate || '', 'pdf'),
+          excel: (range?: ExportDateRange) => handleExportNomorSurat(range?.startDate || '', range?.endDate || '', 'excel'),
+        },
+      },
+      {
+        key: 'inventaris',
+        label: 'Aset & Inventaris Sarpras',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportInventory(range?.startDate || '', range?.endDate || '', 'docx'),
+          pdf: (range?: ExportDateRange) => handleExportInventory(range?.startDate || '', range?.endDate || '', 'pdf'),
+          excel: (range?: ExportDateRange) => handleExportInventory(range?.startDate || '', range?.endDate || '', 'excel'),
+        },
+      },
+      {
+        key: 'peminjaman-barang',
+        label: 'Rekap BA Peminjaman Barang',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportLoans(range?.startDate || '', range?.endDate || '', 'docx'),
+          pdf: (range?: ExportDateRange) => handleExportLoans(range?.startDate || '', range?.endDate || '', 'pdf'),
+          excel: (range?: ExportDateRange) => handleExportLoans(range?.startDate || '', range?.endDate || '', 'excel'),
+        },
+      },
+      {
+        key: 'pemberkasan',
+        label: 'Agenda Pemberkasan Siswa',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportPemberkasan(range?.startDate || '', range?.endDate || '', 'docx'),
+          pdf: (range?: ExportDateRange) => handleExportPemberkasan(range?.startDate || '', range?.endDate || '', 'pdf'),
+          excel: (range?: ExportDateRange) => handleExportPemberkasan(range?.startDate || '', range?.endDate || '', 'excel'),
+        },
+      },
+      {
+        key: 'bos-bop',
+        label: 'Laporan Transparansi BOS/BOP',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportBosBop(range?.startDate || '', range?.endDate || '', 'docx'),
+          pdf: (range?: ExportDateRange) => handleExportBosBop(range?.startDate || '', range?.endDate || '', 'pdf'),
+          excel: (range?: ExportDateRange) => handleExportBosBop(range?.startDate || '', range?.endDate || '', 'excel'),
+        },
+      },
+    ];
+    const priorityIdx = allActions.findIndex(a => a.key === activeTab);
+    const ordered = priorityIdx > 0
+      ? [allActions[priorityIdx], ...allActions.filter((_, i) => i !== priorityIdx)]
+      : allActions;
+    return ordered.map(({ label, formats }) => ({ label, formats }));
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
@@ -1613,14 +1584,14 @@ export default function TendikPanel({
       {activeTab === 'inventaris' && (
         <div className="space-y-6">
           {/* Quick Loans Banner */}
-          <div className="bg-gradient-to-r from-purple-900 to-indigo-900 rounded-2xl p-4 text-white shadow-sm flex items-center justify-between">
+          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 text-slate-900 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-purple-200">
-                <ClipboardList className="w-5 h-5 text-purple-300" />
+              <div className="w-10 h-10 bg-white border border-purple-200 rounded-xl flex items-center justify-center text-purple-600 shrink-0">
+                <ClipboardList className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-xs font-black text-white">Berita Acara &amp; Tracking Peminjaman Barang</h4>
-                <p className="text-[11px] text-purple-200">
+                <h4 className="text-xs font-black text-purple-950">Berita Acara &amp; Tracking Peminjaman Barang</h4>
+                <p className="text-[11px] text-purple-800/80">
                   {inventoryLoans.filter(l => l.status === 'Dipinjam').length} barang saat ini sedang dipinjam | {inventoryLoans.length} total berita acara terbit.
                 </p>
               </div>
@@ -1628,7 +1599,7 @@ export default function TendikPanel({
             <button
               type="button"
               onClick={() => setActiveTab('peminjaman-barang')}
-              className="px-3.5 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-xl text-xs font-extrabold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer hover:scale-105 shrink-0"
+              className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-extrabold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <FileSignature className="w-4 h-4" />
               <span>Kelola BA Peminjaman →</span>
@@ -2020,16 +1991,16 @@ export default function TendikPanel({
       {activeTab === 'peminjaman-barang' && (
         <div className="space-y-6">
           {/* Header & Overview Stats */}
-          <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-6 text-white shadow-lg border border-indigo-800/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="space-y-1">
-              <div className="inline-flex items-center gap-2 bg-blue-500/20 text-blue-200 border border-blue-400/30 px-3 py-1 rounded-full text-[11px] font-bold">
-                <ClipboardList className="w-3.5 h-3.5 text-blue-300" />
+              <div className="inline-flex items-center gap-1.5 text-indigo-700 text-[11px] font-bold uppercase tracking-wider">
+                <ClipboardList className="w-3.5 h-3.5 text-indigo-600" />
                 <span>Modul Sarpras &amp; Tata Usaha</span>
               </div>
-              <h2 className="text-xl font-black text-white flex items-center gap-2">
-                <span>Berita Acara Peminjaman Barang Inventaris</span>
+              <h2 className="text-lg font-black text-slate-900">
+                Berita Acara Peminjaman Barang Inventaris
               </h2>
-              <p className="text-xs text-blue-100/80 max-w-xl">
+              <p className="text-xs text-slate-500 max-w-xl">
                 Rekapitulasi, pembuatan dokumen PDF resmi Berita Acara, serta pelacakan (tracking) status pengembalian aset sekolah secara akurat.
               </p>
             </div>
@@ -2037,7 +2008,7 @@ export default function TendikPanel({
               <button
                 type="button"
                 onClick={handleOpenNewLoanModal}
-                className="px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-black shadow-md transition-all flex items-center gap-2 cursor-pointer hover:scale-[1.02]"
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-xs transition-all flex items-center gap-2 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Buat Berita Acara Baru</span>
@@ -2045,10 +2016,10 @@ export default function TendikPanel({
               <button
                 type="button"
                 onClick={() => setExportModal({ isOpen: true, type: 'peminjaman-barang', title: 'Unduh Rekap Berita Acara Peminjaman' })}
-                className="px-3 py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
                 title="Unduh / Cetak Rekap"
               >
-                <FileSpreadsheet className="w-4 h-4 text-blue-200" />
+                <FileSpreadsheet className="w-4 h-4 text-slate-600" />
                 <span className="hidden sm:inline">Export</span>
               </button>
             </div>

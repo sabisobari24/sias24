@@ -5,6 +5,12 @@ import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
 import { downloadDocx } from '../utils/docxExport';
 import { useDownload } from '../context/DownloadContext';
+import {
+  ExportDateRange,
+  filterItemsByDateRange,
+  getRangeFileSuffix,
+  getRangeTitleSuffix
+} from '../utils/exportDateFilter';
 
 interface GuruWaliPanelProps {
   teacher: Teacher;
@@ -94,6 +100,12 @@ export default function GuruWaliPanel({
   // Reply state
   const [replyText, setReplyText] = useState<Record<string, string>>({});
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const showError = (msg: string) => {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(''), 4000);
+  };
 
   // Hybrid BK Jurnal States
   const [journalStudentId, setJournalStudentId] = useState('');
@@ -113,7 +125,7 @@ export default function GuruWaliPanel({
   const handleSubmitJournal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!journalStudentId || !journalTopic.trim() || !journalNotes.trim()) {
-      alert('Mohon isi semua field wajib untuk jurnal bimbingan.');
+      showError('Mohon isi semua field wajib untuk jurnal bimbingan.');
       return;
     }
     const studentObj = students.find(s => s.id === journalStudentId);
@@ -136,7 +148,7 @@ export default function GuruWaliPanel({
   const handleSubmitSchedule = (e: React.FormEvent) => {
     e.preventDefault();
     if (!scheduleTargetId || !scheduleTopic.trim() || !scheduleDate || !scheduleTime) {
-      alert('Mohon lengkapi semua field wajib untuk jadwal bimbingan.');
+      showError('Mohon lengkapi semua field wajib untuk jadwal bimbingan.');
       return;
     }
     onAddBimbinganSchedule({
@@ -159,7 +171,7 @@ export default function GuruWaliPanel({
   const handleSubmitCounselorNote = (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetStudentId || !noteContent.trim()) {
-      alert('Pilih siswa bimbingan dan berikan catatan bimbingan.');
+      showError('Pilih siswa bimbingan dan berikan catatan bimbingan.');
       return;
     }
 
@@ -183,7 +195,7 @@ export default function GuruWaliPanel({
   const handleUpdateBakatMinat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!bakatStudentId) {
-      alert('Pilih siswa bimbingan terlebih dahulu.');
+      showError('Pilih siswa bimbingan terlebih dahulu.');
       return;
     }
 
@@ -210,37 +222,42 @@ export default function GuruWaliPanel({
   };
 
   // Export Handlers
-  const handleExportBimbingan = (format: 'excel' | 'pdf' | 'docx') => {
+  const handleExportBimbingan = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(
+      counselorNotes.filter(n => myStudents.some(s => s.id === n.studentId)),
+      n => n.date,
+      range
+    );
     const headers = ["Tanggal", "Nama Siswa", "Kelas", "Catatan Bimbingan", "Rencana Tindak Lanjut", "Status", "Pencatat"];
-    const rows = counselorNotes
-      .filter(n => myStudents.some(s => s.id === n.studentId))
-      .map(n => {
-        const s = students.find(std => std.id === n.studentId);
-        return [
-          n.date,
-          s?.name || 'Siswa Terhapus',
-          classes.find(c => c.id === s?.classId)?.name || '-',
-          n.notes,
-          n.followUp || '-',
-          n.status,
-          n.recordedBy
-        ];
-      });
+    const rows = filtered.map(n => {
+      const s = students.find(std => std.id === n.studentId);
+      return [
+        n.date,
+        s?.name || 'Siswa Terhapus',
+        classes.find(c => c.id === s?.classId)?.name || '-',
+        n.notes,
+        n.followUp || '-',
+        n.status,
+        n.recordedBy
+      ];
+    });
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Laporan Rekapitulasi Layanan Bimbingan & Pembinaan (Guru Wali)${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel('rekap_bimbingan_guru_wali.xlsx', headers, rows, 'Bimbingan Guru Wali');
+      downloadExcel(`rekap_bimbingan_guru_wali${suffix}.xlsx`, headers, rows, 'Bimbingan Guru Wali');
       setSuccessMsg('Laporan Rekapitulasi Bimbingan berhasil diunduh (Excel .xlsx)!');
     } else if (format === 'docx') {
-      downloadDocx('rekap_bimbingan_guru_wali.docx', 'Laporan Rekapitulasi Layanan Bimbingan & Pembinaan (Guru Wali)', headers, rows, headmasterName);
+      downloadDocx(`rekap_bimbingan_guru_wali${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg('Laporan Rekapitulasi Bimbingan berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF('Laporan Rekapitulasi Layanan Bimbingan & Pembinaan (Guru Wali)', headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg('Dokumen Laporan Bimbingan berhasil dicetak / disimpan ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportBakatMinat = (format: 'excel' | 'pdf' | 'docx') => {
+  const handleExportBakatMinat = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
     const headers = ["NISN", "Nama Siswa", "Kelas", "Bakat & Minat", "Prestasi Akademik / Non-Akademik"];
     const rows = myStudents.map(s => [
       s.nisn,
@@ -250,22 +267,28 @@ export default function GuruWaliPanel({
       s.prestasi || 'Belum diisi'
     ]);
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Rekapitulasi Pembinaan Bakat, Minat, dan Prestasi Siswa${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel('rekap_bakat_minat_prestasi_guru_wali.xlsx', headers, rows, 'Bakat & Minat');
+      downloadExcel(`rekap_bakat_minat_prestasi_guru_wali${suffix}.xlsx`, headers, rows, 'Bakat & Minat');
       setSuccessMsg('Rekapitulasi Bakat & Minat berhasil diunduh (Excel .xlsx)!');
     } else if (format === 'docx') {
-      downloadDocx('rekap_bakat_minat_prestasi_guru_wali.docx', 'Rekapitulasi Pembinaan Bakat, Minat, dan Prestasi Siswa', headers, rows, headmasterName);
+      downloadDocx(`rekap_bakat_minat_prestasi_guru_wali${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg('Rekapitulasi Bakat & Minat berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF('Rekapitulasi Pembinaan Bakat, Minat, dan Prestasi Siswa', headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg('Dokumen Rekapitulasi Bakat & Minat berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPesanGuruWali = (format: 'excel' | 'pdf' | 'docx') => {
+  const handleExportPesanGuruWali = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
     const headers = ["Tanggal", "Nama Orang Tua", "Siswa Bimbingan", "Pesan dari Orang Tua", "Balasan Terakhir", "Status"];
-    const myMsgList = parentMessages.filter(m => myStudents.some(s => s.id === m.studentId));
+    const myMsgList = filterItemsByDateRange(
+      parentMessages.filter(m => myStudents.some(s => s.id === m.studentId)),
+      m => m.date,
+      range
+    );
     const rows = myMsgList.map(m => {
       const s = students.find(std => std.id === m.studentId);
       const lastReply = m.replies && m.replies.length > 0 ? m.replies[m.replies.length - 1].message : 'Belum Dibalas';
@@ -279,22 +302,28 @@ export default function GuruWaliPanel({
       ];
     });
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Rekapitulasi Komunikasi Orang Tua & Guru Wali${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel('komunikasi_orang_tua_guru_wali.xlsx', headers, rows, 'Pesan Orang Tua');
+      downloadExcel(`komunikasi_orang_tua_guru_wali${suffix}.xlsx`, headers, rows, 'Pesan Orang Tua');
       setSuccessMsg('Pesan Komunikasi Orang Tua berhasil diunduh (Excel .xlsx)!');
     } else if (format === 'docx') {
-      downloadDocx('komunikasi_orang_tua_guru_wali.docx', 'Rekapitulasi Komunikasi Orang Tua & Guru Wali', headers, rows, headmasterName);
+      downloadDocx(`komunikasi_orang_tua_guru_wali${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg('Pesan Komunikasi Orang Tua berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF('Rekapitulasi Komunikasi Orang Tua & Guru Wali', headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg('Pesan Komunikasi berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPrestasiGuruWali = (format: 'excel' | 'pdf' | 'docx') => {
+  const handleExportPrestasiGuruWali = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
     const myStudentIds = myStudents.map(s => s.id);
-    const myAchs = studentAchievements.filter(a => myStudentIds.includes(a.studentId));
+    const myAchs = filterItemsByDateRange(
+      studentAchievements.filter(a => myStudentIds.includes(a.studentId)),
+      a => a.date,
+      range
+    );
     const headers = ['No', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
     const rows = myAchs.map((a, i) => [
       i + 1,
@@ -307,23 +336,26 @@ export default function GuruWaliPanel({
       a.date,
       a.recordedBy
     ]);
+    const suffix = getRangeFileSuffix(range);
+    const title = `Daftar Raihan Prestasi Siswa Bimbingan - Guru Wali${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel(`Prestasi_Siswa_Bimbingan_GuruWali.xlsx`, headers, rows, 'Prestasi Bimbingan');
+      downloadExcel(`Prestasi_Siswa_Bimbingan_GuruWali${suffix}.xlsx`, headers, rows, 'Prestasi Bimbingan');
       setSuccessMsg('Rekap Prestasi Siswa Bimbingan berhasil diunduh (Excel .xlsx)!');
     } else if (format === 'docx') {
-      downloadDocx(`Prestasi_Siswa_Bimbingan_GuruWali.docx`, 'Daftar Raihan Prestasi Siswa Bimbingan - Guru Wali', headers, rows, headmasterName);
+      downloadDocx(`Prestasi_Siswa_Bimbingan_GuruWali${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg('Rekap Prestasi Siswa Bimbingan berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF(`Daftar Raihan Prestasi Siswa Bimbingan - Guru Wali`, headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg('Rekap Prestasi Siswa Bimbingan berhasil dicetak / disimpan ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPresensiBinaan = (format: 'excel' | 'pdf' | 'docx') => {
+  const handleExportPresensiBinaan = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
+    const scopedAttendance = filterItemsByDateRange(attendance, a => a.date, range);
     const headers = ["No", "NISN", "Nama Siswa", "Kelas", "Hadir (H)", "Sakit (S)", "Izin (I)", "Alpa (A)", "Persentase Kehadiran (%)"];
     const rows = myStudents.map((s, idx) => {
-      const sAtt = attendance.filter(a => a.studentId === s.id || (s.nisn && a.studentId === s.nisn));
+      const sAtt = scopedAttendance.filter(a => a.studentId === s.id || (s.nisn && a.studentId === s.nisn));
       const hadir = sAtt.filter(a => a.status === 'Hadir').length;
       const sakit = sAtt.filter(a => a.status === 'Sakit').length;
       const izin = sAtt.filter(a => a.status === 'Izin').length;
@@ -343,14 +375,16 @@ export default function GuruWaliPanel({
       ];
     });
 
+    const suffix = getRangeFileSuffix(range);
+    const title = `Rekapitulasi Presensi Kehadiran Siswa Binaan - ${teacher.name}${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
-      downloadExcel(`Rekap_Presensi_Siswa_Binaan_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Presensi Binaan');
+      downloadExcel(`Rekap_Presensi_Siswa_Binaan_${teacher.name.replace(/\s+/g, '_')}${suffix}.xlsx`, headers, rows, 'Presensi Binaan');
       setSuccessMsg('Rekap Presensi Siswa Binaan berhasil diunduh (Excel .xlsx)!');
     } else if (format === 'docx') {
-      downloadDocx(`Rekap_Presensi_Siswa_Binaan_${teacher.name.replace(/\s+/g, '_')}.docx`, `Rekapitulasi Presensi Kehadiran Siswa Binaan - ${teacher.name}`, headers, rows, headmasterName);
+      downloadDocx(`Rekap_Presensi_Siswa_Binaan_${teacher.name.replace(/\s+/g, '_')}${suffix}.docx`, title, headers, rows, headmasterName);
       setSuccessMsg('Rekap Presensi Siswa Binaan berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF(`Rekapitulasi Presensi Kehadiran Siswa Binaan - ${teacher.name}`, headers, rows, headmasterName);
+      printTablePDF(title, headers, rows, headmasterName);
       setSuccessMsg('Dokumen Presensi Siswa Binaan berhasil dicetak / PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 4000);
@@ -359,7 +393,7 @@ export default function GuruWaliPanel({
   const handleSendNewParentMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMsgStudentId || !newMsgContent.trim()) {
-      alert('Mohon pilih siswa binaan dan tulis isi pesan untuk orang tua.');
+      showError('Mohon pilih siswa binaan dan tulis isi pesan untuk orang tua.');
       return;
     }
 
@@ -377,88 +411,58 @@ export default function GuruWaliPanel({
   };
 
   const getGuruWaliDownloadConfig = () => {
-    switch (activeTab) {
-      case 'bimbingan':
-        return [
-          {
-            label: 'Presensi Siswa Binaan',
-            formats: {
-              docx: () => handleExportPresensiBinaan('docx'),
-              pdf: () => handleExportPresensiBinaan('pdf'),
-              excel: () => handleExportPresensiBinaan('excel'),
-            },
-          },
-        ];
-      case 'bimbingan-bk':
-        return [
-          {
-            label: 'Catatan Bimbingan',
-            formats: {
-              docx: () => handleExportBimbingan('docx'),
-              pdf: () => handleExportBimbingan('pdf'),
-              excel: () => handleExportBimbingan('excel'),
-            },
-          },
-        ];
-      case 'bakat-minat':
-        return [
-          {
-            label: 'Bakat, Minat & Prestasi',
-            formats: {
-              docx: () => handleExportBakatMinat('docx'),
-              pdf: () => handleExportBakatMinat('pdf'),
-              excel: () => handleExportBakatMinat('excel'),
-            },
-          },
-        ];
-      case 'pesan':
-        return [
-          {
-            label: 'Pesan Orang Tua',
-            formats: {
-              docx: () => handleExportPesanGuruWali('docx'),
-              pdf: () => handleExportPesanGuruWali('pdf'),
-              excel: () => handleExportPesanGuruWali('excel'),
-            },
-          },
-        ];
-      case 'beranda':
-      default:
-        return [
-          {
-            label: 'Presensi Siswa Binaan',
-            formats: {
-              docx: () => handleExportPresensiBinaan('docx'),
-              pdf: () => handleExportPresensiBinaan('pdf'),
-              excel: () => handleExportPresensiBinaan('excel'),
-            },
-          },
-          {
-            label: 'Laporan Bimbingan',
-            formats: {
-              docx: () => handleExportBimbingan('docx'),
-              pdf: () => handleExportBimbingan('pdf'),
-              excel: () => handleExportBimbingan('excel'),
-            },
-          },
-          {
-            label: 'Bakat & Minat',
-            formats: {
-              docx: () => handleExportBakatMinat('docx'),
-              pdf: () => handleExportBakatMinat('pdf'),
-              excel: () => handleExportBakatMinat('excel'),
-            },
-          },
-          {
-            label: 'Prestasi Binaan',
-            formats: {
-              docx: () => handleExportPrestasiGuruWali('docx'),
-              pdf: () => handleExportPrestasiGuruWali('pdf'),
-              excel: () => handleExportPrestasiGuruWali('excel'),
-            },
-          },
-        ];
-    }
+    const allActions = [
+      {
+        key: 'bimbingan',
+        label: 'Presensi Siswa Binaan',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportPresensiBinaan('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportPresensiBinaan('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportPresensiBinaan('excel', range),
+        },
+      },
+      {
+        key: 'bimbingan-bk',
+        label: 'Catatan Bimbingan',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportBimbingan('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportBimbingan('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportBimbingan('excel', range),
+        },
+      },
+      {
+        key: 'bakat-minat',
+        label: 'Bakat, Minat & Prestasi',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportBakatMinat('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportBakatMinat('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportBakatMinat('excel', range),
+        },
+      },
+      {
+        key: 'pesan',
+        label: 'Pesan Orang Tua',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportPesanGuruWali('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportPesanGuruWali('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportPesanGuruWali('excel', range),
+        },
+      },
+      {
+        key: 'prestasi',
+        label: 'Prestasi Binaan',
+        formats: {
+          docx: (range?: ExportDateRange) => handleExportPrestasiGuruWali('docx', range),
+          pdf: (range?: ExportDateRange) => handleExportPrestasiGuruWali('pdf', range),
+          excel: (range?: ExportDateRange) => handleExportPrestasiGuruWali('excel', range),
+        },
+      },
+    ];
+    const priorityIdx = allActions.findIndex(a => a.key === activeTab);
+    const ordered = priorityIdx > 0
+      ? [allActions[priorityIdx], ...allActions.filter((_, i) => i !== priorityIdx)]
+      : allActions;
+    return ordered.map(({ label, formats }) => ({ label, formats }));
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
@@ -466,7 +470,7 @@ export default function GuruWaliPanel({
   useEffect(() => {
     setDownloadActions(getGuruWaliDownloadConfig());
     return () => clearDownloadActions();
-  }, [activeTab]);
+  }, [activeTab, myStudents.length, attendance.length, counselorNotes.length, parentMessages.length, studentAchievements.length]);
 
   return (
     <div className="space-y-6">
@@ -485,6 +489,12 @@ export default function GuruWaliPanel({
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold px-4 py-3 rounded-xl flex items-center gap-2 animate-fade-in shadow-xs">
           <CheckCircle className="w-4.5 h-4.5 text-emerald-600" />
           <span>{successMsg}</span>
+        </div>
+      )}
+      {errorMsg && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold px-4 py-3 rounded-xl flex items-center gap-2 animate-fade-in shadow-xs">
+          <AlertTriangle className="w-4.5 h-4.5 text-rose-600" />
+          <span>{errorMsg}</span>
         </div>
       )}
 

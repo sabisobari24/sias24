@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import ConfirmModal from './ConfirmModal';
 import { 
   Building, 
   Save, 
@@ -139,6 +140,27 @@ export default function WebContentEditor() {
 
   // Gallery images list state
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [errorStatus, setErrorStatus] = useState<string>('');
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const openConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmState({ isOpen: true, title, message, onConfirm });
+  };
+
+  const notifyEditorError = (msg: string) => {
+    setErrorStatus(msg);
+    setTimeout(() => setErrorStatus(''), 4000);
+  };
 
   const prevSectionIdRef = React.useRef(activeSectionId);
 
@@ -355,11 +377,11 @@ export default function WebContentEditor() {
 
   const handleDeleteStaff = (idx: number) => {
     if (!activeSection) return;
-    if (confirm('Apakah Anda yakin ingin menghapus staf ini?')) {
+    openConfirm('Hapus Staf', 'Apakah Anda yakin ingin menghapus staf ini?', () => {
       const staffList = [...(activeSection.staff || [])];
       staffList.splice(idx, 1);
       handleSaveSection({ staff: staffList });
-    }
+    });
   };
 
   // Program CRUD Operations
@@ -399,11 +421,11 @@ export default function WebContentEditor() {
 
   const handleDeleteProgram = (idx: number) => {
     if (!activeSection) return;
-    if (confirm('Hapus program kerja ini?')) {
+    openConfirm('Hapus Program Kerja', 'Hapus program kerja ini?', () => {
       const list = [...(activeSection.programs || [])];
       list.splice(idx, 1);
       handleSaveSection({ programs: list });
-    }
+    });
   };
 
   // Slide CRUD Operations
@@ -413,7 +435,7 @@ export default function WebContentEditor() {
     if (editingSlideIdx === null) return;
 
     if (editingSlideIdx === -1 && list.length >= 15) {
-      alert('Jumlah maksimum slider adalah 15 slide.');
+      notifyEditorError('Jumlah maksimum slider adalah 15 slide.');
       return;
     }
 
@@ -455,11 +477,11 @@ export default function WebContentEditor() {
 
   const handleDeleteSlide = (idx: number) => {
     if (!activeSection) return;
-    if (confirm('Hapus slide dokumentasi ini?')) {
+    openConfirm('Hapus Slide', 'Hapus slide dokumentasi ini?', () => {
       const list = [...(activeSection.slides || [])];
       list.splice(idx, 1);
       handleSaveSection({ slides: list });
-    }
+    });
   };
 
   const handleMoveSlide = (idx: number, direction: 'up' | 'down') => {
@@ -479,7 +501,7 @@ export default function WebContentEditor() {
     if (editingPillarIdx === null) return;
 
     if (!pillarForm.title?.trim()) {
-      alert('Judul point penopang visi wajib diisi.');
+      notifyEditorError('Judul point penopang visi wajib diisi.');
       return;
     }
 
@@ -511,7 +533,7 @@ export default function WebContentEditor() {
   };
 
   const handleDeletePillar = (idx: number) => {
-    if (confirm('Hapus point penopang visi ini?')) {
+    openConfirm('Hapus Pilar Visi', 'Hapus point penopang visi ini?', () => {
       const list = [...(visionPillars || [])];
       list.splice(idx, 1);
       setVisionPillars(list);
@@ -524,7 +546,7 @@ export default function WebContentEditor() {
         whatsapp, 
         email 
       });
-    }
+    });
   };
 
   const handleMovePillar = (idx: number, direction: 'up' | 'down') => {
@@ -576,11 +598,11 @@ export default function WebContentEditor() {
 
   const handleDeleteSubject = (idx: number) => {
     if (!activeSection) return;
-    if (confirm('Hapus mata pelajaran ini dari web?')) {
+    openConfirm('Hapus Mata Pelajaran', 'Hapus mata pelajaran ini dari web?', () => {
       const list = [...(activeSection.subjects || [])];
       list.splice(idx, 1);
       handleSaveSection({ subjects: list });
-    }
+    });
   };
 
   // Extracurricular CRUD Operations (Kesiswaan specific)
@@ -613,11 +635,11 @@ export default function WebContentEditor() {
 
   const handleDeleteExtra = (idx: number) => {
     if (!activeSection) return;
-    if (confirm('Hapus Ekstrakurikuler ini?')) {
+    openConfirm('Hapus Ekstrakurikuler', 'Hapus Ekstrakurikuler ini?', () => {
       const list = [...(activeSection.extracurriculars || [])];
       list.splice(idx, 1);
       handleSaveSection({ extracurriculars: list });
-    }
+    });
   };
 
   // Facility CRUD Operations (Sarpras specific)
@@ -650,11 +672,11 @@ export default function WebContentEditor() {
 
   const handleDeleteFacility = (idx: number) => {
     if (!activeSection) return;
-    if (confirm('Hapus sarana utama ini?')) {
+    openConfirm('Hapus Sarana Utama', 'Hapus sarana utama ini?', () => {
       const list = [...(activeSection.facilities || [])];
       list.splice(idx, 1);
       handleSaveSection({ facilities: list });
-    }
+    });
   };
 
   // Article CRUD Operations
@@ -686,11 +708,11 @@ export default function WebContentEditor() {
 
   const handleDeleteArticle = (idx: number) => {
     if (!activeSection) return;
-    if (confirm('Apakah Anda yakin ingin menghapus artikel ini?')) {
+    openConfirm('Hapus Artikel', 'Apakah Anda yakin ingin menghapus artikel ini?', () => {
       const list = [...(activeSection.articles || [])];
       list.splice(idx, 1);
       handleSaveSection({ articles: list });
-    }
+    });
   };
 
   // Ticker CRUD Operations
@@ -718,11 +740,11 @@ export default function WebContentEditor() {
 
   const handleDeleteTicker = (idx: number) => {
     if (!activeSection) return;
-    if (confirm('Hapus teks berita berjalan ini?')) {
+    openConfirm('Hapus Hot News', 'Hapus teks berita berjalan ini?', () => {
       const list = [...(activeSection.tickers || [])];
       list.splice(idx, 1);
       handleSaveSection({ tickers: list });
-    }
+    });
   };
 
   // Activity CRUD Operations
@@ -751,11 +773,11 @@ export default function WebContentEditor() {
 
   const handleDeleteActivity = (idx: number) => {
     if (!activeSection) return;
-    if (confirm('Hapus kegiatan terdaftar ini?')) {
+    openConfirm('Hapus Kegiatan', 'Hapus kegiatan terdaftar ini?', () => {
       const list = [...(activeSection.activities || [])];
       list.splice(idx, 1);
       handleSaveSection({ activities: list });
-    }
+    });
   };
 
   // Agenda CRUD Operations
@@ -784,11 +806,11 @@ export default function WebContentEditor() {
 
   const handleDeleteAgenda = (idx: number) => {
     if (!activeSection) return;
-    if (confirm('Hapus agenda mendatang ini?')) {
+    openConfirm('Hapus Agenda', 'Hapus agenda mendatang ini?', () => {
       const list = [...(activeSection.agendas || [])];
       list.splice(idx, 1);
       handleSaveSection({ agendas: list });
-    }
+    });
   };
 
   // Popup Gallery save
@@ -830,6 +852,12 @@ export default function WebContentEditor() {
               <div className="bg-emerald-800 text-emerald-100 text-xs px-4 py-2 rounded-2xl flex items-center gap-1.5 border border-emerald-700 font-bold animate-pulse">
                 <Check className="w-4 h-4" />
                 <span>{saveStatus}</span>
+              </div>
+            )}
+            {errorStatus && (
+              <div className="bg-rose-800 text-rose-100 text-xs px-4 py-2 rounded-2xl flex items-center gap-1.5 border border-rose-700 font-bold">
+                <AlertCircle className="w-4 h-4" />
+                <span>{errorStatus}</span>
               </div>
             )}
           </div>
@@ -3703,6 +3731,13 @@ export default function WebContentEditor() {
 
       </div>
 
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

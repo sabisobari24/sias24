@@ -1,13 +1,14 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import type { ExportDateRange } from '../utils/exportDateFilter';
 
 export interface DownloadActionItem {
   label: string;
-  onClick?: () => void;
+  onClick?: (range?: ExportDateRange) => void;
   type?: 'excel' | 'pdf' | 'docx' | 'print';
   formats?: {
-    docx?: () => void;
-    pdf?: () => void;
-    excel?: () => void;
+    docx?: (range?: ExportDateRange) => void;
+    pdf?: (range?: ExportDateRange) => void;
+    excel?: (range?: ExportDateRange) => void;
   };
 }
 

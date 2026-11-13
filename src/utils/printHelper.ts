@@ -1,6 +1,30 @@
 import { CertificateConfig, InventoryLoan } from '../types';
 import { getEffectiveSchoolLogo } from './schoolLogoHelper';
 
+const escapeHtml = (val: unknown): string => {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+const isSafeMediaUrl = (url: unknown, fallback: string = ''): string => {
+  if (!url || typeof url !== 'string') return fallback;
+  const trimmed = url.trim();
+  if (
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('/') ||
+    /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(trimmed)
+  ) {
+    return escapeHtml(trimmed);
+  }
+  return fallback;
+};
+
 /**
  * Utility to print styled HTML safely in an iframe environment without being blocked by pop-up blockers.
  */
@@ -102,12 +126,31 @@ export const printHTML = (htmlContent: string) => {
   const previewBody = document.createElement('div');
   previewBody.className = 'flex-1 bg-slate-100 p-2 sm:p-4 overflow-auto flex justify-center';
 
+  // Inline error/status banner (avoids window.alert blocked inside iframe)
+  const statusBanner = document.createElement('div');
+  statusBanner.className = 'hidden px-4 sm:px-6 py-2 bg-rose-50 border-b border-rose-200 text-[11px] font-semibold text-rose-700 flex items-center justify-between gap-2 shrink-0';
+  const statusText = document.createElement('span');
+  const statusDismiss = document.createElement('button');
+  statusDismiss.type = 'button';
+  statusDismiss.className = 'text-rose-500 hover:text-rose-800 font-bold cursor-pointer';
+  statusDismiss.innerText = '✕';
+  statusDismiss.onclick = () => statusBanner.classList.add('hidden');
+  statusBanner.appendChild(statusText);
+  statusBanner.appendChild(statusDismiss);
+
+  const showInlineStatus = (msg: string) => {
+    statusText.innerText = msg;
+    statusBanner.classList.remove('hidden');
+  };
+
   const previewIframe = document.createElement('iframe');
+  previewIframe.setAttribute('sandbox', 'allow-same-origin allow-modals');
   previewIframe.className = 'bg-white shadow-lg w-full max-w-3xl h-full border border-slate-200 rounded-xl';
   previewBody.appendChild(previewIframe);
 
   modal.appendChild(header);
   modal.appendChild(tipBanner);
+  modal.appendChild(statusBanner);
   modal.appendChild(previewBody);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
@@ -156,7 +199,7 @@ export const printHTML = (htmlContent: string) => {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to download HTML file:', err);
-      alert('Gagal mengunduh berkas. Coba klik kanan halaman untuk mencetak.');
+      showInlineStatus('Gagal mengunduh berkas HTML. Silakan coba cetak langsung.');
     }
   };
 
@@ -164,6 +207,7 @@ export const printHTML = (htmlContent: string) => {
   pdfBtn.onclick = async () => {
     const originalText = pdfBtn.innerHTML;
     try {
+      statusBanner.classList.add('hidden');
       pdfBtn.disabled = true;
       pdfBtn.innerHTML = `
         <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -177,7 +221,7 @@ export const printHTML = (htmlContent: string) => {
 
       const targetDoc = previewIframe.contentDocument;
       if (!targetDoc || !targetDoc.body) {
-        alert('Dokumen belum siap. Silakan coba sesaat lagi.');
+        showInlineStatus('Dokumen belum siap. Silakan coba sesaat lagi.');
         return;
       }
 
@@ -222,7 +266,7 @@ export const printHTML = (htmlContent: string) => {
       pdf.save(fileName);
     } catch (err) {
       console.error('Failed to generate PDF from printHTML:', err);
-      alert('Gagal menghasilkan PDF secara otomatis. Gunakan tombol "Cetak Langsung" lalu pilih "Save as PDF".');
+      showInlineStatus('Gagal menghasilkan PDF secara otomatis. Gunakan tombol "Cetak Langsung" lalu pilih "Save as PDF".');
     } finally {
       pdfBtn.disabled = false;
       pdfBtn.innerHTML = originalText;
@@ -285,10 +329,10 @@ export const printTablePDF = (
   rows: any[][],
   headmasterName = 'Dra. Hj. Endah Purwani, M.M.'
 ) => {
-  const tableHeadersHtml = headers.map(h => `<th style="padding: 10px; border: 1px solid #cbd5e1; background-color: #f1f5f9; text-align: left; font-size: 11px; font-weight: bold; color: #1e293b;">${h}</th>`).join('');
+  const tableHeadersHtml = headers.map(h => `<th style="padding: 10px; border: 1px solid #cbd5e1; background-color: #f1f5f9; text-align: left; font-size: 11px; font-weight: bold; color: #1e293b;">${escapeHtml(h)}</th>`).join('');
   
   const tableRowsHtml = rows.map(r => {
-    const cells = r.map(cell => `<td style="padding: 8px 10px; border: 1px solid #e2e8f0; font-size: 10px; color: #334155; max-width: 250px; word-wrap: break-word;">${cell !== null && cell !== undefined ? String(cell) : '-'}</td>`).join('');
+    const cells = r.map(cell => `<td style="padding: 8px 10px; border: 1px solid #e2e8f0; font-size: 10px; color: #334155; max-width: 250px; word-wrap: break-word;">${cell !== null && cell !== undefined ? escapeHtml(cell) : '-'}</td>`).join('');
     return `<tr style="page-break-inside: avoid;">${cells}</tr>`;
   }).join('');
 
@@ -345,22 +389,27 @@ export const printTablePDF = (
   // Load custom logos and Kop Surat text from Admin Settings (with default fallbacks)
   const logoLeftSaved = localStorage.getItem('siakad_logo_left') || '';
   const logoRightSaved = localStorage.getItem('siakad_logo_right') || '';
-  const srcLogoLeft = logoLeftSaved || `${window.location.origin}/logo-dki.png`;
-  const srcLogoRight = logoRightSaved || `${window.location.origin}/logo.png`;
+  const srcLogoLeft = isSafeMediaUrl(logoLeftSaved, `${window.location.origin}/logo-dki.png`);
+  const srcLogoRight = isSafeMediaUrl(logoRightSaved, `${window.location.origin}/logo.png`);
 
-  const govTitle = localStorage.getItem('siakad_kop_gov_title') || 'PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA';
-  const deptTitle = localStorage.getItem('siakad_kop_dept_title') || 'DINAS PENDIDIKAN PROVINSI DKI JAKARTA';
-  const sudinTitle = localStorage.getItem('siakad_kop_sudin_title') || 'SUDIN PENDIDIKAN WILAYAH II KOTA ADMINISTRASI JAKARTA TIMUR';
-  const schoolTitle = localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA';
-  const addressText = localStorage.getItem('siakad_kop_address_text') || 'Komplek Kodam Jaya Cililitan II Kramat Jati – Jakarta Timur – Kode Pos : 13510';
-  const contactText = localStorage.getItem('siakad_kop_contact_text') || 'Telp. (021) 8091734 – Fax (021) 809173 – Email : smpnegeri50@gmail.com, smpn50.jt2@gmail.com';
-  const headmasterNip = localStorage.getItem('siakad_headmaster_nip') || '196711261991032004';
-  const docNumber = localStorage.getItem('siakad_kop_doc_number') || '';
+  const govTitle = escapeHtml(localStorage.getItem('siakad_kop_gov_title') || 'PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA');
+  const deptTitle = escapeHtml(localStorage.getItem('siakad_kop_dept_title') || 'DINAS PENDIDIKAN PROVINSI DKI JAKARTA');
+  const sudinTitle = escapeHtml(localStorage.getItem('siakad_kop_sudin_title') || 'SUDIN PENDIDIKAN WILAYAH II KOTA ADMINISTRASI JAKARTA TIMUR');
+  const schoolTitle = escapeHtml(localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA');
+  const addressText = escapeHtml(localStorage.getItem('siakad_kop_address_text') || 'Komplek Kodam Jaya Cililitan II Kramat Jati – Jakarta Timur – Kode Pos : 13510');
+  const contactText = escapeHtml(localStorage.getItem('siakad_kop_contact_text') || 'Telp. (021) 8091734 – Fax (021) 809173 – Email : smpnegeri50@gmail.com, smpn50.jt2@gmail.com');
+  const headmasterNip = escapeHtml(localStorage.getItem('siakad_headmaster_nip') || '196711261991032004');
+  const docNumber = escapeHtml(localStorage.getItem('siakad_kop_doc_number') || '');
+  const safeTitle = escapeHtml(title);
+  const safeDownloaderRole = escapeHtml(downloaderRole);
+  const safeDownloaderName = escapeHtml(downloaderName);
+  const safeDownloaderNip = escapeHtml(downloaderNip);
+  const safeHeadmasterName = escapeHtml(headmasterName);
 
   const htmlContent = `
     <html>
       <head>
-        <title>${title}</title>
+        <title>${safeTitle}</title>
         <style>
           @page {
             size: A4;
@@ -497,7 +546,7 @@ export const printTablePDF = (
           </div>
         </div>
         
-        <div class="report-title">${title}</div>
+        <div class="report-title">${safeTitle}</div>
         ${docNumber ? `<div style="text-align: center; font-size: 11px; font-weight: bold; margin-top: -15px; margin-bottom: 20px; color: #1e293b;">Nomor: ${docNumber}</div>` : ''}
         
         <table>
@@ -512,20 +561,20 @@ export const printTablePDF = (
         <div class="signature-section">
           <div class="signature-box">
             <p>Unduh Oleh,</p>
-            <p style="font-weight: bold; margin-top: 2px;">${downloaderRole}</p>
+            <p style="font-weight: bold; margin-top: 2px;">${safeDownloaderRole}</p>
             <div style="height: 60px; display: flex; align-items: center; justify-content: center; font-style: italic; color: #cbd5e1; font-size: 9px;">
               (Tanda Tangan Elektronik)
             </div>
-            <p style="font-weight: bold; text-decoration: underline;">${downloaderName}</p>
-            <p>${downloaderNip}</p>
+            <p style="font-weight: bold; text-decoration: underline;">${safeDownloaderName}</p>
+            <p>${safeDownloaderNip}</p>
           </div>
           <div class="signature-box">
-            <p>Jakarta, ${formatToday}</p>
+            <p>Jakarta, ${escapeHtml(formatToday)}</p>
             <p style="font-weight: bold; margin-top: 2px;">Kepala Sekolah</p>
             <div style="height: 60px; display: flex; align-items: center; justify-content: center; font-style: italic; color: #cbd5e1; font-size: 9px;">
               (Tanda Tangan & Cap Resmi)
             </div>
-            <p style="font-weight: bold; text-decoration: underline;">${headmasterName}</p>
+            <p style="font-weight: bold; text-decoration: underline;">${safeHeadmasterName}</p>
             <p>NIP. ${headmasterNip}</p>
           </div>
         </div>
@@ -609,12 +658,32 @@ export const printCertificate = (
   const titleColor = isAcademic ? '#78350f' : '#064e3b';
   const themeBadge = isAcademic ? 'AKADEMIK (OSN & LOMBA)' : 'NON-AKADEMIK (EKSTRAKURIKULER)';
 
+  const safeSchoolTitle = escapeHtml(schoolTitle);
+  const safeCertNumber = escapeHtml(certNumber);
+  const safeStudentName = escapeHtml(student.name);
+  const safeStudentNisn = escapeHtml(student.nisn || '-');
+  const safeStudentClass = escapeHtml(student.classId || '-');
+  const safeAchTitle = escapeHtml(achievement.title);
+  const safeAchCategory = escapeHtml(achievement.category);
+  const safeAchLevel = escapeHtml(achievement.level);
+  const safeAchRank = escapeHtml(achievement.rank || '');
+  const safeAchDate = escapeHtml(achievement.date || new Date().toLocaleDateString('id-ID'));
+  const safeLeftSigTitle = escapeHtml(leftSigTitle);
+  const safeLeftSigName = escapeHtml(leftSigName);
+  const safeRightSigTitle = escapeHtml(rightSigTitle);
+  const safeRightSigName = escapeHtml(rightSigName);
+  const safeRightSigNip = escapeHtml(rightSigNip);
+  const safeLogoLeft = isSafeMediaUrl(logoLeft, '/logo-dki.png');
+  const safeLogoRight = isSafeMediaUrl(logoRight, '/logo.png');
+  const safeBgImage = isSafeMediaUrl(bgImage, '');
+  const safeEffectiveSchoolLogo = isSafeMediaUrl(effectiveSchoolLogo, '/logo.png');
+
   const htmlContent = `
     <!DOCTYPE html>
     <html lang="id">
       <head>
         <meta charset="UTF-8" />
-        <title>SERTIFIKAT DIGITAL PRESTASI - ${student.name}</title>
+        <title>SERTIFIKAT DIGITAL PRESTASI - ${safeStudentName}</title>
         <style>
           @page {
             size: A4 landscape;
@@ -649,7 +718,7 @@ export const printCertificate = (
             padding: 8mm;
             position: relative;
             background: #ffffff;
-            background-image: url('${bgImage}');
+            ${safeBgImage ? `background-image: url('${safeBgImage}');` : ''}
             background-size: cover;
             background-position: center;
             display: flex;
@@ -889,35 +958,35 @@ export const printCertificate = (
             
             <div class="cert-inner-border">
               <div class="header-logos">
-                <img src="${logoLeft}" alt="Logo Pemprov" class="logo-img" onerror="this.src='/logo-dki.png'; this.onerror=null;" />
+                <img src="${safeLogoLeft}" alt="Logo Pemprov" class="logo-img" onerror="this.src='/logo-dki.png'; this.onerror=null;" />
                 <div style="flex:1;">
-                  <div class="school-header">${schoolTitle}</div>
+                  <div class="school-header">${safeSchoolTitle}</div>
                   <div class="cert-title">SERTIFIKAT DIGITAL PRESTASI</div>
-                  <div class="cert-no">NO: ${certNumber}</div>
+                  <div class="cert-no">NO: ${safeCertNumber}</div>
                 </div>
-                <img src="${logoRight}" alt="Logo Sekolah" class="logo-img" onerror="this.src='${effectiveSchoolLogo}'; this.onerror=null;" />
+                <img src="${safeLogoRight}" alt="Logo Sekolah" class="logo-img" onerror="this.src='${safeEffectiveSchoolLogo}'; this.onerror=null;" />
               </div>
               
               <div class="given-to">Diberikan dengan rasa bangga dan apresiasi setinggi-tingginya kepada:</div>
-              <div class="student-name">${student.name}</div>
+              <div class="student-name">${safeStudentName}</div>
               <div class="student-meta">
-                NISN: ${student.nisn || '-'} &nbsp;&bull;&nbsp; Kelas: ${student.classId || '-'}
+                NISN: ${safeStudentNisn} &nbsp;&bull;&nbsp; Kelas: ${safeStudentClass}
               </div>
               
               <div class="for-text">Atas capaian prestasi gemilang yang telah diraih dalam bidang:</div>
-              <div class="achievement-title">"${achievement.title}"</div>
+              <div class="achievement-title">"${safeAchTitle}"</div>
               
               <div class="pill-group">
-                <span class="pill">Kategori: ${achievement.category}</span>
-                <span class="pill">Tingkat: ${achievement.level}</span>
-                ${achievement.rank ? `<span class="pill">Peringkat: ${achievement.rank}</span>` : ''}
+                <span class="pill">Kategori: ${safeAchCategory}</span>
+                <span class="pill">Tingkat: ${safeAchLevel}</span>
+                ${safeAchRank ? `<span class="pill">Peringkat: ${safeAchRank}</span>` : ''}
               </div>
               
               <div class="cert-footer">
                 <div class="sig-box">
                   <div class="sig-date">&nbsp;</div>
-                  <div class="sig-role">${leftSigTitle}</div>
-                  <div class="sig-name">${leftSigName}</div>
+                  <div class="sig-role">${safeLeftSigTitle}</div>
+                  <div class="sig-name">${safeLeftSigName}</div>
                 </div>
                 
                 <div class="seal-container">
@@ -926,10 +995,10 @@ export const printCertificate = (
                 </div>
                 
                 <div class="sig-box">
-                  <div class="sig-date">Jakarta, ${achievement.date || new Date().toLocaleDateString('id-ID')}</div>
-                  <div class="sig-role">${rightSigTitle}</div>
-                  <div class="sig-name">${rightSigName}</div>
-                  ${rightSigNip ? `<div class="sig-nip">NIP. ${rightSigNip}</div>` : ''}
+                  <div class="sig-date">Jakarta, ${safeAchDate}</div>
+                  <div class="sig-role">${safeRightSigTitle}</div>
+                  <div class="sig-name">${safeRightSigName}</div>
+                  ${safeRightSigNip ? `<div class="sig-nip">NIP. ${safeRightSigNip}</div>` : ''}
                 </div>
               </div>
             </div>
@@ -946,15 +1015,28 @@ export const printBeritaAcaraPeminjaman = (
   loan: InventoryLoan,
   headmasterName: string = 'Dra. Hj. Endah Purwani, M.M.'
 ) => {
-  const formattedLoanDate = loan.loanDate ? new Date(loan.loanDate).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '-';
-  const formattedReturnDate = loan.expectedReturnDate ? new Date(loan.expectedReturnDate).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) : '-';
-  const formattedActualReturnDate = loan.actualReturnDate ? new Date(loan.actualReturnDate).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) : '-';
+  const formattedLoanDate = escapeHtml(loan.loanDate ? new Date(loan.loanDate).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '-');
+  const formattedReturnDate = escapeHtml(loan.expectedReturnDate ? new Date(loan.expectedReturnDate).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) : '-');
+  const formattedActualReturnDate = escapeHtml(loan.actualReturnDate ? new Date(loan.actualReturnDate).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) : '-');
+  const safeBaNumber = escapeHtml(loan.baNumber);
+  const safeRecordedBy = escapeHtml(loan.recordedBy || 'Petugas Sarpras & Inventaris');
+  const safeBorrowerName = escapeHtml(loan.borrowerName);
+  const safeBorrowerRole = escapeHtml(loan.borrowerRole);
+  const safeBorrowerContact = escapeHtml(loan.borrowerContact || '-');
+  const safePurpose = escapeHtml(loan.purpose);
+  const safeItemCode = escapeHtml(loan.itemCode);
+  const safeItemName = escapeHtml(loan.itemName);
+  const safeQuantity = escapeHtml(loan.quantity);
+  const safeConditionBefore = escapeHtml(loan.conditionBefore);
+  const safeNotes = escapeHtml(loan.notes || '');
+  const safeConditionAfter = escapeHtml(loan.conditionAfter || 'Baik');
+  const safeHeadmaster = escapeHtml(headmasterName);
 
   const htmlContent = `
     <!DOCTYPE html>
     <html>
       <head>
-        <title>Berita Acara Peminjaman - ${loan.baNumber}</title>
+        <title>Berita Acara Peminjaman - ${safeBaNumber}</title>
         <meta charset="utf-8" />
         <style>
           @page {
@@ -1136,7 +1218,7 @@ export const printBeritaAcaraPeminjaman = (
         <!-- Judul Berita Acara -->
         <div class="document-title">
           <h1>BERITA ACARA PEMINJAMAN BARANG INVENTARIS</h1>
-          <p>Nomor: ${loan.baNumber}</p>
+          <p>Nomor: ${safeBaNumber}</p>
         </div>
 
         <p class="content-paragraph">
@@ -1149,7 +1231,7 @@ export const printBeritaAcaraPeminjaman = (
             <tr>
               <td class="label">PIHAK PERTAMA (Penyerah)</td>
               <td class="colon">:</td>
-              <td><strong>${loan.recordedBy || 'Petugas Sarpras & Inventaris'}</strong></td>
+              <td><strong>${safeRecordedBy}</strong></td>
             </tr>
             <tr>
               <td class="label">Jabatan / Unit</td>
@@ -1165,22 +1247,22 @@ export const printBeritaAcaraPeminjaman = (
             <tr>
               <td class="label">PIHAK KEDUA (Peminjam)</td>
               <td class="colon">:</td>
-              <td><strong>${loan.borrowerName}</strong></td>
+              <td><strong>${safeBorrowerName}</strong></td>
             </tr>
             <tr>
               <td class="label">Kategori Peminjam</td>
               <td class="colon">:</td>
-              <td>${loan.borrowerRole}</td>
+              <td>${safeBorrowerRole}</td>
             </tr>
             <tr>
               <td class="label">Kontak / Keterangan</td>
               <td class="colon">:</td>
-              <td>${loan.borrowerContact || '-'}</td>
+              <td>${safeBorrowerContact}</td>
             </tr>
             <tr>
               <td class="label">Tujuan / Keperluan</td>
               <td class="colon">:</td>
-              <td>${loan.purpose}</td>
+              <td>${safePurpose}</td>
             </tr>
           </table>
         </div>
@@ -1204,25 +1286,25 @@ export const printBeritaAcaraPeminjaman = (
           <tbody>
             <tr>
               <td style="text-align: center;">1</td>
-              <td style="font-family: monospace; font-weight: bold; text-align: center;">${loan.itemCode}</td>
-              <td><strong>${loan.itemName}</strong></td>
-              <td style="text-align: center; font-weight: bold;">${loan.quantity} Unit</td>
-              <td style="text-align: center;">${loan.conditionBefore}</td>
+              <td style="font-family: monospace; font-weight: bold; text-align: center;">${safeItemCode}</td>
+              <td><strong>${safeItemName}</strong></td>
+              <td style="text-align: center; font-weight: bold;">${safeQuantity} Unit</td>
+              <td style="text-align: center;">${safeConditionBefore}</td>
               <td style="text-align: center; font-weight: bold;">${formattedReturnDate}</td>
             </tr>
           </tbody>
         </table>
 
-        ${loan.notes ? `
+        ${safeNotes ? `
           <p style="margin-top: -5px; margin-bottom: 10px; font-size: 11.5px;">
-            <strong>Catatan Kelengkapan:</strong> ${loan.notes}
+            <strong>Catatan Kelengkapan:</strong> ${safeNotes}
           </p>
         ` : ''}
 
         ${loan.status === 'Dikembalikan' ? `
           <div style="margin: 10px 0; padding: 8px 12px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px;">
             <strong style="color: #166534;">STATUS PENGEMBALIAN: DIKEMBALIKAN BERHASIL</strong><br/>
-            <span style="font-size: 11.5px;">Telah dikembalikan pada tanggal <strong>${formattedActualReturnDate}</strong> dengan kondisi akhir: <strong>${loan.conditionAfter || 'Baik'}</strong>.</span>
+            <span style="font-size: 11.5px;">Telah dikembalikan pada tanggal <strong>${formattedActualReturnDate}</strong> dengan kondisi akhir: <strong>${safeConditionAfter}</strong>.</span>
           </div>
         ` : ''}
 
@@ -1244,14 +1326,14 @@ export const printBeritaAcaraPeminjaman = (
           <div class="sig-box">
             <div class="sig-role">Pihak Kedua (Peminjam),</div>
             <div class="sig-space"></div>
-            <div class="sig-name">${loan.borrowerName}</div>
-            <div style="font-size: 11px; color: #475569;">(${loan.borrowerRole})</div>
+            <div class="sig-name">${safeBorrowerName}</div>
+            <div style="font-size: 11px; color: #475569;">(${safeBorrowerRole})</div>
           </div>
 
           <div class="sig-box">
             <div class="sig-role">Pihak Pertama (Petugas),</div>
             <div class="sig-space"></div>
-            <div class="sig-name">${loan.recordedBy || 'Pengelola Sarpras'}</div>
+            <div class="sig-name">${safeRecordedBy}</div>
             <div style="font-size: 11px; color: #475569;">NIP. 198506122014031002</div>
           </div>
         </div>
@@ -1260,7 +1342,7 @@ export const printBeritaAcaraPeminjaman = (
           <div class="sig-box">
             <div class="sig-role">Mengetahui,<br/>Kepala SMP Negeri 50 Jakarta</div>
             <div class="sig-space"></div>
-            <div class="sig-name">${headmasterName}</div>
+            <div class="sig-name">${safeHeadmaster}</div>
             <div style="font-size: 11px; color: #475569;">NIP. 196711261991032004</div>
           </div>
         </div>

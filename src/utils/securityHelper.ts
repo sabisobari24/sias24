@@ -20,11 +20,17 @@ export function sanitizeSecurityInput(input: string): string {
   return input
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
     .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<svg[\s\S]*?>[\s\S]*?<\/svg>/gi, '')
+    .replace(/<object[\s\S]*?>[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?>[\s\S]*?<\/embed>/gi, '')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+    .replace(/<form[\s\S]*?>[\s\S]*?<\/form>/gi, '')
+    .replace(/<\/?(?:link|meta|svg|object|embed|style|form|iframe|script)[^>]*>/gi, '')
     .replace(/<[^>]*>?/gm, '') // Strip remaining HTML tags
-    .replace(/onerror\s*=/gi, '')
-    .replace(/onload\s*=/gi, '')
-    .replace(/onclick\s*=/gi, '')
+    .replace(/\bon[a-z]+\s*=/gi, '')
     .replace(/javascript\s*:/gi, '')
+    .replace(/vbscript\s*:/gi, '')
+    .replace(/data\s*:\s*text\/html/gi, '')
     .replace(/dhimasganteng[^\s"'>]*/gi, '')
     .replace(/deface\.js/gi, '')
     .replace(/[;&|\`$><]/g, '') // Strip shell execution characters used in Termux scripts
@@ -61,14 +67,14 @@ export function sanitizeSecurityObject<T>(data: T): T {
 export function detectSecurityThreat(input: string): { isThreat: boolean; reason?: string } {
   if (!input || typeof input !== 'string') return { isThreat: false };
 
-  if (/<script[\s\S]*?>/i.test(input) || /<\/script>/i.test(input)) {
-    return { isThreat: true, reason: 'Script tag injection detected' };
+  if (/<(script|iframe|svg|object|embed|style|link|meta|form)\b[\s\S]*?>/i.test(input) || /<\/(script|iframe|svg|object|embed|style|form)>/i.test(input)) {
+    return { isThreat: true, reason: 'Dangerous HTML tag injection detected' };
   }
-  if (/onerror\s*=/i.test(input) || /onload\s*=/i.test(input) || /onclick\s*=/i.test(input)) {
+  if (/\bon[a-z]+\s*=/i.test(input)) {
     return { isThreat: true, reason: 'Inline JavaScript event handler injection detected' };
   }
-  if (/javascript\s*:/i.test(input)) {
-    return { isThreat: true, reason: 'JavaScript URI scheme injection detected' };
+  if (/(javascript|vbscript)\s*:|data\s*:\s*text\/html/i.test(input)) {
+    return { isThreat: true, reason: 'Dangerous URI scheme injection detected' };
   }
   if (/dhimasganteng/i.test(input) || /deface\.js/i.test(input) || /hacked by/i.test(input)) {
     return { isThreat: true, reason: 'Deface signature payload detected' };

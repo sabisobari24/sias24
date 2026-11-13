@@ -7,6 +7,12 @@ import { downloadDocx } from '../utils/docxExport';
 import { syncCollection } from '../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../data/initialWebContent';
 import { useDownload } from '../context/DownloadContext';
+import {
+  ExportDateRange,
+  filterItemsByDateRange,
+  getRangeFileSuffix,
+  getRangeTitleSuffix
+} from '../utils/exportDateFilter';
 
 interface WaliKelasPanelProps {
   teacher: Teacher;
@@ -123,6 +129,7 @@ export default function WaliKelasPanel({
 
   // Status indicator
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   // Get student data
   const selectedStudent = students.find((s) => s.id === selectedStudentId);
@@ -140,7 +147,8 @@ export default function WaliKelasPanel({
   const handleSaveNote = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudentId || !noteContent.trim()) {
-      alert('Mohon pilih siswa dan tulis catatan.');
+      setErrorMsg('Mohon pilih siswa dan tulis catatan terlebih dahulu.');
+      setTimeout(() => setErrorMsg(''), 4000);
       return;
     }
 
@@ -170,8 +178,8 @@ export default function WaliKelasPanel({
   };
 
   // Export functions for Jurnal Pembinaan Wali Kelas
-  const handleDownloadExcelJurnal = () => {
-    const classNotes = homeroomNotes.filter(n => classStudentIds.includes(n.studentId));
+  const handleDownloadExcelJurnal = (range?: ExportDateRange) => {
+    const classNotes = filterItemsByDateRange(homeroomNotes.filter(n => classStudentIds.includes(n.studentId)), n => n.date, range);
     const headers = ['No', 'Tanggal', 'NISN', 'Nama Siswa', 'Kelas', 'Perkembangan Perilaku & Karakter', 'Catatan Akademik & Tindak Lanjut', 'Status TTD Orang Tua', 'Pencatat'];
     const rows = classNotes.map((n, idx) => {
       const s = classStudents.find(std => std.id === n.studentId);
@@ -188,11 +196,11 @@ export default function WaliKelasPanel({
       ];
     });
 
-    downloadExcel(`Laporan_Pembinaan_WaliKelas_${managedClass?.name || 'Binaan'}.xlsx`, headers, rows, 'Pembinaan Wali Kelas');
+    downloadExcel(`Laporan_Pembinaan_WaliKelas_${managedClass?.name || 'Binaan'}${getRangeFileSuffix(range)}.xlsx`, headers, rows, 'Pembinaan Wali Kelas');
   };
 
-  const handleDownloadDocxJurnal = () => {
-    const classNotes = homeroomNotes.filter(n => classStudentIds.includes(n.studentId));
+  const handleDownloadDocxJurnal = (range?: ExportDateRange) => {
+    const classNotes = filterItemsByDateRange(homeroomNotes.filter(n => classStudentIds.includes(n.studentId)), n => n.date, range);
     const headers = ['No', 'Tanggal', 'NISN', 'Nama Siswa', 'Perkembangan Perilaku & Karakter', 'Catatan Akademik & Tindak Lanjut', 'Status TTD', 'Pencatat'];
     const rows = classNotes.map((n, idx) => {
       const s = classStudents.find(std => std.id === n.studentId);
@@ -208,15 +216,15 @@ export default function WaliKelasPanel({
       ];
     });
     downloadDocx(
-      `Laporan_Pembinaan_WaliKelas_${managedClass?.name || 'Binaan'}.docx`,
-      `LAPORAN JURNAL PEMBINAAN WALI KELAS ${managedClass?.name ? managedClass.name.toUpperCase() : ''}`,
+      `Laporan_Pembinaan_WaliKelas_${managedClass?.name || 'Binaan'}${getRangeFileSuffix(range)}.docx`,
+      `LAPORAN JURNAL PEMBINAAN WALI KELAS ${managedClass?.name ? managedClass.name.toUpperCase() : ''}${getRangeTitleSuffix(range)}`,
       headers,
       rows
     );
   };
 
-  const handlePrintPDFJurnal = () => {
-    const classNotes = homeroomNotes.filter(n => classStudentIds.includes(n.studentId));
+  const handlePrintPDFJurnal = (range?: ExportDateRange) => {
+    const classNotes = filterItemsByDateRange(homeroomNotes.filter(n => classStudentIds.includes(n.studentId)), n => n.date, range);
     const headers = ['No', 'Tanggal', 'NISN', 'Nama Siswa', 'Perkembangan Perilaku & Karakter', 'Catatan Akademik & Tindak Lanjut', 'Status TTD', 'Pencatat'];
     const rows = classNotes.map((n, idx) => {
       const s = classStudents.find(std => std.id === n.studentId);
@@ -233,7 +241,7 @@ export default function WaliKelasPanel({
     });
 
     printTablePDF(
-      `LAPORAN JURNAL PEMBINAAN WALI KELAS ${managedClass?.name ? managedClass.name.toUpperCase() : ''}`,
+      `LAPORAN JURNAL PEMBINAAN WALI KELAS ${managedClass?.name ? managedClass.name.toUpperCase() : ''}${getRangeTitleSuffix(range)}`,
       headers,
       rows
     );
@@ -279,8 +287,8 @@ export default function WaliKelasPanel({
     return classGradeList;
   };
 
-  const handleDownloadExcelEkskul = () => {
-    const gradeList = getExtracurricularGradesForClass();
+  const handleDownloadExcelEkskul = (range?: ExportDateRange) => {
+    const gradeList = filterItemsByDateRange(getExtracurricularGradesForClass(), g => g.updatedAt, range);
     const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Ekstrakurikuler', 'Nilai Angka', 'Predikat', 'Sikap', 'Catatan Pelatih', 'Tanggal Input'];
     const rows = gradeList.map((g, idx) => [
       idx + 1,
@@ -297,11 +305,11 @@ export default function WaliKelasPanel({
 
     const selectedEkskulObj = extracurriculars.find(e => e.id === selectedEkskulFilter);
     const titleName = selectedEkskulObj ? selectedEkskulObj.name.replace(/\s+/g, '_') : 'Semua';
-    downloadExcel(`Rekap_Nilai_Ekskul_${titleName}_Kelas_${managedClass?.name || 'Wali'}.xlsx`, headers, rows, 'Nilai Ekstrakurikuler');
+    downloadExcel(`Rekap_Nilai_Ekskul_${titleName}_Kelas_${managedClass?.name || 'Wali'}${getRangeFileSuffix(range)}.xlsx`, headers, rows, 'Nilai Ekstrakurikuler');
   };
 
-  const handleDownloadDocxEkskul = () => {
-    const gradeList = getExtracurricularGradesForClass();
+  const handleDownloadDocxEkskul = (range?: ExportDateRange) => {
+    const gradeList = filterItemsByDateRange(getExtracurricularGradesForClass(), g => g.updatedAt, range);
     const headers = ['No', 'NISN', 'Nama Siswa', 'Ekstrakurikuler', 'Nilai', 'Predikat', 'Sikap', 'Catatan Pelatih'];
     const rows = gradeList.map((g, idx) => [
       idx + 1,
@@ -316,15 +324,15 @@ export default function WaliKelasPanel({
     const selectedEkskulObj = extracurriculars.find(e => e.id === selectedEkskulFilter);
     const titleName = selectedEkskulObj ? selectedEkskulObj.name : 'Semua Ekskul';
     downloadDocx(
-      `Rekap_Nilai_Ekskul_${titleName.replace(/\s+/g, '_')}_Kelas_${managedClass?.name || 'Wali'}.docx`,
-      `REKAPITULASI NILAI ${titleName.toUpperCase()} SISWA KELAS ${managedClass?.name ? managedClass.name.toUpperCase() : ''}`,
+      `Rekap_Nilai_Ekskul_${titleName.replace(/\s+/g, '_')}_Kelas_${managedClass?.name || 'Wali'}${getRangeFileSuffix(range)}.docx`,
+      `REKAPITULASI NILAI ${titleName.toUpperCase()} SISWA KELAS ${managedClass?.name ? managedClass.name.toUpperCase() : ''}${getRangeTitleSuffix(range)}`,
       headers,
       rows
     );
   };
 
-  const handlePrintPDFEkskul = () => {
-    const gradeList = getExtracurricularGradesForClass();
+  const handlePrintPDFEkskul = (range?: ExportDateRange) => {
+    const gradeList = filterItemsByDateRange(getExtracurricularGradesForClass(), g => g.updatedAt, range);
     const headers = ['No', 'NISN', 'Nama Siswa', 'Ekstrakurikuler', 'Nilai', 'Predikat', 'Sikap', 'Catatan Pelatih'];
     const rows = gradeList.map((g, idx) => [
       idx + 1,
@@ -341,7 +349,7 @@ export default function WaliKelasPanel({
     const titleName = selectedEkskulObj ? `EKSTRAKURIKULER ${selectedEkskulObj.name.toUpperCase()}` : 'SELURUH EKSTRAKURIKULER';
 
     printTablePDF(
-      `REKAPITULASI NILAI ${titleName} SISWA KELAS ${managedClass?.name ? managedClass.name.toUpperCase() : ''}`,
+      `REKAPITULASI NILAI ${titleName} SISWA KELAS ${managedClass?.name ? managedClass.name.toUpperCase() : ''}${getRangeTitleSuffix(range)}`,
       headers,
       rows
     );
@@ -360,9 +368,10 @@ export default function WaliKelasPanel({
     );
   });
 
-  const handleDownloadExcelPrestasi = () => {
+  const handleDownloadExcelPrestasi = (range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(classAchievements, a => a.date, range);
     const headers = ['No', 'NISN', 'Nama Siswa', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
-    const rows = classAchievements.map((a, i) => [
+    const rows = filtered.map((a, i) => [
       i + 1,
       students.find(s => s.id === a.studentId)?.nisn || '-',
       a.studentName,
@@ -373,12 +382,13 @@ export default function WaliKelasPanel({
       a.date,
       a.recordedBy
     ]);
-    downloadExcel(`Prestasi_Kelas_${managedClass?.name || 'Wali'}.xlsx`, headers, rows, 'Prestasi Kelas');
+    downloadExcel(`Prestasi_Kelas_${managedClass?.name || 'Wali'}${getRangeFileSuffix(range)}.xlsx`, headers, rows, 'Prestasi Kelas');
   };
 
-  const handleDownloadDocxPrestasi = () => {
+  const handleDownloadDocxPrestasi = (range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(classAchievements, a => a.date, range);
     const headers = ['No', 'NISN', 'Nama Siswa', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
-    const rows = classAchievements.map((a, i) => [
+    const rows = filtered.map((a, i) => [
       i + 1,
       students.find(s => s.id === a.studentId)?.nisn || '-',
       a.studentName,
@@ -389,12 +399,13 @@ export default function WaliKelasPanel({
       a.date,
       a.recordedBy
     ]);
-    downloadDocx(`Prestasi_Kelas_${managedClass?.name || 'Wali'}.docx`, `Daftar Raihan Prestasi Siswa Kelas ${managedClass?.name || ''}`, headers, rows);
+    downloadDocx(`Prestasi_Kelas_${managedClass?.name || 'Wali'}${getRangeFileSuffix(range)}.docx`, `Daftar Raihan Prestasi Siswa Kelas ${managedClass?.name || ''}${getRangeTitleSuffix(range)}`, headers, rows);
   };
 
-  const handlePrintPDFPrestasi = () => {
+  const handlePrintPDFPrestasi = (range?: ExportDateRange) => {
+    const filtered = filterItemsByDateRange(classAchievements, a => a.date, range);
     const headers = ['No', 'NISN', 'Nama Siswa', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
-    const rows = classAchievements.map((a, i) => [
+    const rows = filtered.map((a, i) => [
       i + 1,
       students.find(s => s.id === a.studentId)?.nisn || '-',
       a.studentName,
@@ -405,13 +416,14 @@ export default function WaliKelasPanel({
       a.date,
       a.recordedBy
     ]);
-    printTablePDF(`Daftar Raihan Prestasi Siswa Kelas ${managedClass?.name || ''}`, headers, rows);
+    printTablePDF(`Daftar Raihan Prestasi Siswa Kelas ${managedClass?.name || ''}${getRangeTitleSuffix(range)}`, headers, rows);
   };
 
-  const handleDownloadExcelPresensi = () => {
+  const handleDownloadExcelPresensi = (range?: ExportDateRange) => {
+    const scopedAttendance = filterItemsByDateRange(attendance, a => a.date, range);
     const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Hadir', 'Sakit', 'Izin', 'Alpa', '% Kehadiran'];
     const rows = classStudents.map((s, idx) => {
-      const sAtt = attendance.filter(a => a.studentId === s.id);
+      const sAtt = scopedAttendance.filter(a => a.studentId === s.id);
       const h = sAtt.filter(a => a.status === 'Hadir').length;
       const sk = sAtt.filter(a => a.status === 'Sakit').length;
       const iz = sAtt.filter(a => a.status === 'Izin').length;
@@ -420,13 +432,14 @@ export default function WaliKelasPanel({
       const pct = tot > 0 ? `${Math.round((h / tot) * 100)}%` : '100%';
       return [idx + 1, s.nisn, s.name, managedClass?.name || '-', h, sk, iz, a, pct];
     });
-    downloadExcel(`Presensi_Kelas_${managedClass?.name || 'Wali'}.xlsx`, headers, rows, 'Presensi Kelas');
+    downloadExcel(`Presensi_Kelas_${managedClass?.name || 'Wali'}${getRangeFileSuffix(range)}.xlsx`, headers, rows, 'Presensi Kelas');
   };
 
-  const handleDownloadDocxPresensi = () => {
+  const handleDownloadDocxPresensi = (range?: ExportDateRange) => {
+    const scopedAttendance = filterItemsByDateRange(attendance, a => a.date, range);
     const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Hadir', 'Sakit', 'Izin', 'Alpa', '% Kehadiran'];
     const rows = classStudents.map((s, idx) => {
-      const sAtt = attendance.filter(a => a.studentId === s.id);
+      const sAtt = scopedAttendance.filter(a => a.studentId === s.id);
       const h = sAtt.filter(a => a.status === 'Hadir').length;
       const sk = sAtt.filter(a => a.status === 'Sakit').length;
       const iz = sAtt.filter(a => a.status === 'Izin').length;
@@ -435,13 +448,14 @@ export default function WaliKelasPanel({
       const pct = tot > 0 ? `${Math.round((h / tot) * 100)}%` : '100%';
       return [idx + 1, s.nisn, s.name, managedClass?.name || '-', h, sk, iz, a, pct];
     });
-    downloadDocx(`Presensi_Kelas_${managedClass?.name || 'Wali'}.docx`, `REKAPITULASI PRESENSI KELAS ${managedClass?.name || ''}`, headers, rows);
+    downloadDocx(`Presensi_Kelas_${managedClass?.name || 'Wali'}${getRangeFileSuffix(range)}.docx`, `REKAPITULASI PRESENSI KELAS ${managedClass?.name || ''}${getRangeTitleSuffix(range)}`, headers, rows);
   };
 
-  const handlePrintPDFPresensi = () => {
+  const handlePrintPDFPresensi = (range?: ExportDateRange) => {
+    const scopedAttendance = filterItemsByDateRange(attendance, a => a.date, range);
     const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Hadir', 'Sakit', 'Izin', 'Alpa', '% Kehadiran'];
     const rows = classStudents.map((s, idx) => {
-      const sAtt = attendance.filter(a => a.studentId === s.id);
+      const sAtt = scopedAttendance.filter(a => a.studentId === s.id);
       const h = sAtt.filter(a => a.status === 'Hadir').length;
       const sk = sAtt.filter(a => a.status === 'Sakit').length;
       const iz = sAtt.filter(a => a.status === 'Izin').length;
@@ -450,57 +464,53 @@ export default function WaliKelasPanel({
       const pct = tot > 0 ? `${Math.round((h / tot) * 100)}%` : '100%';
       return [idx + 1, s.nisn, s.name, managedClass?.name || '-', h, sk, iz, a, pct];
     });
-    printTablePDF(`REKAPITULASI PRESENSI KELAS ${managedClass?.name || ''}`, headers, rows);
+    printTablePDF(`REKAPITULASI PRESENSI KELAS ${managedClass?.name || ''}${getRangeTitleSuffix(range)}`, headers, rows);
   };
 
   const getWaliKelasDownloadConfig = () => {
-    switch (activeTab) {
-      case 'catatan':
-        return [
-          {
-            label: 'Jurnal Evaluasi Wali Kelas',
-            formats: {
-              docx: handleDownloadDocxJurnal,
-              pdf: handlePrintPDFJurnal,
-              excel: handleDownloadExcelJurnal,
-            },
-          },
-        ];
-      case 'ekskul':
-        return [
-          {
-            label: 'Rekap Nilai Ekskul Kelas',
-            formats: {
-              docx: handleDownloadDocxEkskul,
-              pdf: handlePrintPDFEkskul,
-              excel: handleDownloadExcelEkskul,
-            },
-          },
-        ];
-      case 'prestasi':
-        return [
-          {
-            label: 'Prestasi Siswa Kelas',
-            formats: {
-              docx: handleDownloadDocxPrestasi,
-              pdf: handlePrintPDFPrestasi,
-              excel: handleDownloadExcelPrestasi,
-            },
-          },
-        ];
-      case 'beranda':
-      default:
-        return [
-          {
-            label: 'Rekap Presensi Kelas',
-            formats: {
-              docx: handleDownloadDocxPresensi,
-              pdf: handlePrintPDFPresensi,
-              excel: handleDownloadExcelPresensi,
-            },
-          },
-        ];
-    }
+    const allActions = [
+      {
+        key: 'beranda',
+        label: 'Rekap Presensi Kelas',
+        formats: {
+          docx: (range?: ExportDateRange) => handleDownloadDocxPresensi(range),
+          pdf: (range?: ExportDateRange) => handlePrintPDFPresensi(range),
+          excel: (range?: ExportDateRange) => handleDownloadExcelPresensi(range),
+        },
+      },
+      {
+        key: 'catatan',
+        label: 'Jurnal Evaluasi Wali Kelas',
+        formats: {
+          docx: (range?: ExportDateRange) => handleDownloadDocxJurnal(range),
+          pdf: (range?: ExportDateRange) => handlePrintPDFJurnal(range),
+          excel: (range?: ExportDateRange) => handleDownloadExcelJurnal(range),
+        },
+      },
+      {
+        key: 'ekskul',
+        label: 'Rekap Nilai Ekskul Kelas',
+        formats: {
+          docx: (range?: ExportDateRange) => handleDownloadDocxEkskul(range),
+          pdf: (range?: ExportDateRange) => handlePrintPDFEkskul(range),
+          excel: (range?: ExportDateRange) => handleDownloadExcelEkskul(range),
+        },
+      },
+      {
+        key: 'prestasi',
+        label: 'Prestasi Siswa Kelas',
+        formats: {
+          docx: (range?: ExportDateRange) => handleDownloadDocxPrestasi(range),
+          pdf: (range?: ExportDateRange) => handlePrintPDFPrestasi(range),
+          excel: (range?: ExportDateRange) => handleDownloadExcelPrestasi(range),
+        },
+      },
+    ];
+    const priorityIdx = allActions.findIndex(a => a.key === activeTab);
+    const ordered = priorityIdx > 0
+      ? [allActions[priorityIdx], ...allActions.filter((_, i) => i !== priorityIdx)]
+      : allActions;
+    return ordered.map(({ label, formats }) => ({ label, formats }));
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
@@ -508,7 +518,7 @@ export default function WaliKelasPanel({
   useEffect(() => {
     setDownloadActions(getWaliKelasDownloadConfig());
     return () => clearDownloadActions();
-  }, [activeTab, managedClass?.id, classStudents.length]);
+  }, [activeTab, managedClass?.id, classStudents.length, attendance.length, homeroomNotes.length, classAchievements.length]);
 
   return (
     <div className="space-y-6">
@@ -531,6 +541,12 @@ export default function WaliKelasPanel({
         <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 p-4 rounded-xl flex items-center gap-2 font-medium shadow-sm">
           <Check className="w-5 h-5 text-emerald-600" />
           <span>{successMsg}</span>
+        </div>
+      )}
+      {errorMsg && (
+        <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl flex items-center gap-2 font-medium shadow-sm">
+          <AlertTriangle className="w-5 h-5 text-rose-600" />
+          <span>{errorMsg}</span>
         </div>
       )}
 
@@ -818,16 +834,18 @@ export default function WaliKelasPanel({
         {activeTab === 'ekskul' && (
           <div className="space-y-6">
             {/* Header & Download Bar */}
-            <div className="bg-gradient-to-r from-amber-600 via-amber-700 to-amber-900 rounded-2xl p-6 text-white shadow-md">
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+                <Award className="w-5 h-5 text-amber-600" />
+              </div>
               <div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold mb-2 border border-white/20">
-                  <Award className="w-4 h-4 text-amber-200" />
-                  <span>Nilai Ekstrakurikuler Dari Pelatih / Pembina</span>
-                </div>
-                <h2 className="text-xl font-bold">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
+                  Nilai Ekstrakurikuler Dari Pelatih / Pembina
+                </p>
+                <h2 className="text-lg font-extrabold text-slate-900">
                   Rekapitulasi Nilai Ekstrakurikuler Kelas {managedClass?.name || ''}
                 </h2>
-                <p className="text-amber-100 text-xs mt-1">
+                <p className="text-slate-500 text-xs mt-0.5">
                   Daftar nilai, predikat, dan evaluasi sikap yang telah di-input oleh masing-masing Pelatih / Pembina Ekskul.
                 </p>
               </div>
@@ -991,14 +1009,16 @@ export default function WaliKelasPanel({
         {/* PRESTASI SISWA KELAS TAB */}
         {activeTab === 'prestasi' && (
           <div className="space-y-6">
-            <div className="bg-gradient-to-r from-blue-700 to-indigo-800 rounded-2xl p-6 text-white shadow-md">
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center shrink-0">
+                <Award className="w-5 h-5 text-indigo-600" />
+              </div>
               <div>
-                <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Kelas {managedClass?.name || '-'}</p>
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <Award className="w-6 h-6 text-amber-300" />
-                  <span>Raihan Prestasi Siswa Kelas</span>
+                <p className="text-indigo-600 text-[11px] font-bold uppercase tracking-wider">Kelas {managedClass?.name || '-'}</p>
+                <h2 className="text-lg font-extrabold text-slate-900">
+                  Raihan Prestasi Siswa Kelas
                 </h2>
-                <p className="text-blue-100 text-xs">Daftar rekapitulasi prestasi Akademik &amp; Non-Akademik siswa binaan Anda.</p>
+                <p className="text-slate-500 text-xs mt-0.5">Daftar rekapitulasi prestasi Akademik &amp; Non-Akademik siswa binaan Anda.</p>
               </div>
             </div>
 

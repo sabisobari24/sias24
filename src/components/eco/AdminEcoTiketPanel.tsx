@@ -35,6 +35,7 @@ import {
   EcoConfig 
 } from '../../types';
 import { EcoCertificateModal } from './EcoCertificateModal';
+import ConfirmModal from '../ConfirmModal';
 import StudentIdCardActivityScannerModal from '../common/StudentIdCardActivityScannerModal';
 import { downloadExcel } from '../../utils/excelExport';
 import { printTablePDF } from '../../utils/printHelper';
@@ -62,6 +63,7 @@ interface AdminEcoTiketPanelProps {
   onUpdateReward?: (reward: EcoReward) => Promise<void> | void;
   onDeleteReward?: (id: string) => Promise<void> | void;
   onUpdateRedemptionStatus?: (id: string, status: 'Selesai' | 'Menunggu' | 'Ditolak', notes?: string) => Promise<void> | void;
+  onDeleteRedemption?: (id: string) => Promise<void> | void;
   onUpdateConfig?: (config: EcoConfig) => Promise<void> | void;
 }
 
@@ -86,11 +88,37 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
   onUpdateReward,
   onDeleteReward,
   onUpdateRedemptionStatus,
+  onDeleteRedemption,
   onUpdateConfig
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'verifikasi' | 'redemptions' | 'leaderboard' | 'katalog' | 'hadiah' | 'pengaturan'>('verifikasi');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    isDanger: boolean;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Ya, Hapus',
+    isDanger: true,
+    onConfirm: () => {}
+  });
+
+  const openConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    confirmText = 'Ya, Hapus',
+    isDanger = true
+  ) => {
+    setConfirmState({ isOpen: true, title, message, confirmText, isDanger, onConfirm });
+  };
 
   // Filter & Search states
   const [depositSearch, setDepositSearch] = useState('');
@@ -289,28 +317,42 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
     }
   };
 
-  const handleRejectDeposit = async (dep: EcoWasteDeposit) => {
-    if (!confirm(`Tolak setoran sampah oleh ${dep.studentName}?`)) return;
-    try {
-      if (onUpdateDepositStatus) {
-        await onUpdateDepositStatus(dep.id, 'Ditolak', 'Admin');
-        notifySuccess(`Setoran sampah oleh ${dep.studentName} ditolak.`);
-      }
-    } catch (err: any) {
-      notifyError(err.message || 'Gagal menolak setoran.');
-    }
+  const handleRejectDeposit = (dep: EcoWasteDeposit) => {
+    openConfirm(
+      'Tolak Setoran Sampah',
+      `Tolak setoran sampah oleh ${dep.studentName} (${dep.quantity} ${dep.unit} ${dep.categoryName})?`,
+      async () => {
+        try {
+          if (onUpdateDepositStatus) {
+            await onUpdateDepositStatus(dep.id, 'Ditolak', 'Admin');
+            notifySuccess(`Setoran sampah oleh ${dep.studentName} ditolak.`);
+          }
+        } catch (err: any) {
+          notifyError(err.message || 'Gagal menolak setoran.');
+        }
+      },
+      'Ya, Tolak Setoran',
+      true
+    );
   };
 
-  const handleDeleteDepositItem = async (dep: EcoWasteDeposit) => {
-    if (!confirm(`Hapus catatan setoran #${dep.id} permanen?`)) return;
-    try {
-      if (onDeleteDeposit) {
-        await onDeleteDeposit(dep.id);
-        notifySuccess('Catatan setoran berhasil dihapus.');
-      }
-    } catch (err: any) {
-      notifyError(err.message || 'Gagal menghapus setoran.');
-    }
+  const handleDeleteDepositItem = (dep: EcoWasteDeposit) => {
+    openConfirm(
+      'Hapus Catatan Setoran',
+      `Hapus catatan setoran sampah oleh ${dep.studentName} (${dep.categoryName}) secara permanen?`,
+      async () => {
+        try {
+          if (onDeleteDeposit) {
+            await onDeleteDeposit(dep.id);
+            notifySuccess('Catatan setoran berhasil dihapus.');
+          }
+        } catch (err: any) {
+          notifyError(err.message || 'Gagal menghapus setoran.');
+        }
+      },
+      'Ya, Hapus Permanen',
+      true
+    );
   };
 
   const handleCreateDirectDeposit = async (e: React.FormEvent) => {
@@ -959,42 +1001,77 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
                         </span>
                       </td>
                       <td className="py-3 px-3 text-right whitespace-nowrap">
-                        {r.status === 'Menunggu' && (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (onUpdateRedemptionStatus) {
-                                  await onUpdateRedemptionStatus(r.id, 'Selesai', 'Diserahkan oleh Admin');
-                                  notifySuccess(`Hadiah/Klaim untuk ${r.studentName} telah ditandai Selesai & Diserahkan!`);
-                                }
-                              }}
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs active:scale-95"
-                            >
-                              Tandai Selesai
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (confirm(`Tolak penukaran ini? Poin akan dikembalikan.`)) {
+                        <div className="flex items-center justify-end gap-1.5">
+                          {r.status === 'Menunggu' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={async () => {
                                   if (onUpdateRedemptionStatus) {
-                                    await onUpdateRedemptionStatus(r.id, 'Ditolak', 'Dibatalkan admin');
-                                    notifySuccess('Penukaran ditolak.');
+                                    await onUpdateRedemptionStatus(r.id, 'Selesai', 'Diserahkan oleh Admin');
+                                    notifySuccess(`Hadiah/Klaim untuk ${r.studentName} telah ditandai Selesai & Diserahkan!`);
                                   }
-                                }
+                                }}
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs active:scale-95"
+                              >
+                                Tandai Selesai
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  openConfirm(
+                                    'Tolak Penukaran Poin',
+                                    `Tolak klaim penukaran oleh ${r.studentName}? Poin akan dikembalikan ke saldo siswa.`,
+                                    async () => {
+                                      try {
+                                        if (onUpdateRedemptionStatus) {
+                                          await onUpdateRedemptionStatus(r.id, 'Ditolak', 'Dibatalkan admin');
+                                          notifySuccess('Penukaran ditolak.');
+                                        }
+                                      } catch (err: any) {
+                                        notifyError(err.message || 'Gagal menolak penukaran.');
+                                      }
+                                    },
+                                    'Ya, Tolak',
+                                    true
+                                  );
+                                }}
+                                className="px-2 py-1 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 cursor-pointer"
+                              >
+                                Tolak
+                              </button>
+                            </>
+                          )}
+                          {r.status === 'Selesai' && (
+                            <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 mr-1">
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Tuntas</span>
+                            </span>
+                          )}
+                          {onDeleteRedemption && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                openConfirm(
+                                  'Hapus Riwayat Penukaran',
+                                  `Hapus catatan penukaran poin oleh ${r.studentName} secara permanen?`,
+                                  async () => {
+                                    try {
+                                      await onDeleteRedemption(r.id);
+                                      notifySuccess('Catatan penukaran berhasil dihapus.');
+                                    } catch (err: any) {
+                                      notifyError(err.message || 'Gagal menghapus catatan penukaran.');
+                                    }
+                                  }
+                                );
                               }}
-                              className="px-2 py-1 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Hapus Catatan Penukaran"
                             >
-                              Tolak
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          </div>
-                        )}
-                        {r.status === 'Selesai' && (
-                          <span className="text-[11px] text-emerald-600 font-semibold flex items-center justify-end gap-1">
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Tuntas</span>
-                          </span>
-                        )}
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1253,9 +1330,20 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      if (confirm(`Hapus kategori sampah "${cat.name}"?`)) {
-                        if (onDeleteCategory) onDeleteCategory(cat.id);
-                      }
+                      openConfirm(
+                        'Hapus Kategori Sampah',
+                        `Hapus kategori sampah "${cat.name}" (${cat.pointsPerUnit} Poin/${cat.unit}) dari katalog?`,
+                        async () => {
+                          try {
+                            if (onDeleteCategory) {
+                              await onDeleteCategory(cat.id);
+                              notifySuccess(`Kategori "${cat.name}" berhasil dihapus.`);
+                            }
+                          } catch (err: any) {
+                            notifyError(err.message || 'Gagal menghapus kategori sampah.');
+                          }
+                        }
+                      );
                     }}
                     className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-white transition-colors cursor-pointer"
                     title="Hapus Kategori"
@@ -1359,9 +1447,20 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      if (confirm(`Hapus hadiah "${rew.name}"?`)) {
-                        if (onDeleteReward) onDeleteReward(rew.id);
-                      }
+                      openConfirm(
+                        'Hapus Hadiah Reward',
+                        `Hapus hadiah "${rew.name}" dari katalog penukaran siswa?`,
+                        async () => {
+                          try {
+                            if (onDeleteReward) {
+                              await onDeleteReward(rew.id);
+                              notifySuccess(`Hadiah "${rew.name}" berhasil dihapus.`);
+                            }
+                          } catch (err: any) {
+                            notifyError(err.message || 'Gagal menghapus hadiah.');
+                          }
+                        }
+                      );
                     }}
                     className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-white transition-colors cursor-pointer"
                     title="Hapus Hadiah"
@@ -1966,6 +2065,16 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
         onAddEcoDeposit={onAddDeposit}
         operatorName="Petugas Bank Sampah"
         initialMode="eco"
+      />
+
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText={confirmState.confirmText}
+        isDanger={confirmState.isDanger}
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
       />
     </div>
   );
