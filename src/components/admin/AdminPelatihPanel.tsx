@@ -189,9 +189,7 @@ export default function AdminPelatihPanel({
         setMemberIds([]);
       }
     } else {
-      const def = students.slice(0, 8).map(s => s.id);
-      setMemberIds(def);
-      safeLocalStorageSet(`ekskul_members_${selectedEkskulId}`, JSON.stringify(def));
+      setMemberIds([]);
     }
 
     return () => {
@@ -472,7 +470,7 @@ export default function AdminPelatihPanel({
         idx + 1,
         student?.nisn || '-',
         student?.name || 'Siswa',
-        classes.find(c => c.id === student?.classId)?.name || student?.classId || '-',
+        getSchoolClassName(student?.classId, classes),
         score,
         pred,
         att,
@@ -722,13 +720,12 @@ export default function AdminPelatihPanel({
                 ) : (
                   memberIds.map((sid, idx) => {
                     const student = students.find(s => s.id === sid);
-                    const studentClass = classes.find(c => c.id === student?.classId);
                     return (
                       <tr key={sid} className="hover:bg-slate-50">
                         <td className="px-4 py-2.5 font-bold text-slate-400">{idx + 1}</td>
                         <td className="px-4 py-2.5 font-bold text-slate-900">{student?.name || 'Siswa'}</td>
                         <td className="px-4 py-2.5 font-mono text-slate-500">{student?.nisn || '-'}</td>
-                        <td className="px-4 py-2.5 font-semibold text-purple-700">{studentClass?.name || '-'}</td>
+                        <td className="px-4 py-2.5 font-semibold text-purple-700">{getSchoolClassName(student?.classId, classes)}</td>
                         <td className="px-4 py-2.5 text-slate-500">{student?.bakatMinat || '-'}</td>
                         <td className="px-4 py-2.5 text-right">
                           <button
@@ -978,7 +975,6 @@ export default function AdminPelatihPanel({
               <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
                 {memberIds.map((sid) => {
                   const student = students.find(s => s.id === sid);
-                  const studentClass = classes.find(c => c.id === student?.classId);
                   const currentDraft = draftGrades[sid] || {
                     score: String(grades.find(g => g.studentId === sid)?.score || 85),
                     attitude: grades.find(g => g.studentId === sid)?.attitude || 'Sangat Baik',
@@ -988,7 +984,7 @@ export default function AdminPelatihPanel({
                   return (
                     <tr key={sid} className="hover:bg-slate-50">
                       <td className="px-4 py-2.5 font-bold text-slate-900">{student?.name || 'Siswa'}</td>
-                      <td className="px-4 py-2.5 text-purple-700 font-semibold">{studentClass?.name || '-'}</td>
+                      <td className="px-4 py-2.5 text-purple-700 font-semibold">{getSchoolClassName(student?.classId, classes)}</td>
                       <td className="px-4 py-2.5">
                         <input
                           type="number"
@@ -1245,7 +1241,7 @@ export default function AdminPelatihPanel({
 
             <div className="flex-1 overflow-y-auto divide-y border rounded-xl p-2 max-h-64 text-xs">
               {students
-                .filter(s => memberClassFilter === 'all' || s.classId === memberClassFilter)
+                .filter(s => memberClassFilter === 'all' || isSameClass(s.classId, memberClassFilter, classes))
                 .filter(s => !memberIds.includes(s.id))
                 .filter(s => s.name.toLowerCase().includes(memberSearch.toLowerCase()))
                 .map(s => {
@@ -1265,7 +1261,7 @@ export default function AdminPelatihPanel({
                         className="rounded text-purple-600"
                       />
                       <span className="font-bold text-slate-900 flex-1">{s.name}</span>
-                      <span className="text-purple-600 text-[10px] font-bold">{classes.find(c => c.id === s.classId)?.name}</span>
+                      <span className="text-purple-600 text-[10px] font-bold">{getSchoolClassName(s.classId, classes)}</span>
                     </label>
                   );
                 })}
@@ -1550,7 +1546,7 @@ export default function AdminPelatihPanel({
                 >
                   <option value="">-- Pilih Siswa --</option>
                   {students.map(s => (
-                    <option key={s.id} value={s.id}>{s.name} ({classes.find(c => c.id === s.classId)?.name || s.classId})</option>
+                    <option key={s.id} value={s.id}>{s.name} ({getSchoolClassName(s.classId, classes)})</option>
                   ))}
                 </select>
               </div>

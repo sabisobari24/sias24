@@ -23,6 +23,7 @@ import FormattedText from './common/FormattedText';
 import { QuestionBank, CbtQuestion, Teacher, SchoolClass } from '../types';
 import { syncCollection, saveDocument, deleteDocument } from '../lib/firebase';
 import ConfirmModal from './ConfirmModal';
+import { getSchoolClassName } from '../utils/classUtils';
 
 interface BankSoalManagerProps {
   teacher: Teacher;
@@ -422,7 +423,7 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
                     <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
                       <span>Kelas:</span>
                       <span className="font-bold text-slate-700">
-                        {bank.classId === 'all' ? 'Semua Kelas' : (matchedClass?.name || bank.classId)}
+                        {getSchoolClassName(bank.classId, classes)}
                       </span>
                     </div>
 

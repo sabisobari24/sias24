@@ -34,6 +34,7 @@ import {
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF, printHTML } from '../utils/printHelper';
 import { downloadDocx } from '../utils/docxExport';
+import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 import ConfirmModal from './ConfirmModal';
 
 interface ELearningPanelProps {
@@ -194,7 +195,7 @@ export default function ELearningPanel({
       id: currentProgressId,
       studentId: currentUser.id,
       studentName: currentUser.name || 'Siswa',
-      classId: currentUser.classId || '7-A',
+      classId: currentUser.classId || '',
       materialId: material.id,
       materialTitle: material.title,
       subject: material.subject,
@@ -208,40 +209,16 @@ export default function ELearningPanel({
   };
 
   // Helper Student Class Info
-  const studentClassObj = useMemo(() => {
-    if (!currentUser?.classId) return null;
-    return classes.find(c => c.id === currentUser.classId || c.name === currentUser.classId);
-  }, [classes, currentUser]);
-
   const studentClassName = useMemo(() => {
-    if (studentClassObj) return studentClassObj.name;
-    if (currentUser?.classId) return currentUser.classId;
+    if (currentUser?.classId) return getSchoolClassName(currentUser.classId, classes);
     return 'Kelas Anda';
-  }, [studentClassObj, currentUser]);
+  }, [classes, currentUser]);
 
   // Helper Check Class Match
   const checkClassMatch = (materialClassIds: string[], targetClassId?: string) => {
     if (!targetClassId) return true;
-    if (materialClassIds.includes('ALL')) return true;
-    if (materialClassIds.includes(targetClassId)) return true;
-
-    const clsObj = classes.find((c) => c.id === targetClassId || c.name === targetClassId);
-    const matchedNames = [targetClassId];
-    if (clsObj) {
-      if (clsObj.id) matchedNames.push(clsObj.id);
-      if (clsObj.name) matchedNames.push(clsObj.name);
-    }
-
-    const normalize = (s: string) => s.toLowerCase().replace(/kelas/g, '').replace(/[^a-z0-9]/g, '');
-    const targetNorms = matchedNames.map(normalize);
-
-    return materialClassIds.some((mc) => {
-      if (mc === 'ALL') return true;
-      const mcNorm = normalize(mc);
-      return targetNorms.some(
-        (tn) => tn === mcNorm || (tn.length > 0 && mcNorm.length > 0 && (mcNorm.includes(tn) || tn.includes(mcNorm)))
-      );
-    });
+    if (materialClassIds.includes('ALL') || materialClassIds.includes('all')) return true;
+    return materialClassIds.some((mc) => mc === 'ALL' || mc === 'all' || isSameClass(mc, targetClassId, classes));
   };
 
   // Filtered Materials for Display
@@ -324,7 +301,7 @@ export default function ELearningPanel({
     const rows = progressList.map((p, idx) => [
       idx + 1,
       p.studentName,
-      p.classId,
+      getSchoolClassName(p.classId, classes),
       p.subject,
       p.materialTitle,
       p.status,
@@ -341,7 +318,7 @@ export default function ELearningPanel({
     const rows = progressList.map((p, idx) => [
       String(idx + 1),
       p.studentName,
-      p.classId,
+      getSchoolClassName(p.classId, classes),
       p.subject,
       p.materialTitle,
       p.status,
@@ -358,7 +335,7 @@ export default function ELearningPanel({
     const rows = progressList.map((p, idx) => [
       idx + 1,
       p.studentName,
-      p.classId,
+      getSchoolClassName(p.classId, classes),
       p.subject,
       p.materialTitle,
       p.status,
@@ -473,7 +450,7 @@ export default function ELearningPanel({
               <div className="w-full px-3 py-2 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 rounded-xl text-xs font-bold text-indigo-700 dark:text-indigo-300 flex items-center justify-between shadow-xs">
                 <span className="flex items-center gap-1.5 truncate">
                   <BookOpen className="w-3.5 h-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
-                  <span>Fokus: Kelas {studentClassName}</span>
+                  <span>Fokus: {studentClassName}</span>
                 </span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-200/80 dark:bg-indigo-900/80 text-indigo-800 dark:text-indigo-200 font-extrabold shrink-0">
                   Otomatis
@@ -488,7 +465,7 @@ export default function ELearningPanel({
                 <option value="ALL">Semua Kelas Target</option>
                 {classes.map((cls) => (
                   <option key={cls.id} value={cls.id}>
-                    Kelas {cls.name}
+                    {cls.name}
                   </option>
                 ))}
               </select>
@@ -521,13 +498,13 @@ export default function ELearningPanel({
           </div>
           <div className="space-y-0.5">
             <p className="font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-              <span>Materi Pembelajaran Khusus Kelas {studentClassName}</span>
+              <span>Materi Pembelajaran Khusus {studentClassName}</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800">
                 Terfilter Otomatis
               </span>
             </p>
             <p className="text-[11px] text-slate-600 dark:text-indigo-200/90 leading-relaxed">
-              Halo <strong>{currentUser?.name || 'Siswa'}</strong>! Tampilan e-learning Anda telah disesuaikan khusus untuk <strong>Kelas {studentClassName}</strong>. Anda hanya fokus mengikuti materi dan modul pembelajaran yang ditugaskan untuk kelas Anda.
+              Halo <strong>{currentUser?.name || 'Siswa'}</strong>! Tampilan e-learning Anda telah disesuaikan khusus untuk <strong>{studentClassName}</strong>. Anda hanya fokus mengikuti materi dan modul pembelajaran yang ditugaskan untuk kelas Anda.
             </p>
           </div>
         </div>
@@ -540,12 +517,12 @@ export default function ELearningPanel({
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-12 text-center">
               <BookOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3 animate-pulse" />
               <h3 className="text-base font-bold text-slate-700 dark:text-slate-200">
-                {isStudent ? `Belum Ada Materi untuk Kelas ${studentClassName}` : 'Belum Ada Materi Pembelajaran'}
+                {isStudent ? `Belum Ada Materi untuk ${studentClassName}` : 'Belum Ada Materi Pembelajaran'}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
                 {isTeacher
                   ? 'Klik tombol "Unggah Materi Baru" di atas untuk menambahkan modul PDF, PPT, atau video pembelajaran untuk siswa Anda.'
-                  : `Belum ada materi pembelajaran yang diunggah oleh guru khusus untuk Kelas ${studentClassName} pada pilihan filter ini.`}
+                  : `Belum ada materi pembelajaran yang diunggah oleh guru khusus untuk ${studentClassName} pada pilihan filter ini.`}
               </p>
             </div>
           ) : (
@@ -619,7 +596,7 @@ export default function ELearningPanel({
                               key={cid}
                               className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] rounded-md font-bold"
                             >
-                              {cid}
+                              {getSchoolClassName(cid, classes)}
                             </span>
                           ))
                         )}
@@ -746,7 +723,7 @@ export default function ELearningPanel({
                     <tr key={prog.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                       <td className="py-3 px-4 font-bold text-slate-500">{idx + 1}</td>
                       <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-100">{prog.studentName}</td>
-                      <td className="py-3 px-4">{prog.classId}</td>
+                      <td className="py-3 px-4">{getSchoolClassName(prog.classId, classes)}</td>
                       <td className="py-3 px-4 text-indigo-600 dark:text-indigo-400 font-semibold">{prog.subject}</td>
                       <td className="py-3 px-4 max-w-xs truncate">{prog.materialTitle}</td>
                       <td className="py-3 px-4">

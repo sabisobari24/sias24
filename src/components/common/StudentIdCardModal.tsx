@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Student, SchoolClass } from '../../types';
+import { getSchoolClassName } from '../../utils/classUtils';
 import { generateNISNQRCode, printSingleStudentCard } from '../../utils/qrHelper';
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from '../../utils/schoolLogoHelper';
 import { getCardDesignConfig, getPresetById, CardDesignConfig } from '../../utils/cardDesignHelper';
@@ -96,8 +97,7 @@ export default function StudentIdCardModal({
 
   if (!isOpen || !student) return null;
 
-  const currentClass = classes.find(c => c.id === student.classId);
-  const className = currentClass?.name || student.classId || '-';
+  const className = getSchoolClassName(student.classId, classes);
   const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=4f46e5&color=fff&size=200&bold=true`;
   const avatarUrl = student.avatarUrl || defaultAvatar;
 

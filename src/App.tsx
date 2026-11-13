@@ -358,8 +358,7 @@ export default function App({ initialMode }: AppProps = {}) {
     } catch { /* ignore */ }
     const isInit = localStorage.getItem('siakad_col_initialized_students') === 'true';
     if (!isInit) {
-      const { uniqueStudents } = deduplicateStudents(INITIAL_STUDENTS);
-      return uniqueStudents;
+      return [];
     }
     return [];
   });
@@ -922,7 +921,6 @@ export default function App({ initialMode }: AppProps = {}) {
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
-  const [showDemoGuide, setShowDemoGuide] = useState(true);
 
   // Loading indicator - Never block the initial landing page or when local cache is present
   const [isLoading, setIsLoading] = useState(() => {
@@ -1282,18 +1280,7 @@ export default function App({ initialMode }: AppProps = {}) {
     const unsubBimbinganSchedules = syncCollection<BimbinganSchedule>('bimbingan_schedules', (data) => {
       setBimbinganSchedules(data);
       safeLocalStorageSet('siakad_bimbingan_schedules', JSON.stringify(data));
-    }, [
-      {
-        id: 'bs-1',
-        date: new Date().toISOString().split('T')[0],
-        time: '09:00 - 10:00',
-        targetType: 'Kelas',
-        targetId: 'all',
-        topic: 'Sosialisasi Bahaya Bullying & Pembentukan Karakter Siswa',
-        notes: 'Sesi bimbingan klasikal bersama Guru BK',
-        recordedBy: 'Zainal Arifin, S.Pd.'
-      }
-    ]);
+    }, []);
 
     const unsubStudentAchievements = syncCollection<StudentAchievement>('student_achievements', (data) => {
       setStudentAchievements(data);
@@ -1410,6 +1397,38 @@ export default function App({ initialMode }: AppProps = {}) {
       }
     } catch (e) {
       console.error(e);
+    }
+
+    // One-time safe purge of legacy seeded dummy records in Firestore (does not touch classes or real accounts)
+    if (typeof window !== 'undefined' && localStorage.getItem('siakad_dummy_purged_v2') !== 'true') {
+      safeLocalStorageSet('siakad_dummy_purged_v2', 'true');
+      const dummyCleanupMap: Record<string, string[]> = {
+        teachers: ['t-sri', 't-budi', 't-endah', 't-tendik', 'T1'],
+        students: ['s-ahmad', 's-siti'],
+        attendance: ['a-demo-1', 'a-demo-2'],
+        violations: ['v-demo-1'],
+        counselor_notes: ['cn-demo-1'],
+        homeroom_notes: ['hn-demo-1'],
+        parent_messages: ['pm-demo-1'],
+        exam_schedules: ['es-demo-1'],
+        exam_grades: ['eg-demo-1'],
+        student_achievements: ['ach-1', 'ach-2', 'ach-3', 'ach-4'],
+        pemberkasan_schedules: ['pem-1', 'pem-2'],
+        nomor_surat: ['ns-1', 'ns-2'],
+        inventory_items: ['inv-1', 'inv-2', 'inv-3'],
+        inventory_loans: ['loan-1', 'loan-2'],
+        bos_bop_reports: ['bos-1', 'bop-1', 'bos-2'],
+        eco_deposits: ['eco-dep-1', 'eco-dep-2', 'eco-dep-3', 'eco-dep-4'],
+        elearning_materials: ['mat-01', 'ipa-02', 'bin-03'],
+        elearning_progress: ['prog-01', 'prog-02'],
+        bimbingan_schedules: ['bs-1']
+      };
+      Object.entries(dummyCleanupMap).forEach(([col, ids]) => {
+        ids.forEach((docId) => {
+          trackDeletedId(col, docId);
+          deleteDocument(col, docId).catch(() => {});
+        });
+      });
     }
 
     // Set loading false after initial load
@@ -2860,7 +2879,7 @@ export default function App({ initialMode }: AppProps = {}) {
       id,
       studentId: activeUser.id,
       studentName: activeUser.name,
-      classId: activeUser.classId || 'Kelas 7A',
+      classId: activeUser.classId || '',
       type: 'tebus_pelanggaran',
       pointsSpent: ecoPointsSpent,
       violationPointsReduced: pointsToRedeem,
@@ -3118,75 +3137,49 @@ export default function App({ initialMode }: AppProps = {}) {
     ];
     await clearAllCollections(collections);
 
-    syncTable('siakad_students', INITIAL_STUDENTS);
-    syncTable('siakad_teachers', INITIAL_TEACHERS);
-    syncTable('siakad_classes', INITIAL_CLASSES);
+    syncTable('siakad_students', []);
+    syncTable('siakad_teachers', []);
+    syncTable('siakad_classes', []);
     syncTable('siakad_violation_types', INITIAL_VIOLATION_TYPES);
-    syncTable('siakad_violations', INITIAL_VIOLATIONS);
-    syncTable('siakad_attendance', INITIAL_ATTENDANCE);
-    syncTable('siakad_counselor_notes', INITIAL_COUNSELOR_NOTES);
-    syncTable('siakad_homeroom_notes', INITIAL_HOMEROOM_NOTES);
-    syncTable('siakad_parent_messages', INITIAL_PARENT_MESSAGES);
-    syncTable('siakad_exam_schedules', INITIAL_EXAM_SCHEDULES);
-    syncTable('siakad_exam_grades', INITIAL_EXAM_GRADES);
-    syncTable('siakad_absent_teachers', INITIAL_ABSENT_TEACHERS);
-    syncTable('siakad_important_events', INITIAL_IMPORTANT_EVENTS);
-    syncTable('siakad_student_achievements', INITIAL_STUDENT_ACHIEVEMENTS);
-    syncTable('siakad_violation_types', INITIAL_VIOLATION_TYPES);
-    syncTable('siakad_violations', INITIAL_VIOLATIONS);
-    syncTable('siakad_attendance', INITIAL_ATTENDANCE);
-    syncTable('siakad_counselor_notes', INITIAL_COUNSELOR_NOTES);
-    syncTable('siakad_homeroom_notes', INITIAL_HOMEROOM_NOTES);
-    syncTable('siakad_parent_messages', INITIAL_PARENT_MESSAGES);
-    syncTable('siakad_exam_schedules', INITIAL_EXAM_SCHEDULES);
-    syncTable('siakad_exam_grades', INITIAL_EXAM_GRADES);
-    syncTable('siakad_absent_teachers', INITIAL_ABSENT_TEACHERS);
-    syncTable('siakad_important_events', INITIAL_IMPORTANT_EVENTS);
+    syncTable('siakad_violations', []);
+    syncTable('siakad_attendance', []);
+    syncTable('siakad_counselor_notes', []);
+    syncTable('siakad_homeroom_notes', []);
+    syncTable('siakad_parent_messages', []);
+    syncTable('siakad_exam_schedules', []);
+    syncTable('siakad_exam_grades', []);
+    syncTable('siakad_absent_teachers', []);
+    syncTable('siakad_important_events', []);
+    syncTable('siakad_student_achievements', []);
     syncTable('siakad_teaching_journals', []);
     syncTable('siakad_bimbingan_journals', []);
     syncTable('siakad_pending_registrations', []);
-
-    const initialBimbinganSchedules = [
-      {
-        id: 'bs-1',
-        date: new Date().toISOString().split('T')[0],
-        time: '09:00 - 10:00',
-        targetType: 'Kelas',
-        targetId: 'all',
-        topic: 'Sosialisasi Bahaya Bullying & Pembentukan Karakter Siswa',
-        notes: 'Sesi bimbingan klasikal bersama Guru BK',
-        recordedBy: 'Zainal Arifin, S.Pd.'
-      }
-    ];
-    syncTable('siakad_bimbingan_schedules', initialBimbinganSchedules);
+    syncTable('siakad_bimbingan_schedules', []);
     handleUpdateHeadmasterName('Dra. Hj. Endah Purwani, M.M.');
 
     // If activeUser is logged in, sync their state to the reset values
-    if (activeUser) {
-      if (activeRole === 'siswa' || activeRole === 'orang_tua') {
-        const resetS = INITIAL_STUDENTS.find(s => s.id === activeUser.id);
-        if (resetS) setActiveUser(resetS);
-      } else {
-        const resetT = INITIAL_TEACHERS.find(t => t.id === activeUser.id);
-        if (resetT) setActiveUser(resetT);
-      }
+    if (activeUser && (activeRole === 'admin' || activeUser.roles?.includes('admin'))) {
+      syncTable('siakad_teachers', [activeUser]);
     }
   };
 
   // Database Clear (Kosongkan) - clears everything except Admin account
   const handleClearDatabase = async () => {
     const adminTeachers = teachers.filter(t => t.roles?.includes('admin') || t.role === 'admin');
-    const finalAdminTeachers = adminTeachers.length > 0 ? adminTeachers : [
-      {
-        id: 'T1',
-        name: 'Dra. Hj. Endah Purwani, M.M.',
-        nip: '196711261991032004',
-        password: 'admin',
-        role: 'admin' as const,
-        roles: ['admin'] as any[],
-        email: 'endah.purwani@smpn50.sch.id'
-      }
-    ];
+    const finalAdminTeachers = adminTeachers.length > 0
+      ? adminTeachers
+      : (activeUser && (activeUser.role === 'admin' || activeUser.roles?.includes('admin'))
+          ? [activeUser]
+          : [
+              {
+                id: 't-sobari',
+                name: 'Sobari, S.Pd.',
+                nip: '199504242023211018',
+                role: 'admin' as const,
+                roles: ['admin'] as any[],
+                email: 'sobari.661@guru.smp.belajar.id'
+              }
+            ]);
 
     const collections = [
       'students', 'teachers', 'classes', 'violation_types', 'violations',
@@ -4089,6 +4082,7 @@ export default function App({ initialMode }: AppProps = {}) {
           <CoachPanel
             activeUser={activeUser}
             students={students}
+            classes={classes}
             onLogout={handleLogout}
             studentAchievements={studentAchievements}
             onAddStudentAchievement={handleAddStudentAchievement}

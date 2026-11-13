@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, SchoolClass } from '../../types';
+import { getSchoolClassName, isSameClass } from '../../utils/classUtils';
 import { printBatchStudentCards } from '../../utils/qrHelper';
 import { downloadBatchStudentCardsPDF } from '../../utils/cardPdfHelper';
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from '../../utils/schoolLogoHelper';
@@ -98,7 +99,7 @@ export default function BatchStudentCardsModal({
   const classCounts = useMemo(() => {
     const counts: Record<string, number> = { all: students.length };
     classes.forEach(c => {
-      counts[c.id] = students.filter(s => s.classId === c.id).length;
+      counts[c.id] = students.filter(s => isSameClass(s.classId, c.id, classes)).length;
     });
     return counts;
   }, [students, classes]);
@@ -106,7 +107,7 @@ export default function BatchStudentCardsModal({
   // Filter students based on class selection and search query
   const filteredStudents = useMemo(() => {
     return students.filter((s) => {
-      const matchClass = selectedClassId === 'all' || s.classId === selectedClassId;
+      const matchClass = selectedClassId === 'all' || isSameClass(s.classId, selectedClassId, classes);
       const matchSearch =
         !searchQuery.trim() ||
         s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -156,7 +157,7 @@ export default function BatchStudentCardsModal({
 
   // Sample student for live preview
   const previewStudent = filteredStudents.find(s => selectedStudentIds.has(s.id)) || filteredStudents[0] || students[0];
-  const previewClass = previewStudent ? classes.find(c => c.id === previewStudent.classId)?.name || previewStudent.classId : '-';
+  const previewClass = previewStudent ? getSchoolClassName(previewStudent.classId, classes) : '-';
   const previewAvatar = previewStudent?.avatarUrl || (previewStudent ? `https://ui-avatars.com/api/?name=${encodeURIComponent(previewStudent.name)}&background=4f46e5&color=fff&size=200&bold=true` : '');
 
   const handlePrintBatch = async () => {
@@ -165,9 +166,8 @@ export default function BatchStudentCardsModal({
 
     setIsPrinting(true);
     try {
-      const selectedClassObj = classes.find(c => c.id === selectedClassId);
       const title = selectedClassId !== 'all'
-        ? `Kartu Pelajar Siswa - Kelas ${selectedClassObj?.name || selectedClassId}`
+        ? `Kartu Pelajar Siswa - ${getSchoolClassName(selectedClassId, classes)}`
         : 'Kartu Pelajar Siswa - Seluruh Kelas';
 
       await printBatchStudentCards(targetStudents, classes, headmasterName, title, {

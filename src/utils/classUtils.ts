@@ -1,16 +1,20 @@
 import { SchoolClass } from '../types';
 
 /**
- * Maps roman numerals and variations to standard grade numbers
+ * Maps roman numerals and variations to standard grade numbers for reliable matching.
  */
-function cleanClassString(input: string): string {
+export function cleanClassString(input: string): string {
   if (!input) return '';
   return input
     .toLowerCase()
-    .replace(/kelas/g, '')
-    .replace(/class/g, '')
-    .replace(/vii/g, '7')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\bkelas\b/g, '')
+    .replace(/\bclass\b/g, '')
+    .replace(/\bviii\b/g, '8')
+    .replace(/\bvii\b/g, '7')
+    .replace(/\bix\b/g, '9')
     .replace(/viii/g, '8')
+    .replace(/vii/g, '7')
     .replace(/ix/g, '9')
     .replace(/[^a-z0-9]/g, '')
     .trim()
@@ -18,11 +22,70 @@ function cleanClassString(input: string): string {
 }
 
 /**
+ * Finds the matching SchoolClass from "Kelas & Database" by ID, exact name, or normalized token.
+ */
+export function findMatchingClass(
+  classIdOrName: string | undefined | null,
+  existingClasses: SchoolClass[] = []
+): SchoolClass | undefined {
+  if (!classIdOrName || !existingClasses || existingClasses.length === 0) return undefined;
+  const trimmed = classIdOrName.trim();
+  if (!trimmed) return undefined;
+
+  // 1. Direct ID match
+  const directMatch = existingClasses.find((c) => c.id === trimmed);
+  if (directMatch) return directMatch;
+
+  // 2. Case-insensitive ID or Name match
+  const lower = trimmed.toLowerCase();
+  const nameMatch = existingClasses.find(
+    (c) => (c.name && c.name.toLowerCase() === lower) || (c.id && c.id.toLowerCase() === lower)
+  );
+  if (nameMatch) return nameMatch;
+
+  // 3. Normalized token comparison (handles dashes, en-dashes, Roman vs Arabic, spaces)
+  const cleanTarget = cleanClassString(trimmed);
+  if (cleanTarget) {
+    return existingClasses.find((c) => {
+      const cleanId = cleanClassString(c.id);
+      const cleanName = cleanClassString(c.name);
+      return cleanId === cleanTarget || cleanName === cleanTarget;
+    });
+  }
+
+  return undefined;
+}
+
+/**
+ * Checks if two class identifiers/names refer to the same class in "Kelas & Database".
+ */
+export function isSameClass(
+  classA: string | undefined | null,
+  classB: string | undefined | null,
+  existingClasses: SchoolClass[] = []
+): boolean {
+  if (!classA || !classB) return false;
+  const aTrim = classA.trim();
+  const bTrim = classB.trim();
+  if (!aTrim || !bTrim) return false;
+  if (aTrim === bTrim || aTrim.toLowerCase() === bTrim.toLowerCase()) return true;
+
+  const matchA = findMatchingClass(aTrim, existingClasses);
+  const matchB = findMatchingClass(bTrim, existingClasses);
+  if (matchA && matchB) return matchA.id === matchB.id;
+  if (matchA && (matchA.id === bTrim || matchA.name.toLowerCase() === bTrim.toLowerCase())) return true;
+  if (matchB && (matchB.id === aTrim || matchB.name.toLowerCase() === aTrim.toLowerCase())) return true;
+
+  const cleanA = cleanClassString(aTrim);
+  const cleanB = cleanClassString(bTrim);
+  return Boolean(cleanA && cleanB && cleanA === cleanB);
+}
+
+/**
  * Converts grade number and letter to canonical ID and Name
  * e.g., '7A' -> { id: 'Kelas 7A', name: 'Kelas VII-A' }
  */
 export function formatCanonicalClass(cleanCode: string, rawOriginal: string): { id: string; name: string } {
-  // Extract number and letter if possible
   const match = cleanCode.match(/^([789])([A-Z0-9]+)$/);
   if (match) {
     const grade = match[1];
@@ -34,7 +97,6 @@ export function formatCanonicalClass(cleanCode: string, rawOriginal: string): { 
     };
   }
 
-  // Fallback for non-standard class codes
   const trimmed = rawOriginal.trim();
   const titleFormatted = trimmed.startsWith('Kelas') ? trimmed : `Kelas ${trimmed}`;
   return {
@@ -44,47 +106,25 @@ export function formatCanonicalClass(cleanCode: string, rawOriginal: string): { 
 }
 
 /**
- * Normalizes any raw class ID/name to a matching SchoolClass in the system.
- * If no matching class exists in existingClasses, it generates a new canonical SchoolClass.
+ * Normalizes any raw class ID/name to a matching SchoolClass in "Kelas & Database".
+ * If no matching class exists in existingClasses, generates a canonical SchoolClass.
  */
 export function normalizeClassId(
   rawClassId: string | undefined | null,
   existingClasses: SchoolClass[] = []
 ): { classId: string; createdClass?: SchoolClass } {
   if (!rawClassId || !rawClassId.trim()) {
-    const defaultId = existingClasses.length > 0 ? existingClasses[0].id : 'Kelas 7A';
+    const defaultId = existingClasses.length > 0 ? existingClasses[0].id : '';
     return { classId: defaultId };
   }
 
   const trimmedRaw = rawClassId.trim();
-
-  // 1. Direct ID match
-  const directMatch = existingClasses.find((c) => c.id === trimmedRaw);
-  if (directMatch) {
-    return { classId: directMatch.id };
+  const existingMatch = findMatchingClass(trimmedRaw, existingClasses);
+  if (existingMatch) {
+    return { classId: existingMatch.id };
   }
 
-  // 2. Direct Name match
-  const nameMatch = existingClasses.find((c) => c.name.toLowerCase() === trimmedRaw.toLowerCase());
-  if (nameMatch) {
-    return { classId: nameMatch.id };
-  }
-
-  // 3. Clean token comparison (e.g. '7-A', '7A', 'VII-A', 'Kelas 7A', 'Kelas VII-A' all -> '7A')
   const cleanTarget = cleanClassString(trimmedRaw);
-  if (cleanTarget) {
-    const tokenMatch = existingClasses.find((c) => {
-      const cleanId = cleanClassString(c.id);
-      const cleanName = cleanClassString(c.name);
-      return cleanId === cleanTarget || cleanName === cleanTarget;
-    });
-
-    if (tokenMatch) {
-      return { classId: tokenMatch.id };
-    }
-  }
-
-  // 4. Class not found in existing list -> Auto-create canonical class
   const canonical = formatCanonicalClass(cleanTarget || trimmedRaw, trimmedRaw);
   const newClass: SchoolClass = {
     id: canonical.id,
@@ -99,23 +139,36 @@ export function normalizeClassId(
 }
 
 /**
- * Helper to display the class name safely across all UI screens
+ * Displays the exact class name as configured in "Kelas & Database" across all UI screens & exports.
  */
-export function getSchoolClassName(classId: string | undefined | null, existingClasses: SchoolClass[] = []): string {
-  if (!classId) return 'Tanpa Kelas';
-  const found = existingClasses.find((c) => c.id === classId || c.name === classId);
+export function getSchoolClassName(
+  classId: string | undefined | null,
+  existingClasses: SchoolClass[] = []
+): string {
+  if (!classId || !classId.trim()) return '-';
+  const trimmed = classId.trim();
+  if (trimmed.toLowerCase() === 'all') return 'Semua Kelas';
+
+  const found = findMatchingClass(trimmed, existingClasses);
   if (found) return found.name;
 
-  // Try normalized lookup
-  const cleanTarget = cleanClassString(classId);
-  if (cleanTarget) {
-    const tokenMatch = existingClasses.find((c) => {
-      const cleanId = cleanClassString(c.id);
-      const cleanName = cleanClassString(c.name);
-      return cleanId === cleanTarget || cleanName === cleanTarget;
-    });
-    if (tokenMatch) return tokenMatch.name;
-  }
+  return trimmed;
+}
 
-  return classId;
+/**
+ * Formats a comma-separated list or array of class IDs using exact names from "Kelas & Database".
+ */
+export function formatClassListDisplay(
+  classIds: string | string[] | undefined | null,
+  existingClasses: SchoolClass[] = []
+): string {
+  if (!classIds) return '-';
+  const items = Array.isArray(classIds)
+    ? classIds
+    : classIds.split(',').map((s) => s.trim()).filter(Boolean);
+
+  if (items.length === 0) return '-';
+  if (items.some((i) => i.toLowerCase() === 'all')) return 'Semua Kelas';
+
+  return items.map((id) => getSchoolClassName(id, existingClasses)).join(', ');
 }

@@ -287,24 +287,14 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
     return () => clearInterval(timer);
   }, [slides.length]);
 
-  const fallbackTeachers = useMemo(() => [
-    // GURU
-    { id: 'g1', name: 'Apryanti Puji Rahayu, S.Pd', subject: 'Matematika', nip: '198404122009042003', email: 'apryanti@smpn50.sch.id', role: 'guru' },
-    { id: 'g2', name: 'Rahaulia Nisfulah S., S.Pd', subject: 'Bahasa Indonesia', nip: '199011262015032011', email: 'rahaulia@smpn50.sch.id', role: 'guru' },
-    { id: 'g3', name: 'Siti Kurniawati M, S.Pd', subject: 'IPA Terpadu', nip: '198705142010122005', email: 'sitikurnia@smpn50.sch.id', role: 'guru' },
-    { id: 'g4', name: 'Rangga Malela, S.Pd', subject: 'IPS Terpadu', nip: '198509032011011002', email: 'rangga@smpn50.sch.id', role: 'guru' },
-    { id: 'g5', name: 'Ahmad Syarif, S.Pd', subject: 'Pendidikan Pancasila', nip: '198103182008011004', email: 'ahmadsyarif@smpn50.sch.id', role: 'guru' },
-    { id: 'g6', name: 'Sri Wahyuni, S.Pd', subject: 'Seni Budaya', nip: '197902102006042008', email: 'sriwahyuni@smpn50.sch.id', role: 'guru' },
-    { id: 'g7', name: 'Budi Santoso, M.Pd', subject: 'Bahasa Inggris', nip: '197607052002121003', email: 'budisantoso@smpn50.sch.id', role: 'guru' },
-    { id: 'g8', name: 'Hj. Nurlaila, S.Ag', subject: 'Pendidikan Agama Islam', nip: '197212301998032001', email: 'nurlaila@smpn50.sch.id', role: 'guru' },
-    
-    // TENDIK
-    { id: 't1', name: 'H. Suryadi, S.Sos', subject: 'Kepala Tata Usaha', nip: '196805151992031005', email: 'suryadi.tu@smpn50.sch.id', role: 'piket' },
-    { id: 't2', name: 'Eka Wijaya', subject: 'Staf Administrasi TU', nip: '198902142014021001', email: 'ekawijaya@smpn50.sch.id', role: 'piket' },
-    { id: 't3', name: 'Rina Herawati', subject: 'Bendahara Sekolah', nip: '198308222010122002', email: 'rina.finance@smpn50.sch.id', role: 'piket' },
-    { id: 't4', name: 'Dedi Mulyadi', subject: 'Staf Keamanan', nip: '-', email: 'dedi.security@smpn50.sch.id', role: 'piket' },
-    { id: 't5', name: 'Siti Aminah, A.Md', subject: 'Pustakawan', nip: '199304012019032008', email: 'aminah.perpus@smpn50.sch.id', role: 'piket' }
-  ], []);
+  const fallbackTeachers = useMemo(() => [] as Array<{
+    id: string;
+    name: string;
+    subject: string;
+    nip: string;
+    email: string;
+    role: string;
+  }>, []);
 
   const allTeachersData = useMemo(() => {
     // Gather all initial staff profiles to use as pre-existing fallbacks

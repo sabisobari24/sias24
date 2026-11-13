@@ -68,7 +68,7 @@ export default function RegisterModal({
     if (classes && classes.length > 0) {
       setClassId(classes[0].id);
     } else {
-      setClassId('Kelas 7A');
+      setClassId('');
     }
   }, [classes, isOpen]);
 
@@ -191,6 +191,11 @@ export default function RegisterModal({
         setErrorMsg('Pendaftaran ditolak: Pengajuan akun Orang Tua untuk siswa ini sedang menunggu verifikasi Admin.');
         return;
       }
+    }
+
+    if (role === 'siswa' && !classId) {
+      setErrorMsg('Kelas wajib dipilih. Hubungi Admin jika daftar kelas belum tersedia.');
+      return;
     }
 
     if (role === 'pelatih') {
@@ -402,19 +407,7 @@ export default function RegisterModal({
                             <option key={cl.id} value={cl.id}>{cl.name}</option>
                           ))
                         ) : (
-                          [
-                            { id: 'Kelas 7A', name: 'Kelas VII-A' },
-                            { id: 'Kelas 7B', name: 'Kelas VII-B' },
-                            { id: 'Kelas 7C', name: 'Kelas VII-C' },
-                            { id: 'Kelas 8A', name: 'Kelas VIII-A' },
-                            { id: 'Kelas 8B', name: 'Kelas VIII-B' },
-                            { id: 'Kelas 8C', name: 'Kelas VIII-C' },
-                            { id: 'Kelas 9A', name: 'Kelas IX-A' },
-                            { id: 'Kelas 9B', name: 'Kelas IX-B' },
-                            { id: 'Kelas 9C', name: 'Kelas IX-C' },
-                          ].map((cl) => (
-                            <option key={cl.id} value={cl.id}>{cl.name}</option>
-                          ))
+                          <option value="">Belum ada kelas di database</option>
                         )}
                       </select>
                     </div>

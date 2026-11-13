@@ -4,6 +4,7 @@ import { Download, FileSpreadsheet, Search, Filter, Printer, FileText, CheckCirc
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
 import { downloadDocx } from '../utils/docxExport';
+import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 
 interface CbtScoreExporterProps {
   students: Student[];
@@ -72,7 +73,8 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
     // 1. Process student CBT submissions
     studentSubmissions.forEach((sub) => {
       const student = students.find((s) => s.id === sub.studentId);
-      const studentClass = classes.find((c) => c.id === (sub.classId || student?.classId));
+      const rawClassId = sub.classId || student?.classId || '';
+      const resolvedClassName = getSchoolClassName(rawClassId, classes);
       const score = sub.score !== undefined ? sub.score : 0;
       const schedule = examSchedules.find((sch) => sch.id === sub.examScheduleId);
 
@@ -81,8 +83,8 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
         studentId: sub.studentId,
         studentName: sub.studentName || student?.name || 'Siswa',
         nisn: student?.nisn || '-',
-        classId: sub.classId || student?.classId || '7-A',
-        className: studentClass?.name || sub.classId || '7-A',
+        classId: rawClassId,
+        className: resolvedClassName,
         subject: sub.subject || schedule?.subject || 'CBT',
         score: Math.round(score),
         status: score >= 75 ? 'Lulus' : 'Remedial',
@@ -97,15 +99,16 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
       const existing = results.find((r) => r.studentId === g.studentId && r.subject === g.subject && r.date === g.date);
       if (!existing) {
         const student = students.find((s) => s.id === g.studentId);
-        const studentClass = classes.find((c) => c.id === (g.classId || student?.classId));
+        const rawClassId = g.classId || student?.classId || '';
+        const resolvedClassName = getSchoolClassName(rawClassId, classes);
 
         results.push({
           id: g.id,
           studentId: g.studentId,
           studentName: student?.name || 'Siswa',
           nisn: student?.nisn || '-',
-          classId: g.classId || student?.classId || '7-A',
-          className: studentClass?.name || g.classId || '7-A',
+          classId: rawClassId,
+          className: resolvedClassName,
           subject: g.subject,
           score: Math.round(g.score),
           status: g.status || (g.score >= 75 ? 'Lulus' : 'Remedial'),
@@ -123,7 +126,7 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
   const filteredResults = useMemo(() => {
     return combinedResults.filter((res) => {
       // Filter by class
-      if (selectedClassId !== 'all' && res.classId !== selectedClassId) {
+      if (selectedClassId !== 'all' && !isSameClass(res.classId, selectedClassId, classes)) {
         return false;
       }
       // Filter by subject
@@ -149,7 +152,7 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
       return;
     }
 
-    const classNameStr = selectedClassId === 'all' ? 'Semua_Kelas' : (classes.find(c => c.id === selectedClassId)?.name || selectedClassId);
+    const classNameStr = selectedClassId === 'all' ? 'Semua_Kelas' : getSchoolClassName(selectedClassId, classes);
     const subjectStr = selectedSubject === 'all' ? 'Semua_Mapel' : selectedSubject.replace(/[^a-zA-Z0-9]/g, '_');
     const fileName = `Nilai_CBT_${classNameStr}_${subjectStr}_${new Date().toISOString().split('T')[0]}`;
 
@@ -176,7 +179,7 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
       return;
     }
 
-    const classNameStr = selectedClassId === 'all' ? 'Semua Kelas' : (classes.find(c => c.id === selectedClassId)?.name || selectedClassId);
+    const classNameStr = selectedClassId === 'all' ? 'Semua Kelas' : getSchoolClassName(selectedClassId, classes);
     const subjectStr = selectedSubject === 'all' ? 'Semua Mata Pelajaran' : selectedSubject;
 
     const pdfTitle = `REKAPITULASI HASIL NILAI UJIAN CBT SISWA - ${classNameStr} (${subjectStr})`;
@@ -202,9 +205,9 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
       return;
     }
 
-    const classNameStr = selectedClassId === 'all' ? 'Semua Kelas' : (classes.find(c => c.id === selectedClassId)?.name || selectedClassId);
+    const classNameStr = selectedClassId === 'all' ? 'Semua Kelas' : getSchoolClassName(selectedClassId, classes);
     const subjectStr = selectedSubject === 'all' ? 'Semua Mata Pelajaran' : selectedSubject;
-    const classSlug = selectedClassId === 'all' ? 'Semua_Kelas' : (classes.find(c => c.id === selectedClassId)?.name || selectedClassId);
+    const classSlug = selectedClassId === 'all' ? 'Semua_Kelas' : getSchoolClassName(selectedClassId, classes);
     const subjectSlug = selectedSubject === 'all' ? 'Semua_Mapel' : selectedSubject.replace(/[^a-zA-Z0-9]/g, '_');
 
     const title = `REKAPITULASI HASIL NILAI UJIAN CBT SISWA - ${classNameStr} (${subjectStr})`;

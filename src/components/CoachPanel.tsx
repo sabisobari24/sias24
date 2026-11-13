@@ -34,16 +34,18 @@ import { safeLocalStorageSet } from '../utils/storageHelper';
 import { printHTML, printTablePDF } from '../utils/printHelper';
 import { downloadExcel } from '../utils/excelExport';
 import { downloadDocx } from '../utils/docxExport';
-import { Student, Teacher, WebSectionContent, WebExtracurricular, StudentAchievement } from '../types';
+import { Student, Teacher, SchoolClass, WebSectionContent, WebExtracurricular, StudentAchievement } from '../types';
 import { INITIAL_WEB_CONTENT } from '../data/initialWebContent';
 import { WebIcon } from './website/WebIcon';
 import { useDownload } from '../context/DownloadContext';
 import UnifiedDownloadMenu from './UnifiedDownloadMenu';
 import { ExportDateRange, filterItemsByDateRange, getRangeFileSuffix, getRangeTitleSuffix } from '../utils/exportDateFilter';
+import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 
 interface CoachPanelProps {
   activeUser: Teacher;
   students: Student[];
+  classes?: SchoolClass[];
   onLogout: () => void;
   studentAchievements?: StudentAchievement[];
   onAddStudentAchievement?: (ach: Omit<StudentAchievement, 'id'>) => void;
@@ -81,6 +83,7 @@ interface StudentGrade {
 export default function CoachPanel({ 
   activeUser, 
   students, 
+  classes = [],
   onLogout,
   studentAchievements = [],
   onAddStudentAchievement,
@@ -172,12 +175,9 @@ export default function CoachPanel({
         setMemberIds([]);
       }
     } else {
-      // Default members - pick first 5 students for demonstration if empty
-      const defaultIds = students.slice(0, 5).map(s => s.id);
-      setMemberIds(defaultIds);
-      safeLocalStorageSet(`ekskul_members_${ekskulId}`, JSON.stringify(defaultIds));
+      setMemberIds([]);
     }
-  }, [ekskulId, students]);
+  }, [ekskulId]);
 
   // Load student grades in real-time
   useEffect(() => {
@@ -237,13 +237,15 @@ export default function CoachPanel({
     }
   };
 
-  // Filtered available classes
-  const availableClasses = Array.from(new Set(students.map(s => s.classId).filter(Boolean))).sort();
+  // Filtered available classes from Kelas & Database
+  const availableClasses = classes.length > 0
+    ? classes.map(c => c.id)
+    : Array.from(new Set(students.map(s => s.classId).filter(Boolean))).sort();
 
   // Filtered available students for addition
   const availableStudentsForAdd = students
     .filter(s => !memberIds.includes(s.id))
-    .filter(s => selectedClassFilter === 'all' || s.classId === selectedClassFilter)
+    .filter(s => selectedClassFilter === 'all' || isSameClass(s.classId, selectedClassFilter, classes))
     .filter(s => 
       !searchStudentQuery.trim() || 
       s.name.toLowerCase().includes(searchStudentQuery.toLowerCase().trim()) || 
@@ -452,7 +454,7 @@ export default function CoachPanel({
 
     // Identify selected student if any
     const selectedStudent = students.find(s => s.id === achievementStudentId);
-    const studentSuffix = selectedStudent ? ` - diraih oleh ${selectedStudent.name} (Kelas ${selectedStudent.classId})` : '';
+    const studentSuffix = selectedStudent ? ` - diraih oleh ${selectedStudent.name} (${getSchoolClassName(selectedStudent.classId, classes)})` : '';
     const formattedAchievementName = achievementName.trim() + studentSuffix;
 
     const newAchievement = {
@@ -644,7 +646,7 @@ export default function CoachPanel({
         <tr>
           <td style="text-align: center;">${idx + 1}</td>
           <td><b>${m.name}</b></td>
-          <td style="text-align: center;">${m.classId}</td>
+          <td style="text-align: center;">${getSchoolClassName(m.classId, classes)}</td>
           <td style="text-align: center; font-weight: bold; color: #1e3a8a;">${score}</td>
           <td style="text-align: center; font-weight: bold;">${predicate}</td>
           <td style="text-align: center;">${attitude}</td>
@@ -862,7 +864,7 @@ export default function CoachPanel({
       return [
         idx + 1,
         m.name,
-        m.classId,
+        getSchoolClassName(m.classId, classes),
         g ? g.score : '-',
         g ? g.predicate : '-',
         g ? g.attitude : '-',
@@ -890,7 +892,7 @@ export default function CoachPanel({
       return [
         idx + 1,
         m.name,
-        m.classId,
+        getSchoolClassName(m.classId, classes),
         g ? g.score : '-',
         g ? g.predicate : '-',
         g ? g.attitude : '-',
@@ -947,7 +949,7 @@ export default function CoachPanel({
       return [
         idx + 1,
         siswa.name,
-        siswa.classId || '-',
+        getSchoolClassName(siswa.classId, classes),
         siswa.nisn,
         ...sessionStatuses,
         countHadir,
@@ -990,7 +992,7 @@ export default function CoachPanel({
 
   const handleDownloadMembers = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Jenis Kelamin', 'No. HP'];
-    const rows = memberStudents.map((s, idx) => [idx + 1, s.nisn || '-', s.name, s.classId || '-', s.gender || '-', s.phone || '-']);
+    const rows = memberStudents.map((s, idx) => [idx + 1, s.nisn || '-', s.name, getSchoolClassName(s.classId, classes), s.gender || '-', s.phone || '-']);
     const slug = currentEkskul.name.toLowerCase().replace(/\s+/g, '_');
     const title = `Daftar Anggota Ekskul ${currentEkskul.name}`;
     const headmasterName = localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.';
@@ -1003,7 +1005,7 @@ export default function CoachPanel({
     const ekskulAchs = studentAchievements.filter(a => a.category === 'Non Akademik');
     const filtered = filterItemsByDateRange(ekskulAchs, (a) => a.date, range);
     const headers = ['No', 'Tanggal', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Tingkat', 'Peringkat', 'Pencatat'];
-    const rows = filtered.map((a, idx) => [idx + 1, a.date, a.studentName, a.classId, a.title, a.level, a.rank || '-', a.recordedBy]);
+    const rows = filtered.map((a, idx) => [idx + 1, a.date, a.studentName, getSchoolClassName(a.classId, classes), a.title, a.level, a.rank || '-', a.recordedBy]);
     const slug = currentEkskul.name.toLowerCase().replace(/\s+/g, '_');
     const title = `Daftar Prestasi Non-Akademik Ekskul ${currentEkskul.name}${getRangeTitleSuffix(range)}`;
     const headmasterName = localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.';
@@ -1345,10 +1347,10 @@ export default function CoachPanel({
                     >
                       <option value="all">-- Semua Kelas ({students.filter(s => !memberIds.includes(s.id)).length} Siswa) --</option>
                       {availableClasses.map(cls => {
-                        const countInClass = students.filter(s => !memberIds.includes(s.id) && s.classId === cls).length;
+                        const countInClass = students.filter(s => !memberIds.includes(s.id) && isSameClass(s.classId, cls, classes)).length;
                         return (
                           <option key={cls} value={cls}>
-                            Kelas {cls} ({countInClass} Belum Terdaftar)
+                            {getSchoolClassName(cls, classes)} ({countInClass} Belum Terdaftar)
                           </option>
                         );
                       })}
@@ -1436,7 +1438,7 @@ export default function CoachPanel({
                               </p>
                               <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                                 <span className="bg-indigo-100 text-indigo-800 px-1.5 py-0.2 rounded font-extrabold">
-                                  Kelas {student.classId}
+                                  {getSchoolClassName(student.classId, classes)}
                                 </span>
                                 <span className="font-mono">{student.nisn}</span>
                               </div>
@@ -1496,7 +1498,7 @@ export default function CoachPanel({
                           <tr key={siswa.id} className="hover:bg-slate-50/50">
                             <td className="p-3.5 pl-5 font-bold text-slate-800">{siswa.name}</td>
                             <td className="p-3.5 font-mono text-slate-500">{siswa.nisn}</td>
-                            <td className="p-3.5 font-bold text-indigo-600">Kelas {siswa.classId}</td>
+                            <td className="p-3.5 font-bold text-indigo-600">{getSchoolClassName(siswa.classId, classes)}</td>
                             <td className="p-3.5">
                               <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
                                 (siswa.gender || 'Laki-laki').toLowerCase() === 'perempuan'
@@ -1901,7 +1903,7 @@ export default function CoachPanel({
                       <option value="">-- Pilih Anggota Ekskul --</option>
                       {students.filter(s => memberIds.includes(s.id)).map(st => (
                         <option key={st.id} value={st.id}>
-                          {st.name} (Kelas {st.classId})
+                          {st.name} ({getSchoolClassName(st.classId, classes)})
                         </option>
                       ))}
                     </select>
@@ -2103,7 +2105,7 @@ export default function CoachPanel({
                             </td>
                             <td className="p-4 text-center">
                               <span className="bg-slate-100 text-slate-600 font-bold px-2 py-1 rounded-md text-[10px]">
-                                {student.classId}
+                                {getSchoolClassName(student.classId, classes)}
                               </span>
                             </td>
                             <td className="p-4 text-center">

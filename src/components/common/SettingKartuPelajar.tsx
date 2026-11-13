@@ -39,9 +39,9 @@ import {
 import { saveCardDesignToFirestore } from '../../lib/firebase';
 import { printSingleStudentCard } from '../../utils/qrHelper';
 import { downloadSingleStudentCardPDF } from '../../utils/cardPdfHelper';
-import { Student } from '../../types';
+import { Student, SchoolClass } from '../../types';
 
-export default function SettingKartuPelajar() {
+export default function SettingKartuPelajar({ classes = [] }: { classes?: SchoolClass[] }) {
   // Config from cardDesignHelper
   const initialConfig = getCardDesignConfig();
 
@@ -257,12 +257,14 @@ export default function SettingKartuPelajar() {
     }
   };
 
-  // Mock Student for Preview and Test Print
+  // Sample Student for Preview and Test Print using active class list
+  const sampleClassId = classes[0]?.id || '';
+  const sampleClassName = classes[0]?.name || '-';
   const sampleStudent: Student = {
     id: 'sample-001',
     name: 'MUHAMMAD RIZKY PRATAMA',
     nisn: '0098765432',
-    classId: '7-A',
+    classId: sampleClassId,
     gender: 'Laki-laki',
     address: 'Jl. Slamet Riyadi IV No. 50, Matraman',
     phone: '081234567890',
@@ -289,7 +291,7 @@ export default function SettingKartuPelajar() {
 
       await downloadSingleStudentCardPDF(
         sampleStudent,
-        'Kelas 7-A (Unggulan)',
+        sampleClassName,
         headmasterName,
         schoolName,
         logoUrl,
@@ -306,7 +308,7 @@ export default function SettingKartuPelajar() {
   const handleTestPrint = () => {
     printSingleStudentCard(
       sampleStudent,
-      'Kelas 7-A (Unggulan)',
+      sampleClassName,
       headmasterName,
       schoolName,
       logoUrl
@@ -987,7 +989,7 @@ export default function SettingKartuPelajar() {
                             </div>
                             <div>
                               <div className="text-[6px] text-slate-500 font-semibold">KELAS</div>
-                              <div className="font-bold text-slate-900">7-A</div>
+                              <div className="font-bold text-slate-900">{sampleClassName}</div>
                             </div>
                           </div>
                         </div>
