@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF, printHTML } from '../utils/printHelper';
+import { downloadDocx } from '../utils/docxExport';
 import ConfirmModal from './ConfirmModal';
 
 interface ELearningPanelProps {
@@ -350,6 +351,24 @@ export default function ELearningPanel({
     printTablePDF('LAPORAN HASIL REKAP PEMBELAJARAN SISWA (E-LEARNING)', headers, rows);
   };
 
+  // Export Rekap Progress Word (.docx)
+  const handleExportDocxProgress = () => {
+    const filename = `Rekap_Pembelajaran_E-Learning_${new Date().toISOString().split('T')[0]}.docx`;
+    const headers = ['No', 'Nama Siswa', 'Kelas', 'Mata Pelajaran', 'Judul Materi', 'Status', 'Waktu Selesai', 'Catatan'];
+    const rows = progressList.map((p, idx) => [
+      idx + 1,
+      p.studentName,
+      p.classId,
+      p.subject,
+      p.materialTitle,
+      p.status,
+      p.completedAt || '-',
+      p.notes || '-'
+    ]);
+
+    downloadDocx(filename, 'LAPORAN HASIL REKAP PEMBELAJARAN SISWA (E-LEARNING)', headers, rows, headmasterName);
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner Header */}
@@ -655,20 +674,30 @@ export default function ELearningPanel({
             </div>
 
             {/* Export Buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={handleExportExcelProgress}
-                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                type="button"
+                onClick={handleExportDocxProgress}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
               >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>Ekspor Excel</span>
+                <FileText className="w-4 h-4" />
+                <span>Word (.docx)</span>
               </button>
               <button
+                type="button"
                 onClick={handleExportPdfProgress}
                 className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
               >
                 <Printer className="w-4 h-4" />
-                <span>Cetak / PDF</span>
+                <span>PDF (.pdf)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleExportExcelProgress}
+                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Excel (.xlsx)</span>
               </button>
             </div>
           </div>

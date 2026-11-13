@@ -3,6 +3,7 @@ import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teac
 import { HeartHandshake, Search, FileText, CheckCircle, Save, Send, MessageSquare, AlertTriangle, ShieldCheck, Download, FileSpreadsheet, Calendar, Trash2, Clock, Users, UserCheck, Award, ChevronDown } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
+import { downloadDocx } from '../utils/docxExport';
 import { useDownload } from '../context/DownloadContext';
 
 interface BKPanelProps {
@@ -200,7 +201,7 @@ export default function BKPanel({
   };
 
   // Export Handlers
-  const handleExportBimbinganBK = (format: 'excel' | 'pdf') => {
+  const handleExportBimbinganBK = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ["Tanggal", "Nama Siswa", "Kelas", "Catatan Bimbingan", "Tindak Lanjut", "Status Pembinaan", "Wali Murid Mengetahui", "Konselor"];
     const rows = counselorNotes.map(n => {
       const s = students.find(std => std.id === n.studentId);
@@ -218,7 +219,10 @@ export default function BKPanel({
 
     if (format === 'excel') {
       downloadExcel('rekap_bimbingan_konseling_bk.xlsx', headers, rows, 'Bimbingan BK');
-      setSuccessMsg('Rekapan Catatan Bimbingan BK berhasil diunduh (Excel)!');
+      setSuccessMsg('Rekapan Catatan Bimbingan BK berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('rekap_bimbingan_konseling_bk.docx', 'Rekapitulasi Layanan Bimbingan Konseling (BK)', headers, rows, headmasterName);
+      setSuccessMsg('Rekapan Catatan Bimbingan BK berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF('Rekapitulasi Layanan Bimbingan Konseling (BK)', headers, rows, headmasterName);
       setSuccessMsg('Dokumen Bimbingan BK berhasil dicetak / disimpan ke PDF!');
@@ -226,7 +230,7 @@ export default function BKPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportKedisiplinanBK = (format: 'excel' | 'pdf') => {
+  const handleExportKedisiplinanBK = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ["Tanggal", "Nama Siswa", "Kelas", "Jenis Pelanggaran", "Poin", "Catatan", "Pencatat"];
     const rows = violations.map(v => {
       const s = students.find(std => std.id === v.studentId || (std.nisn && std.nisn === v.studentId));
@@ -244,7 +248,10 @@ export default function BKPanel({
 
     if (format === 'excel') {
       downloadExcel('rekap_laporan_pelanggaran_siswa_bk.xlsx', headers, rows, 'Pelanggaran BK');
-      setSuccessMsg('Laporan Poin Kedisiplinan Siswa berhasil diunduh (Excel)!');
+      setSuccessMsg('Laporan Poin Kedisiplinan Siswa berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('rekap_laporan_pelanggaran_siswa_bk.docx', 'Laporan Catatan Pelanggaran Kedisiplinan Siswa', headers, rows, headmasterName);
+      setSuccessMsg('Laporan Poin Kedisiplinan Siswa berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF('Laporan Catatan Pelanggaran Kedisiplinan Siswa', headers, rows, headmasterName);
       setSuccessMsg('Laporan Kedisiplinan berhasil dicetak / disimpan ke PDF!');
@@ -252,7 +259,7 @@ export default function BKPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportJurnalBK = (format: 'excel' | 'pdf') => {
+  const handleExportJurnalBK = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ["Tanggal", "Tipe", "Kelas / Siswa", "Kategori Bidang", "Catatan Jurnal Layanan"];
     const rows = bimbinganJournals.map(j => {
       const cls = classes.find(c => c.id === j.classId)?.name || j.classId;
@@ -269,7 +276,10 @@ export default function BKPanel({
 
     if (format === 'excel') {
       downloadExcel('jurnal_harian_layanan_bk.xlsx', headers, rows, 'Jurnal BK');
-      setSuccessMsg('Jurnal Layanan BK berhasil diunduh (Excel)!');
+      setSuccessMsg('Jurnal Layanan BK berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('jurnal_harian_layanan_bk.docx', 'Jurnal Harian Layanan Bimbingan Konseling (BK)', headers, rows, headmasterName);
+      setSuccessMsg('Jurnal Layanan BK berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF('Jurnal Harian Layanan Bimbingan Konseling (BK)', headers, rows, headmasterName);
       setSuccessMsg('Jurnal Layanan BK berhasil dicetak / disimpan ke PDF!');
@@ -277,7 +287,7 @@ export default function BKPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportJadwalBK = (format: 'excel' | 'pdf') => {
+  const handleExportJadwalBK = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ["Tanggal", "Waktu", "Target", "Subjek / Sasaran", "Topik / Agenda", "Catatan Persiapan"];
     const rows = bimbinganSchedules.map(s => {
       const clsName = classes.find(c => c.id === s.targetId)?.name || '';
@@ -295,7 +305,10 @@ export default function BKPanel({
 
     if (format === 'excel') {
       downloadExcel('jadwal_layanan_bimbingan_bk.xlsx', headers, rows, 'Jadwal BK');
-      setSuccessMsg('Jadwal Layanan Konseling BK berhasil diunduh (Excel)!');
+      setSuccessMsg('Jadwal Layanan Konseling BK berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('jadwal_layanan_bimbingan_bk.docx', 'Agenda & Jadwal Layanan Bimbingan Konseling (BK)', headers, rows, headmasterName);
+      setSuccessMsg('Jadwal Layanan Konseling BK berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF('Agenda & Jadwal Layanan Bimbingan Konseling (BK)', headers, rows, headmasterName);
       setSuccessMsg('Jadwal Bimbingan BK berhasil dicetak / disimpan ke PDF!');
@@ -303,7 +316,7 @@ export default function BKPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPesanBK = (format: 'excel' | 'pdf') => {
+  const handleExportPesanBK = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ["Tanggal", "Pengirim / Orang Tua", "Nama Siswa", "Pesan dari Orang Tua", "Balasan Terakhir", "Status Respon"];
     const rows = parentMessages.map(m => {
       const s = students.find(std => std.id === m.studentId);
@@ -320,7 +333,10 @@ export default function BKPanel({
 
     if (format === 'excel') {
       downloadExcel('konseling_pesan_orang_tua_bk.xlsx', headers, rows, 'Pesan Konseling');
-      setSuccessMsg('Rekap Pesan Konseling Orang Tua berhasil diunduh (Excel)!');
+      setSuccessMsg('Rekap Pesan Konseling Orang Tua berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('konseling_pesan_orang_tua_bk.docx', 'Rekapitulasi Komunikasi & Pesan Konseling Orang Tua', headers, rows, headmasterName);
+      setSuccessMsg('Rekap Pesan Konseling Orang Tua berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF('Rekapitulasi Komunikasi & Pesan Konseling Orang Tua', headers, rows, headmasterName);
       setSuccessMsg('Pesan Konseling berhasil dicetak / disimpan ke PDF!');
@@ -328,7 +344,7 @@ export default function BKPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPrestasiBK = (format: 'excel' | 'pdf') => {
+  const handleExportPrestasiBK = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Judul Prestasi', 'Kategori', 'Tingkat', 'Peringkat', 'Tanggal', 'Dicatat Oleh'];
     const rows = studentAchievements.map((a, i) => [
       i + 1,
@@ -344,7 +360,10 @@ export default function BKPanel({
     ]);
     if (format === 'excel') {
       downloadExcel(`Portofolio_Prestasi_Siswa_BK.xlsx`, headers, rows, 'Prestasi Siswa BK');
-      setSuccessMsg('Rekap Prestasi Siswa berhasil diunduh (Excel)!');
+      setSuccessMsg('Rekap Prestasi Siswa berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`Portofolio_Prestasi_Siswa_BK.docx`, 'Laporan Rekam Jejak Prestasi Siswa - BK', headers, rows, headmasterName);
+      setSuccessMsg('Rekap Prestasi Siswa berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF(`Laporan Rekam Jejak Prestasi Siswa - BK`, headers, rows, headmasterName);
       setSuccessMsg('Rekap Prestasi Siswa berhasil dicetak / disimpan ke PDF!');
@@ -357,33 +376,77 @@ export default function BKPanel({
       case 'beranda':
       case 'bimbingan':
         return [
-          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbinganBK('excel'), type: 'excel' as const },
-          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbinganBK('pdf'), type: 'pdf' as const },
+          {
+            label: 'Bimbingan Konseling',
+            formats: {
+              docx: () => handleExportBimbinganBK('docx'),
+              pdf: () => handleExportBimbinganBK('pdf'),
+              excel: () => handleExportBimbinganBK('excel'),
+            },
+          },
+          {
+            label: 'Catatan Kedisiplinan',
+            formats: {
+              docx: () => handleExportKedisiplinanBK('docx'),
+              pdf: () => handleExportKedisiplinanBK('pdf'),
+              excel: () => handleExportKedisiplinanBK('excel'),
+            },
+          },
         ];
       case 'jurnal':
         return [
-          { label: 'Jurnal BK (Excel)', onClick: () => handleExportJurnalBK('excel'), type: 'excel' as const },
-          { label: 'Jurnal BK (PDF)', onClick: () => handleExportJurnalBK('pdf'), type: 'pdf' as const },
+          {
+            label: 'Jurnal Harian Layanan BK',
+            formats: {
+              docx: () => handleExportJurnalBK('docx'),
+              pdf: () => handleExportJurnalBK('pdf'),
+              excel: () => handleExportJurnalBK('excel'),
+            },
+          },
         ];
       case 'jadwal':
         return [
-          { label: 'Jadwal BK (Excel)', onClick: () => handleExportJadwalBK('excel'), type: 'excel' as const },
-          { label: 'Jadwal BK (PDF)', onClick: () => handleExportJadwalBK('pdf'), type: 'pdf' as const },
+          {
+            label: 'Agenda & Jadwal BK',
+            formats: {
+              docx: () => handleExportJadwalBK('docx'),
+              pdf: () => handleExportJadwalBK('pdf'),
+              excel: () => handleExportJadwalBK('excel'),
+            },
+          },
         ];
       case 'pesan':
         return [
-          { label: 'Pesan Konseling (Excel)', onClick: () => handleExportPesanBK('excel'), type: 'excel' as const },
-          { label: 'Pesan Konseling (PDF)', onClick: () => handleExportPesanBK('pdf'), type: 'pdf' as const },
+          {
+            label: 'Pesan Konseling Orang Tua',
+            formats: {
+              docx: () => handleExportPesanBK('docx'),
+              pdf: () => handleExportPesanBK('pdf'),
+              excel: () => handleExportPesanBK('excel'),
+            },
+          },
         ];
       case 'prestasi':
         return [
-          { label: 'Prestasi Siswa (Excel)', onClick: () => handleExportPrestasiBK('excel'), type: 'excel' as const },
-          { label: 'Prestasi Siswa (PDF)', onClick: () => handleExportPrestasiBK('pdf'), type: 'pdf' as const },
+          {
+            label: 'Portofolio Prestasi Siswa',
+            formats: {
+              docx: () => handleExportPrestasiBK('docx'),
+              pdf: () => handleExportPrestasiBK('pdf'),
+              excel: () => handleExportPrestasiBK('excel'),
+            },
+          },
         ];
       default:
         return [
-          { label: 'Bimbingan (Excel)', onClick: () => handleExportBimbinganBK('excel'), type: 'excel' as const },
-          { label: 'Bimbingan (PDF)', onClick: () => handleExportBimbinganBK('pdf'), type: 'pdf' as const },
+          {
+            label: 'Bimbingan Konseling',
+            formats: {
+              docx: () => handleExportBimbinganBK('docx'),
+              pdf: () => handleExportBimbinganBK('pdf'),
+              excel: () => handleExportBimbinganBK('excel'),
+            },
+          },
         ];
     }
   };

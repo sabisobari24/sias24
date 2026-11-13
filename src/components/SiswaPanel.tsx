@@ -702,55 +702,51 @@ export default function SiswaPanel({
     return sched.targetClassId === student.classId || sched.targetClassId === studentClass?.name;
   });
 
+  const handleExportPrestasi = (format: 'docx' | 'pdf' | 'excel') => {
+    const headers = ["Judul Prestasi", "Kategori", "Tingkat", "Peringkat", "Tanggal"];
+    const rows = myAchievements.map((a) => [a.title, a.category, `Tingkat ${a.level}`, a.rank || a.level, a.date]);
+    const title = `Rekapitulasi Raihan Prestasi Siswa - ${student.name}`;
+    const safeName = student.name.replace(/\s+/g, '_');
+    if (format === 'docx') {
+      downloadDocx(`Rekap_Prestasi_${safeName}.docx`, title, headers, rows, headmasterName);
+    } else if (format === 'excel') {
+      downloadExcel(`Rekap_Prestasi_${safeName}.xlsx`, headers, rows, 'Prestasi Siswa');
+    } else {
+      printTablePDF(title, headers, rows, headmasterName);
+    }
+  };
+
+  const handleExportPresensiSiswa = (format: 'docx' | 'pdf' | 'excel') => {
+    const headers = ["Tanggal", "Status", "Keterangan"];
+    const rows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
+    const title = `Rekap Presensi Kehadiran Siswa - ${student.name}`;
+    const safeName = student.name.replace(/\s+/g, '_');
+    if (format === 'docx') {
+      downloadDocx(`Rekap_Presensi_${safeName}.docx`, title, headers, rows, headmasterName);
+    } else if (format === 'excel') {
+      downloadExcel(`Rekap_Presensi_${safeName}.xlsx`, headers, rows, 'Presensi Siswa');
+    } else {
+      printTablePDF(title, headers, rows, headmasterName);
+    }
+  };
+
   const getSiswaDownloadConfig = () => {
-    const achHeaders = ["Judul Prestasi", "Kategori", "Tingkat", "Peringkat", "Tanggal"];
-    const achRows = myAchievements.map((a) => [a.title, a.category, `Tingkat ${a.level}`, a.rank || a.level, a.date]);
-
-    const attHeaders = ["Tanggal", "Status", "Keterangan"];
-    const attRows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
-
     return [
       {
-        label: 'Prestasi (.docx)',
-        onClick: () => {
-          downloadDocx(`rekap_prestasi_${student.name.toLowerCase().replace(/\s+/g, '_')}.docx`, `Rekapitulasi Raihan Prestasi Siswa - ${student.name}`, achHeaders, achRows, headmasterName);
+        label: 'Rekap Prestasi Siswa',
+        formats: {
+          docx: () => handleExportPrestasi('docx'),
+          pdf: () => handleExportPrestasi('pdf'),
+          excel: () => handleExportPrestasi('excel'),
         },
-        type: 'docx' as const,
       },
       {
-        label: 'Prestasi (.pdf)',
-        onClick: () => {
-          printTablePDF(`Rekapitulasi Raihan Prestasi Siswa - ${student.name}`, achHeaders, achRows, headmasterName);
+        label: 'Rekap Presensi Siswa',
+        formats: {
+          docx: () => handleExportPresensiSiswa('docx'),
+          pdf: () => handleExportPresensiSiswa('pdf'),
+          excel: () => handleExportPresensiSiswa('excel'),
         },
-        type: 'pdf' as const,
-      },
-      {
-        label: 'Prestasi (.xlsx)',
-        onClick: () => {
-          downloadExcel(`rekap_prestasi_${student.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`, achHeaders, achRows, 'Prestasi');
-        },
-        type: 'excel' as const,
-      },
-      {
-        label: 'Presensi (.docx)',
-        onClick: () => {
-          downloadDocx(`rekap_presensi_${student.name.toLowerCase().replace(/\s+/g, '_')}.docx`, `Rekap Presensi Kehadiran Siswa - ${student.name}`, attHeaders, attRows, headmasterName);
-        },
-        type: 'docx' as const,
-      },
-      {
-        label: 'Presensi (.pdf)',
-        onClick: () => {
-          printTablePDF(`Rekap Presensi Kehadiran Siswa - ${student.name}`, attHeaders, attRows, headmasterName);
-        },
-        type: 'pdf' as const,
-      },
-      {
-        label: 'Presensi (.xlsx)',
-        onClick: () => {
-          downloadExcel(`rekap_presensi_${student.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`, attHeaders, attRows, 'Presensi');
-        },
-        type: 'excel' as const,
       }
     ];
   };
@@ -913,19 +909,34 @@ export default function SiswaPanel({
                 <Award className="w-5 h-5 text-amber-500" />
                 <span>Daftar Raihan Prestasi Saya (Akademik &amp; Non-Akademik)</span>
               </h3>
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {myAchievements.length > 0 && (
-                  <button
-                    onClick={() => {
-                      const headers = ["Judul Prestasi", "Kategori", "Tingkat", "Peringkat", "Tanggal"];
-                      const rows = myAchievements.map((a) => [a.title, a.category, `Tingkat ${a.level}`, a.rank || a.level, a.date]);
-                      printTablePDF(`Rekapitulasi Raihan Prestasi Siswa - ${student.name}`, headers, rows, headmasterName);
-                    }}
-                    className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer border border-amber-300 shadow-2xs"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Cetak Rekap (PDF)</span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleExportPrestasi('docx')}
+                      className="bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-xl transition-all flex items-center gap-1 cursor-pointer border border-blue-200 shadow-2xs"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>.docx</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExportPrestasi('pdf')}
+                      className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold px-2.5 py-1 rounded-xl transition-all flex items-center gap-1 cursor-pointer border border-amber-300 shadow-2xs"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>.pdf</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExportPrestasi('excel')}
+                      className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-xl transition-all flex items-center gap-1 cursor-pointer border border-emerald-200 shadow-2xs"
+                    >
+                      <FileDown className="w-3.5 h-3.5" />
+                      <span>.xlsx</span>
+                    </button>
+                  </>
                 )}
                 <span className="bg-amber-50 text-amber-700 font-extrabold px-2.5 py-1 rounded-full text-xs border border-amber-200/60">
                   {myAchievements.length} Prestasi Terekam

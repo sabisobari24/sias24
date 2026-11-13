@@ -82,59 +82,51 @@ export default function OrangTuaPanel({
     setNewMessage('');
   };
 
+  const handleExportPresensiAnak = (format: 'docx' | 'pdf' | 'excel') => {
+    const headers = ["Tanggal", "Status", "Keterangan"];
+    const rows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
+    const title = `Rekap Kehadiran Siswa - ${student.name}`;
+    const safeName = student.name.replace(/\s+/g, '_');
+    if (format === 'docx') {
+      downloadDocx(`Presensi_${safeName}.docx`, title, headers, rows, headmasterName);
+    } else if (format === 'excel') {
+      downloadExcel(`Presensi_${safeName}.xlsx`, headers, rows, 'Presensi Anak');
+    } else {
+      printTablePDF(title, headers, rows, headmasterName);
+    }
+  };
+
+  const handleExportKedisiplinanAnak = (format: 'docx' | 'pdf' | 'excel') => {
+    const headers = ["Tanggal", "Pelanggaran", "Poin"];
+    const rows = studentViolations.map(v => [v.date, violationTypes.find(vt => vt.id === v.violationTypeId)?.name || 'Pelanggaran', `${v.points} Poin`]);
+    const title = `Catatan Kedisiplinan Siswa - ${student.name}`;
+    const safeName = student.name.replace(/\s+/g, '_');
+    if (format === 'docx') {
+      downloadDocx(`Kedisiplinan_${safeName}.docx`, title, headers, rows, headmasterName);
+    } else if (format === 'excel') {
+      downloadExcel(`Kedisiplinan_${safeName}.xlsx`, headers, rows, 'Kedisiplinan Anak');
+    } else {
+      printTablePDF(title, headers, rows, headmasterName);
+    }
+  };
+
   const getParentDownloadConfig = () => {
-    const attendanceHeaders = ["Tanggal", "Status", "Keterangan"];
-    const attendanceRows = studentAttendance.map(a => [a.date, a.status, a.notes || '-']);
-
-    const violationHeaders = ["Tanggal", "Pelanggaran", "Poin"];
-    const violationRows = studentViolations.map(v => [
-      v.date,
-      violationTypes.find(vt => vt.id === v.violationTypeId)?.name || 'Pelanggaran',
-      `${v.points} Poin`
-    ]);
-
     return [
       {
-        label: 'Presensi (.docx)',
-        onClick: () => {
-          downloadDocx(`rekap_kehadiran_${student.name.toLowerCase().replace(/\s+/g, '_')}.docx`, `Rekap Kehadiran Siswa - ${student.name}`, attendanceHeaders, attendanceRows, headmasterName);
+        label: 'Presensi Anak',
+        formats: {
+          docx: () => handleExportPresensiAnak('docx'),
+          pdf: () => handleExportPresensiAnak('pdf'),
+          excel: () => handleExportPresensiAnak('excel'),
         },
-        type: 'docx' as const,
       },
       {
-        label: 'Presensi (.pdf)',
-        onClick: () => {
-          printTablePDF(`Rekap Kehadiran Siswa - ${student.name}`, attendanceHeaders, attendanceRows, headmasterName);
+        label: 'Catatan Kedisiplinan',
+        formats: {
+          docx: () => handleExportKedisiplinanAnak('docx'),
+          pdf: () => handleExportKedisiplinanAnak('pdf'),
+          excel: () => handleExportKedisiplinanAnak('excel'),
         },
-        type: 'pdf' as const,
-      },
-      {
-        label: 'Presensi (.xlsx)',
-        onClick: () => {
-          downloadExcel(`rekap_kehadiran_${student.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`, attendanceHeaders, attendanceRows, 'Kehadiran');
-        },
-        type: 'excel' as const,
-      },
-      {
-        label: 'Kedisiplinan (.docx)',
-        onClick: () => {
-          downloadDocx(`catatan_kedisiplinan_${student.name.toLowerCase().replace(/\s+/g, '_')}.docx`, `Catatan Kedisiplinan Siswa - ${student.name}`, violationHeaders, violationRows, headmasterName);
-        },
-        type: 'docx' as const,
-      },
-      {
-        label: 'Kedisiplinan (.pdf)',
-        onClick: () => {
-          printTablePDF(`Catatan Kedisiplinan Siswa - ${student.name}`, violationHeaders, violationRows, headmasterName);
-        },
-        type: 'pdf' as const,
-      },
-      {
-        label: 'Kedisiplinan (.xlsx)',
-        onClick: () => {
-          downloadExcel(`catatan_kedisiplinan_${student.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`, violationHeaders, violationRows, 'Kedisiplinan');
-        },
-        type: 'excel' as const,
       }
     ];
   };

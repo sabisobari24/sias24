@@ -2,8 +2,13 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 export interface DownloadActionItem {
   label: string;
-  onClick: () => void;
-  type?: 'excel' | 'pdf' | 'print' | 'docx';
+  onClick?: () => void;
+  type?: 'excel' | 'pdf' | 'docx' | 'print';
+  formats?: {
+    docx?: () => void;
+    pdf?: () => void;
+    excel?: () => void;
+  };
 }
 
 interface DownloadContextType {

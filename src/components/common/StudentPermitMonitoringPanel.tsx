@@ -12,6 +12,7 @@ import {
 import { getSchoolClassName } from '../../utils/classUtils';
 import { downloadExcel } from '../../utils/excelExport';
 import { printTablePDF } from '../../utils/printHelper';
+import { downloadDocx } from '../../utils/docxExport';
 import StudentIdCardActivityScannerModal from './StudentIdCardActivityScannerModal';
 import {
   DoorOpen,
@@ -295,6 +296,50 @@ export default function StudentPermitMonitoringPanel({
 
     printTablePDF(`Buku Kendali Izin Keluar & Toilet Siswa (${dateFilter || 'Semua Tanggal'})`, headers, rows, headmasterName);
     setActionSuccessMsg('Dokumen Buku Kendali siap dicetak / disimpan ke PDF!');
+    setTimeout(() => setActionSuccessMsg(''), 4000);
+  };
+
+  // Export to Word (.docx)
+  const handleExportDocx = () => {
+    const headers = [
+      'No',
+      'Tanggal',
+      'NISN',
+      'Nama Siswa',
+      'Kelas',
+      'Jenis Izin',
+      'Tujuan / Lokasi',
+      'Alasan',
+      'Jam Keluar',
+      'Jam Kembali',
+      'Durasi',
+      'Status',
+      'Petugas'
+    ];
+    const rows = filteredPermits.map((p, idx) => [
+      idx + 1,
+      p.date,
+      p.nisn || '-',
+      p.studentName,
+      getSchoolClassName(p.classId, classes),
+      p.type === 'toilet' ? 'Ke Toilet' : p.type === 'pulang_cepat' ? 'Pulang Cepat' : 'Keluar Kelas',
+      p.destination,
+      p.reason,
+      p.timeOut,
+      p.timeIn || 'Belum Kembali',
+      p.durationMinutes !== undefined ? `${p.durationMinutes} mnt` : `${getElapsedMinutes(p)} mnt`,
+      p.status === 'kembali' ? 'Sudah Kembali' : p.status === 'izin_pulang' ? 'Pulang' : 'Masih di Luar',
+      p.approvedBy
+    ]);
+
+    downloadDocx(
+      `rekap_izin_keluar_toilet_siswa_${dateFilter || todayStr}.docx`,
+      `Buku Kendali Izin Keluar & Toilet Siswa (${dateFilter || 'Semua Tanggal'})`,
+      headers,
+      rows,
+      headmasterName
+    );
+    setActionSuccessMsg('Berhasil mengunduh Laporan Buku Kendali Izin Siswa (Word .docx)!');
     setTimeout(() => setActionSuccessMsg(''), 4000);
   };
 
@@ -657,11 +702,11 @@ export default function StudentPermitMonitoringPanel({
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={handleExportExcel}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                onClick={handleExportDocx}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>Unduh Excel</span>
+                <FileText className="w-3.5 h-3.5" />
+                <span>Word (.docx)</span>
               </button>
 
               <button
@@ -670,7 +715,16 @@ export default function StudentPermitMonitoringPanel({
                 className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span>Cetak PDF</span>
+                <span>PDF (.pdf)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Excel (.xlsx)</span>
               </button>
             </div>
           </div>

@@ -51,6 +51,7 @@ import {
 } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF, printBeritaAcaraPeminjaman } from '../utils/printHelper';
+import { downloadDocx } from '../utils/docxExport';
 import { getSchoolClassName } from '../utils/classUtils';
 import ConfirmModal from './ConfirmModal';
 import ExportDateFilterModal from './ExportDateFilterModal';
@@ -324,7 +325,7 @@ export default function TendikPanel({
     setSelectedLoanForReturn(null);
   };
 
-  const handleExportLoans = (startDate: string, endDate: string, format: 'excel' | 'pdf') => {
+  const handleExportLoans = (startDate: string, endDate: string, format: 'excel' | 'pdf' | 'docx') => {
     let list = inventoryLoans;
     if (startDate) list = list.filter(l => l.loanDate >= startDate);
     if (endDate) list = list.filter(l => l.loanDate <= endDate);
@@ -346,11 +347,15 @@ export default function TendikPanel({
       l.recordedBy
     ]);
 
+    const docTitle = "Rekapitulasi Berita Acara Peminjaman Barang Inventaris Sekolah";
     if (format === 'excel') {
       downloadExcel(`rekap_peminjaman_barang_${startDate || 'semua'}.xlsx`, headers, rows, "BA Peminjaman Barang");
-      setSuccessMsg('Data Rekap Peminjaman Barang berhasil diunduh ke Excel!');
+      setSuccessMsg('Data Rekap Peminjaman Barang berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`rekap_peminjaman_barang_${startDate || 'semua'}.docx`, docTitle, headers, rows, headmasterName);
+      setSuccessMsg('Data Rekap Peminjaman Barang berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF("Rekapitulasi Berita Acara Peminjaman Barang Inventaris Sekolah", headers, rows, headmasterName);
+      printTablePDF(docTitle, headers, rows, headmasterName);
       setSuccessMsg('Data Rekap Peminjaman Barang berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 3000);
@@ -514,7 +519,7 @@ export default function TendikPanel({
   };
 
   // Exports with Date Filter support
-  const handleExportDispatch = (startDate: string, endDate: string, format: 'excel' | 'pdf') => {
+  const handleExportDispatch = (startDate: string, endDate: string, format: 'excel' | 'pdf' | 'docx') => {
     switch (exportModal.type) {
       case 'kjp':
         handleExportKjp(startDate, endDate, format);
@@ -537,8 +542,8 @@ export default function TendikPanel({
     }
   };
 
-  const handleExportKjp = (startDate: string, endDate: string, format: 'excel' | 'pdf') => {
-    let list = filteredKjpStudents;
+  const handleExportKjp = (startDate: string, _endDate: string, format: 'excel' | 'pdf' | 'docx') => {
+    const list = filteredKjpStudents;
     const headers = ["Nama Siswa", "NISN", "Kelas", "Jenis Kelamin", "Status KJP Plus", "Nama Orang Tua", "No HP Ortu"];
     const rows = list.map(s => [
       s.name,
@@ -549,17 +554,21 @@ export default function TendikPanel({
       s.parentName,
       s.parentPhone
     ]);
+    const docTitle = "Rekapitulasi Siswa Penerima KJP Plus Sekolah";
     if (format === 'excel') {
       downloadExcel(`rekap_penerima_kjp_plus_${startDate || 'semua'}.xlsx`, headers, rows, "Rekap KJP");
-      setSuccessMsg('Data Rekap KJP berhasil diunduh ke Excel!');
+      setSuccessMsg('Data Rekap KJP berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`rekap_penerima_kjp_plus_${startDate || 'semua'}.docx`, docTitle, headers, rows, headmasterName);
+      setSuccessMsg('Data Rekap KJP berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF("Rekapitulasi Siswa Penerima KJP Plus Sekolah", headers, rows, headmasterName);
+      printTablePDF(docTitle, headers, rows, headmasterName);
       setSuccessMsg('Data Rekap KJP berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
-  const handleExportPemberkasan = (startDate: string, endDate: string, format: 'excel' | 'pdf') => {
+  const handleExportPemberkasan = (startDate: string, endDate: string, format: 'excel' | 'pdf' | 'docx') => {
     let list = pemberkasanSchedules;
     if (startDate) list = list.filter(item => (item.startDate >= startDate || item.endDate >= startDate));
     if (endDate) list = list.filter(item => (item.endDate <= endDate || item.startDate <= endDate));
@@ -573,17 +582,21 @@ export default function TendikPanel({
       item.description || '-',
       item.recordedBy
     ]);
+    const docTitle = "Agenda & Jadwal Pemberkasan Siswa Resmi";
     if (format === 'excel') {
       downloadExcel(`jadwal_pemberkasan_${startDate || 'semua'}_s.d_${endDate || 'semua'}.xlsx`, headers, rows, "Pemberkasan");
-      setSuccessMsg('Jadwal Pemberkasan Siswa berhasil diunduh ke Excel!');
+      setSuccessMsg('Jadwal Pemberkasan Siswa berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`jadwal_pemberkasan_${startDate || 'semua'}_s.d_${endDate || 'semua'}.docx`, docTitle, headers, rows, headmasterName);
+      setSuccessMsg('Jadwal Pemberkasan Siswa berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF("Agenda & Jadwal Pemberkasan Siswa Resmi", headers, rows, headmasterName);
+      printTablePDF(docTitle, headers, rows, headmasterName);
       setSuccessMsg('Jadwal Pemberkasan berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
-  const handleExportNomorSurat = (startDate: string, endDate: string, format: 'excel' | 'pdf') => {
+  const handleExportNomorSurat = (startDate: string, endDate: string, format: 'excel' | 'pdf' | 'docx') => {
     let list = nomorSuratList;
     if (startDate) list = list.filter(ns => ns.date >= startDate);
     if (endDate) list = list.filter(ns => ns.date <= endDate);
@@ -597,17 +610,21 @@ export default function TendikPanel({
       ns.date,
       ns.recordedBy
     ]);
+    const docTitle = "Buku Agenda Penerbitan Nomor Surat Resmi Sekolah";
     if (format === 'excel') {
       downloadExcel(`buku_agenda_nomor_surat_${startDate || 'semua'}_s.d_${endDate || 'semua'}.xlsx`, headers, rows, "Nomor Surat");
-      setSuccessMsg('Buku Agenda Nomor Surat berhasil diunduh ke Excel!');
+      setSuccessMsg('Buku Agenda Nomor Surat berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`buku_agenda_nomor_surat_${startDate || 'semua'}_s.d_${endDate || 'semua'}.docx`, docTitle, headers, rows, headmasterName);
+      setSuccessMsg('Buku Agenda Nomor Surat berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF("Buku Agenda Penerbitan Nomor Surat Resmi Sekolah", headers, rows, headmasterName);
+      printTablePDF(docTitle, headers, rows, headmasterName);
       setSuccessMsg('Buku Agenda Nomor Surat berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
-  const handleExportInventory = (startDate: string, endDate: string, format: 'excel' | 'pdf') => {
+  const handleExportInventory = (startDate: string, endDate: string, format: 'excel' | 'pdf' | 'docx') => {
     let list = inventoryItems;
     if (startDate) list = list.filter(item => !item.updatedAt || item.updatedAt >= startDate);
     if (endDate) list = list.filter(item => !item.updatedAt || item.updatedAt <= endDate);
@@ -623,17 +640,21 @@ export default function TendikPanel({
       item.notes || "-",
       item.updatedAt || "-"
     ]);
+    const docTitle = "Daftar Aset & Inventarisir Sarana Prasarana Sekolah";
     if (format === 'excel') {
       downloadExcel(`rekap_inventaris_${startDate || 'semua'}.xlsx`, headers, rows, "Inventaris");
-      setSuccessMsg('Data Inventaris Sekolah berhasil diunduh!');
+      setSuccessMsg('Data Inventaris Sekolah berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`rekap_inventaris_${startDate || 'semua'}.docx`, docTitle, headers, rows, headmasterName);
+      setSuccessMsg('Data Inventaris Sekolah berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF("Daftar Aset & Inventarisir Sarana Prasarana Sekolah", headers, rows, headmasterName);
+      printTablePDF(docTitle, headers, rows, headmasterName);
       setSuccessMsg('Data Inventaris Sekolah berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
-  const handleExportBosBop = (startDate: string, endDate: string, format: 'excel' | 'pdf') => {
+  const handleExportBosBop = (startDate: string, endDate: string, format: 'excel' | 'pdf' | 'docx') => {
     let list = bosBopReports;
     if (startDate) list = list.filter(r => !r.updatedAt || r.updatedAt >= startDate);
     if (endDate) list = list.filter(r => !r.updatedAt || r.updatedAt <= endDate);
@@ -649,11 +670,15 @@ export default function TendikPanel({
       r.budgetTotal - r.expenseTotal,
       r.description
     ]);
+    const docTitle = "Laporan Transparansi Penggunaan Dana BOS & BOP";
     if (format === 'excel') {
       downloadExcel(`laporan_penggunaan_bos_bop_${startDate || 'semua'}.xlsx`, headers, rows, "Laporan BOS BOP");
-      setSuccessMsg('Laporan Dana BOS & BOP berhasil diunduh!');
+      setSuccessMsg('Laporan Dana BOS & BOP berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`laporan_penggunaan_bos_bop_${startDate || 'semua'}.docx`, docTitle, headers, rows, headmasterName);
+      setSuccessMsg('Laporan Dana BOS & BOP berhasil diunduh (Word .docx)!');
     } else {
-      printTablePDF("Laporan Transparansi Penggunaan Dana BOS & BOP", headers, rows, headmasterName);
+      printTablePDF(docTitle, headers, rows, headmasterName);
       setSuccessMsg('Laporan Dana BOS & BOP berhasil dicetak ke PDF!');
     }
     setTimeout(() => setSuccessMsg(''), 3000);
@@ -672,33 +697,96 @@ export default function TendikPanel({
     switch (activeTab) {
       case 'kjp':
         return [
-          { label: 'Rekap KJP (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'kjp', title: 'Unduh Rekap Siswa KJP Plus' }), type: 'excel' as const },
-          { label: 'Rekap KJP (PDF)', onClick: () => setExportModal({ isOpen: true, type: 'kjp', title: 'Cetak PDF Rekap KJP Plus' }), type: 'pdf' as const },
+          {
+            label: 'Rekap Siswa KJP Plus',
+            formats: {
+              docx: () => handleExportKjp('', '', 'docx'),
+              pdf: () => handleExportKjp('', '', 'pdf'),
+              excel: () => handleExportKjp('', '', 'excel'),
+            },
+          },
         ];
       case 'nomor-surat':
         return [
-          { label: 'Agenda Surat (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'nomor-surat', title: 'Unduh Agenda Penomoran Surat' }), type: 'excel' as const },
-          { label: 'Agenda Surat (PDF)', onClick: () => setExportModal({ isOpen: true, type: 'nomor-surat', title: 'Cetak Agenda Penomoran Surat' }), type: 'pdf' as const },
+          {
+            label: 'Buku Agenda Nomor Surat',
+            formats: {
+              docx: () => handleExportNomorSurat('', '', 'docx'),
+              pdf: () => handleExportNomorSurat('', '', 'pdf'),
+              excel: () => handleExportNomorSurat('', '', 'excel'),
+            },
+          },
         ];
       case 'inventaris':
         return [
-          { label: 'Aset Sarpras (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'inventaris', title: 'Unduh Rekap Inventaris Barang' }), type: 'excel' as const },
-          { label: 'Aset Sarpras (PDF)', onClick: () => setExportModal({ isOpen: true, type: 'inventaris', title: 'Cetak Inventaris Barang' }), type: 'pdf' as const },
+          {
+            label: 'Aset & Inventaris Sarpras',
+            formats: {
+              docx: () => handleExportInventory('', '', 'docx'),
+              pdf: () => handleExportInventory('', '', 'pdf'),
+              excel: () => handleExportInventory('', '', 'excel'),
+            },
+          },
+        ];
+      case 'peminjaman-barang':
+        return [
+          {
+            label: 'Rekap BA Peminjaman Barang',
+            formats: {
+              docx: () => handleExportLoans('', '', 'docx'),
+              pdf: () => handleExportLoans('', '', 'pdf'),
+              excel: () => handleExportLoans('', '', 'excel'),
+            },
+          },
         ];
       case 'pemberkasan':
         return [
-          { label: 'Pemberkasan (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'pemberkasan', title: 'Unduh Rekap Agenda Pemberkasan' }), type: 'excel' as const },
-          { label: 'Pemberkasan (PDF)', onClick: () => setExportModal({ isOpen: true, type: 'pemberkasan', title: 'Cetak Rekap Agenda Pemberkasan' }), type: 'pdf' as const },
+          {
+            label: 'Agenda Pemberkasan Siswa',
+            formats: {
+              docx: () => handleExportPemberkasan('', '', 'docx'),
+              pdf: () => handleExportPemberkasan('', '', 'pdf'),
+              excel: () => handleExportPemberkasan('', '', 'excel'),
+            },
+          },
         ];
       case 'bos-bop':
         return [
-          { label: 'Laporan BOS/BOP (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'bos-bop', title: 'Unduh Laporan Transparansi BOS & BOP' }), type: 'excel' as const },
-          { label: 'Laporan BOS/BOP (PDF)', onClick: () => setExportModal({ isOpen: true, type: 'bos-bop', title: 'Cetak Laporan Transparansi BOS & BOP' }), type: 'pdf' as const },
+          {
+            label: 'Laporan Transparansi BOS/BOP',
+            formats: {
+              docx: () => handleExportBosBop('', '', 'docx'),
+              pdf: () => handleExportBosBop('', '', 'pdf'),
+              excel: () => handleExportBosBop('', '', 'excel'),
+            },
+          },
         ];
       default:
         return [
-          { label: 'Rekap KJP (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'kjp', title: 'Unduh Rekap Siswa KJP Plus' }), type: 'excel' as const },
-          { label: 'Aset Sarpras (Excel)', onClick: () => setExportModal({ isOpen: true, type: 'inventaris', title: 'Unduh Rekap Inventaris Barang' }), type: 'excel' as const },
+          {
+            label: 'Rekap Siswa KJP Plus',
+            formats: {
+              docx: () => handleExportKjp('', '', 'docx'),
+              pdf: () => handleExportKjp('', '', 'pdf'),
+              excel: () => handleExportKjp('', '', 'excel'),
+            },
+          },
+          {
+            label: 'Aset & Inventaris Sarpras',
+            formats: {
+              docx: () => handleExportInventory('', '', 'docx'),
+              pdf: () => handleExportInventory('', '', 'pdf'),
+              excel: () => handleExportInventory('', '', 'excel'),
+            },
+          },
+          {
+            label: 'Laporan Transparansi BOS/BOP',
+            formats: {
+              docx: () => handleExportBosBop('', '', 'docx'),
+              pdf: () => handleExportBosBop('', '', 'pdf'),
+              excel: () => handleExportBosBop('', '', 'excel'),
+            },
+          },
         ];
     }
   };
@@ -708,7 +796,7 @@ export default function TendikPanel({
   useEffect(() => {
     setDownloadActions(getTendikDownloadConfig());
     return () => clearDownloadActions();
-  }, [activeTab]);
+  }, [activeTab, filteredKjpStudents.length, pemberkasanSchedules.length, nomorSuratList.length, inventoryItems.length, inventoryLoans.length, bosBopReports.length]);
 
   return (
     <div className="space-y-6 relative">

@@ -3,6 +3,7 @@ import { Student, SchoolClass, StudentExamSubmission, ExamGrade, ExamSchedule } 
 import { Download, FileSpreadsheet, Search, Filter, Printer, FileText, CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
 import { printTablePDF } from '../utils/printHelper';
+import { downloadDocx } from '../utils/docxExport';
 
 interface CbtScoreExporterProps {
   students: Student[];
@@ -194,6 +195,35 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
     printTablePDF(pdfTitle, pdfHeaders, pdfRows);
   };
 
+  // Word (.docx) Export Handler
+  const handleExportDocx = () => {
+    if (filteredResults.length === 0) {
+      alert('Tidak ada data nilai CBT yang memenuhi kriteria filter.');
+      return;
+    }
+
+    const classNameStr = selectedClassId === 'all' ? 'Semua Kelas' : (classes.find(c => c.id === selectedClassId)?.name || selectedClassId);
+    const subjectStr = selectedSubject === 'all' ? 'Semua Mata Pelajaran' : selectedSubject;
+    const classSlug = selectedClassId === 'all' ? 'Semua_Kelas' : (classes.find(c => c.id === selectedClassId)?.name || selectedClassId);
+    const subjectSlug = selectedSubject === 'all' ? 'Semua_Mapel' : selectedSubject.replace(/[^a-zA-Z0-9]/g, '_');
+
+    const title = `REKAPITULASI HASIL NILAI UJIAN CBT SISWA - ${classNameStr} (${subjectStr})`;
+    const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Mata Pelajaran', 'Kategori Ujian', 'Nilai CBT (0-100)', 'Status KKM (≥75)', 'Tanggal Pengerjaan'];
+    const rows = filteredResults.map((r, idx) => [
+      idx + 1,
+      r.nisn,
+      r.studentName,
+      r.className,
+      r.subject,
+      r.examType,
+      r.score,
+      r.status,
+      r.date
+    ]);
+
+    downloadDocx(`Nilai_CBT_${classSlug}_${subjectSlug}_${new Date().toISOString().split('T')[0]}.docx`, title, headers, rows);
+  };
+
   const btnBgClass = themeColor === 'amber'
     ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-200'
     : themeColor === 'teal'
@@ -213,19 +243,19 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
             </span>
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            Nilai diambil secara otomatis dari pengerjaan CBT siswa. Filter berdasarkan Kelas &amp; Mata Pelajaran lalu unduh dalam format Excel (.xlsx) atau PDF.
+            Nilai diambil secara otomatis dari pengerjaan CBT siswa. Filter berdasarkan Kelas &amp; Mata Pelajaran lalu unduh dalam format Word (.docx), PDF, atau Excel (.xlsx).
           </p>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={handleExportExcel}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md ${btnBgClass}`}
+            onClick={handleExportDocx}
+            className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold text-xs rounded-xl border border-blue-200 transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <Download className="w-4 h-4" />
-            <span>Download Excel (.xlsx)</span>
+            <FileText className="w-4 h-4 text-blue-600" />
+            <span>Word (.docx)</span>
           </button>
           <button
             type="button"
@@ -233,7 +263,15 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Printer className="w-4 h-4" />
-            <span>Cetak PDF</span>
+            <span>PDF (.pdf)</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md ${btnBgClass}`}
+          >
+            <Download className="w-4 h-4" />
+            <span>Excel (.xlsx)</span>
           </button>
         </div>
       </div>

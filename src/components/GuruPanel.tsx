@@ -23,8 +23,8 @@ import {
 } from '../types';
 import { Calendar, UserCheck, AlertTriangle, Search, Check, Save, Sparkles, Send, Info, Download, FileSpreadsheet, Plus, Trash, GraduationCap, Edit, FileText, Award, Trash2, Clock, Database, Shield, Key, Lock, Users, RefreshCw, BookOpen, DoorOpen, Leaf, ChevronDown } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
-import { printTablePDF } from '../utils/printHelper';
-import { printHTML } from '../utils/printHelper';
+import { printTablePDF, printHTML } from '../utils/printHelper';
+import { downloadDocx } from '../utils/docxExport';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import ConfirmModal from './ConfirmModal';
 import BankSoalManager from './BankSoalManager';
@@ -760,7 +760,7 @@ export default function GuruPanel({
   };
 
   // Export Handlers
-  const handleExportPresensiGuru = (format: 'excel' | 'pdf') => {
+  const handleExportPresensiGuru = (format: 'excel' | 'pdf' | 'docx') => {
     const classObj = classes.find(c => c.id === selectedClassId);
     const className = classObj ? classObj.name : selectedClassId;
     const classAttendance = attendance.filter(a => a.classId === selectedClassId);
@@ -781,7 +781,10 @@ export default function GuruPanel({
 
     if (format === 'excel') {
       downloadExcel(`jurnal_kehadiran_kelas_${className.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Jurnal Kehadiran');
-      setSuccessMsg(`Berhasil mengunduh Jurnal Kehadiran Kelas ${className} (Excel)!`);
+      setSuccessMsg(`Berhasil mengunduh Jurnal Kehadiran Kelas ${className} (Excel .xlsx)!`);
+    } else if (format === 'docx') {
+      downloadDocx(`jurnal_kehadiran_kelas_${className.replace(/\s+/g, '_')}.docx`, `Jurnal Kehadiran Kelas ${className}`, headers, rows, headmasterName);
+      setSuccessMsg(`Berhasil mengunduh Jurnal Kehadiran Kelas ${className} (Word .docx)!`);
     } else {
       printTablePDF(`Jurnal Kehadiran Kelas ${className}`, headers, rows, headmasterName);
       setSuccessMsg(`Jurnal Kehadiran Kelas ${className} berhasil dicetak / disimpan ke PDF!`);
@@ -789,7 +792,7 @@ export default function GuruPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportTeachingJournal = (format: 'excel' | 'pdf') => {
+  const handleExportTeachingJournal = (format: 'excel' | 'pdf' | 'docx') => {
     const myJournals = teachingJournals.filter(j => j.teacherId === teacher.id);
     
     if (myJournals.length === 0) {
@@ -813,7 +816,10 @@ export default function GuruPanel({
 
     if (format === 'excel') {
       downloadExcel(`Jurnal_Mengajar_Guru_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Jurnal Mengajar');
-      setSuccessMsg(`Berhasil mengunduh Jurnal Mengajar Harian Anda (Excel)!`);
+      setSuccessMsg(`Berhasil mengunduh Jurnal Mengajar Harian Anda (Excel .xlsx)!`);
+    } else if (format === 'docx') {
+      downloadDocx(`Jurnal_Mengajar_Guru_${teacher.name.replace(/\s+/g, '_')}.docx`, `Jurnal Mengajar Harian Guru - ${teacher.name}`, headers, rows, headmasterName);
+      setSuccessMsg(`Berhasil mengunduh Jurnal Mengajar Harian Anda (Word .docx)!`);
     } else {
       printTablePDF(`Jurnal Mengajar Harian Guru - ${teacher.name}`, headers, rows, headmasterName);
       setSuccessMsg(`Jurnal Mengajar Anda berhasil dicetak / disimpan ke PDF!`);
@@ -821,7 +827,7 @@ export default function GuruPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportPelanggaranGuru = (format: 'excel' | 'pdf') => {
+  const handleExportPelanggaranGuru = (format: 'excel' | 'pdf' | 'docx') => {
     const myViolations = violations.filter(v => v.recordedBy === teacher.name);
     const headers = ["Tanggal", "Nama Siswa", "Kelas", "Jenis Pelanggaran", "Poin", "Catatan", "Pencatat"];
     const rows = myViolations.map(v => {
@@ -840,7 +846,10 @@ export default function GuruPanel({
 
     if (format === 'excel') {
       downloadExcel(`laporan_pelanggaran_oleh_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Laporan Pelanggaran');
-      setSuccessMsg('Berhasil mengunduh rekapan catatan kedisiplinan (Excel)!');
+      setSuccessMsg('Berhasil mengunduh rekapan catatan kedisiplinan (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`laporan_pelanggaran_oleh_${teacher.name.replace(/\s+/g, '_')}.docx`, `Laporan Penegakan Kedisiplinan oleh ${teacher.name}`, headers, rows, headmasterName);
+      setSuccessMsg('Berhasil mengunduh rekapan catatan kedisiplinan (Word .docx)!');
     } else {
       printTablePDF(`Laporan Penegakan Kedisiplinan oleh ${teacher.name}`, headers, rows, headmasterName);
       setSuccessMsg('Rekapitulasi penegakan kedisiplinan berhasil dicetak / disimpan ke PDF!');
@@ -848,7 +857,7 @@ export default function GuruPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportRiwayatGuru = (format: 'excel' | 'pdf') => {
+  const handleExportRiwayatGuru = (format: 'excel' | 'pdf' | 'docx') => {
     const myAttendance = attendance.filter(a => a.recordedBy === teacher.name);
     const myViolations = violations.filter(v => v.recordedBy === teacher.name);
     
@@ -879,7 +888,10 @@ export default function GuruPanel({
 
     if (format === 'excel') {
       downloadExcel(`riwayat_entri_guru_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Riwayat Entri');
-      setSuccessMsg('Berhasil mengunduh Riwayat Laporan Entri Anda (Excel)!');
+      setSuccessMsg('Berhasil mengunduh Riwayat Laporan Entri Anda (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`riwayat_entri_guru_${teacher.name.replace(/\s+/g, '_')}.docx`, `Riwayat Aktivitas & Laporan Entri Guru - ${teacher.name}`, headers, rows, headmasterName);
+      setSuccessMsg('Berhasil mengunduh Riwayat Laporan Entri Anda (Word .docx)!');
     } else {
       printTablePDF(`Riwayat Aktivitas & Laporan Entri Guru - ${teacher.name}`, headers, rows, headmasterName);
       setSuccessMsg('Riwayat Laporan Anda berhasil dicetak ke PDF!');
@@ -887,7 +899,7 @@ export default function GuruPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportVerifikasiMapel = (format: 'excel' | 'pdf') => {
+  const handleExportVerifikasiMapel = (format: 'excel' | 'pdf' | 'docx') => {
     const selfRecords = attendance.filter(a => a.isSelfAttendance);
     const headers = ["Tanggal", "Waktu Check-In", "Nama Siswa", "Kelas", "Status Diajukan", "Verifikasi Guru Mapel", "Keterangan"];
     const rows = selfRecords.map(a => {
@@ -906,7 +918,10 @@ export default function GuruPanel({
 
     if (format === 'excel') {
       downloadExcel('rekap_verifikasi_absensi_mandiri.xlsx', headers, rows, 'Verifikasi Mandiri');
-      setSuccessMsg('Berhasil mengunduh Rekap Verifikasi Absensi Mandiri (Excel)!');
+      setSuccessMsg('Berhasil mengunduh Rekap Verifikasi Absensi Mandiri (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('rekap_verifikasi_absensi_mandiri.docx', 'Rekapitulasi Verifikasi Presensi Mandiri Siswa', headers, rows, headmasterName);
+      setSuccessMsg('Berhasil mengunduh Rekap Verifikasi Absensi Mandiri (Word .docx)!');
     } else {
       printTablePDF('Rekapitulasi Verifikasi Presensi Mandiri Siswa', headers, rows, headmasterName);
       setSuccessMsg('Dokumen Verifikasi Absensi berhasil dicetak ke PDF!');
@@ -914,7 +929,7 @@ export default function GuruPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportJadwalUjian = (format: 'excel' | 'pdf') => {
+  const handleExportJadwalUjian = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ["Tanggal", "Jam Ujian", "Mata Pelajaran", "Target Kelas", "Jenis Evaluasi", "Ruangan / Tempat"];
     const rows = examSchedules.map(e => [
       e.date,
@@ -927,7 +942,10 @@ export default function GuruPanel({
 
     if (format === 'excel') {
       downloadExcel('jadwal_evaluasi_cbt_sekolah.xlsx', headers, rows, 'Jadwal Ujian');
-      setSuccessMsg('Jadwal Evaluasi Ujian CBT berhasil diunduh (Excel)!');
+      setSuccessMsg('Jadwal Evaluasi Ujian CBT berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx('jadwal_evaluasi_cbt_sekolah.docx', 'Jadwal Pelaksanaan Evaluasi & Ujian CBT', headers, rows, headmasterName);
+      setSuccessMsg('Jadwal Evaluasi Ujian CBT berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF('Jadwal Pelaksanaan Evaluasi & Ujian CBT', headers, rows, headmasterName);
       setSuccessMsg('Jadwal Ujian berhasil dicetak ke PDF!');
@@ -935,7 +953,7 @@ export default function GuruPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportBankSoal = (format: 'excel' | 'pdf') => {
+  const handleExportBankSoal = (format: 'excel' | 'pdf' | 'docx') => {
     const headers = ["Judul Bank Soal", "Mata Pelajaran", "Tingkat Kelas", "Jumlah Soal", "Tanggal Dibuat", "Author"];
     const rows = teacherBanks.map(b => [
       b.title,
@@ -948,7 +966,10 @@ export default function GuruPanel({
 
     if (format === 'excel') {
       downloadExcel(`bank_soal_cbt_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Bank Soal');
-      setSuccessMsg('Daftar Bank Soal CBT berhasil diunduh (Excel)!');
+      setSuccessMsg('Daftar Bank Soal CBT berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`bank_soal_cbt_${teacher.name.replace(/\s+/g, '_')}.docx`, `Daftar Bank Soal CBT - ${teacher.name}`, headers, rows, headmasterName);
+      setSuccessMsg('Daftar Bank Soal CBT berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF(`Daftar Bank Soal CBT - ${teacher.name}`, headers, rows, headmasterName);
       setSuccessMsg('Daftar Bank Soal berhasil dicetak ke PDF!');
@@ -956,7 +977,7 @@ export default function GuruPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleExportGuruWaliView = (format: 'excel' | 'pdf') => {
+  const handleExportGuruWaliView = (format: 'excel' | 'pdf' | 'docx') => {
     const myWaliStudents = students.filter(s => s.guruWaliTeacherId === teacher.id);
     const headers = ["NISN", "Nama Siswa", "Kelas", "Kategori Bimbingan", "Catatan Perkembangan", "Bakat & Minat"];
     const rows = myWaliStudents.map(s => {
@@ -974,7 +995,10 @@ export default function GuruPanel({
 
     if (format === 'excel') {
       downloadExcel(`pendampingan_guru_wali_${teacher.name.replace(/\s+/g, '_')}.xlsx`, headers, rows, 'Guru Wali');
-      setSuccessMsg('Laporan Pendampingan Guru Wali berhasil diunduh (Excel)!');
+      setSuccessMsg('Laporan Pendampingan Guru Wali berhasil diunduh (Excel .xlsx)!');
+    } else if (format === 'docx') {
+      downloadDocx(`pendampingan_guru_wali_${teacher.name.replace(/\s+/g, '_')}.docx`, `Laporan Pendampingan Akademik Guru Wali - ${teacher.name}`, headers, rows, headmasterName);
+      setSuccessMsg('Laporan Pendampingan Guru Wali berhasil diunduh (Word .docx)!');
     } else {
       printTablePDF(`Laporan Pendampingan Akademik Guru Wali - ${teacher.name}`, headers, rows, headmasterName);
       setSuccessMsg('Laporan Guru Wali berhasil dicetak ke PDF!');
@@ -988,56 +1012,110 @@ export default function GuruPanel({
       case 'presensi': {
         const clsName = classes.find(c => c.id === selectedClassId)?.name || 'Kelas';
         return [
-          { label: `Presensi ${clsName} (Excel)`, onClick: () => handleExportPresensiGuru('excel'), type: 'excel' as const },
-          { label: `Presensi ${clsName} (PDF)`, onClick: () => handleExportPresensiGuru('pdf'), type: 'pdf' as const },
+          {
+            label: `Presensi ${clsName}`,
+            formats: {
+              docx: () => handleExportPresensiGuru('docx'),
+              pdf: () => handleExportPresensiGuru('pdf'),
+              excel: () => handleExportPresensiGuru('excel'),
+            },
+          },
         ];
       }
       case 'pelanggaran': {
         return [
-          { label: 'Pelanggaran (Excel)', onClick: () => handleExportPelanggaranGuru('excel'), type: 'excel' as const },
-          { label: 'Pelanggaran (PDF)', onClick: () => handleExportPelanggaranGuru('pdf'), type: 'pdf' as const },
+          {
+            label: 'Laporan Pelanggaran',
+            formats: {
+              docx: () => handleExportPelanggaranGuru('docx'),
+              pdf: () => handleExportPelanggaranGuru('pdf'),
+              excel: () => handleExportPelanggaranGuru('excel'),
+            },
+          },
         ];
       }
       case 'jurnal-harian': {
         return [
-          { label: 'Jurnal Mengajar (Excel)', onClick: () => handleExportTeachingJournal('excel'), type: 'excel' as const },
-          { label: 'Jurnal Mengajar (PDF)', onClick: () => handleExportTeachingJournal('pdf'), type: 'pdf' as const },
+          {
+            label: 'Jurnal Mengajar Guru',
+            formats: {
+              docx: () => handleExportTeachingJournal('docx'),
+              pdf: () => handleExportTeachingJournal('pdf'),
+              excel: () => handleExportTeachingJournal('excel'),
+            },
+          },
         ];
       }
       case 'riwayat': {
         return [
-          { label: 'Riwayat Laporan (Excel)', onClick: () => handleExportRiwayatGuru('excel'), type: 'excel' as const },
-          { label: 'Riwayat Laporan (PDF)', onClick: () => handleExportRiwayatGuru('pdf'), type: 'pdf' as const },
+          {
+            label: 'Riwayat Laporan Entri',
+            formats: {
+              docx: () => handleExportRiwayatGuru('docx'),
+              pdf: () => handleExportRiwayatGuru('pdf'),
+              excel: () => handleExportRiwayatGuru('excel'),
+            },
+          },
         ];
       }
       case 'verifikasi-mandiri': {
         return [
-          { label: 'Verifikasi Absensi (Excel)', onClick: () => handleExportVerifikasiMapel('excel'), type: 'excel' as const },
-          { label: 'Verifikasi Absensi (PDF)', onClick: () => handleExportVerifikasiMapel('pdf'), type: 'pdf' as const },
+          {
+            label: 'Verifikasi Absensi Mandiri',
+            formats: {
+              docx: () => handleExportVerifikasiMapel('docx'),
+              pdf: () => handleExportVerifikasiMapel('pdf'),
+              excel: () => handleExportVerifikasiMapel('excel'),
+            },
+          },
         ];
       }
       case 'jadwal-ujian': {
         return [
-          { label: 'Jadwal Ujian (Excel)', onClick: () => handleExportJadwalUjian('excel'), type: 'excel' as const },
-          { label: 'Jadwal Ujian (PDF)', onClick: () => handleExportJadwalUjian('pdf'), type: 'pdf' as const },
+          {
+            label: 'Jadwal Ujian CBT',
+            formats: {
+              docx: () => handleExportJadwalUjian('docx'),
+              pdf: () => handleExportJadwalUjian('pdf'),
+              excel: () => handleExportJadwalUjian('excel'),
+            },
+          },
         ];
       }
       case 'bank-soal': {
         return [
-          { label: 'Bank Soal (Excel)', onClick: () => handleExportBankSoal('excel'), type: 'excel' as const },
-          { label: 'Bank Soal (PDF)', onClick: () => handleExportBankSoal('pdf'), type: 'pdf' as const },
+          {
+            label: 'Daftar Bank Soal CBT',
+            formats: {
+              docx: () => handleExportBankSoal('docx'),
+              pdf: () => handleExportBankSoal('pdf'),
+              excel: () => handleExportBankSoal('excel'),
+            },
+          },
         ];
       }
       case 'guru-wali-view': {
         return [
-          { label: 'Guru Wali (Excel)', onClick: () => handleExportGuruWaliView('excel'), type: 'excel' as const },
-          { label: 'Guru Wali (PDF)', onClick: () => handleExportGuruWaliView('pdf'), type: 'pdf' as const },
+          {
+            label: 'Pendampingan Guru Wali',
+            formats: {
+              docx: () => handleExportGuruWaliView('docx'),
+              pdf: () => handleExportGuruWaliView('pdf'),
+              excel: () => handleExportGuruWaliView('excel'),
+            },
+          },
         ];
       }
       default:
         return [
-          { label: 'Presensi (Excel)', onClick: () => handleExportPresensiGuru('excel'), type: 'excel' as const },
-          { label: 'Presensi (PDF)', onClick: () => handleExportPresensiGuru('pdf'), type: 'pdf' as const },
+          {
+            label: 'Jurnal Presensi Kelas',
+            formats: {
+              docx: () => handleExportPresensiGuru('docx'),
+              pdf: () => handleExportPresensiGuru('pdf'),
+              excel: () => handleExportPresensiGuru('excel'),
+            },
+          },
         ];
     }
   };

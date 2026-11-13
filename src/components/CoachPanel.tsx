@@ -853,28 +853,53 @@ export default function CoachPanel({
   const handleDownloadExcelGrades = () => {
     const activeMembers = students.filter(s => memberIds.includes(s.id));
     const ekskulName = currentEkskul.name;
-
-    // Headers
-    let csvContent = "No;Nama Siswa;Kelas;Nilai Angka;Predikat;Sikap;Catatan Perkembangan\n";
-
-    activeMembers.forEach((m, idx) => {
+    const headers = ['No', 'Nama Siswa', 'Kelas', 'Nilai Angka', 'Predikat', 'Sikap', 'Catatan Perkembangan'];
+    const rows = activeMembers.map((m, idx) => {
       const g = studentGrades.find(grade => grade.studentId === m.id);
-      const score = g ? g.score : '-';
-      const predicate = g ? g.predicate : '-';
-      const attitude = g ? g.attitude : '-';
-      const notes = g ? g.notes ? g.notes.replace(/;/g, ',') : '-' : '-';
-
-      csvContent += `${idx + 1};${m.name};${m.classId};${score};${predicate};${attitude};${notes}\n`;
+      return [
+        idx + 1,
+        m.name,
+        m.classId,
+        g ? g.score : '-',
+        g ? g.predicate : '-',
+        g ? g.attitude : '-',
+        g && g.notes ? g.notes : '-'
+      ];
     });
 
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `rekap_nilai_ekskul_${ekskulName.toLowerCase().replace(/\s+/g, '_')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadExcel(
+      `rekap_nilai_ekskul_${ekskulName.toLowerCase().replace(/\s+/g, '_')}.xlsx`,
+      headers,
+      rows,
+      `Nilai ${ekskulName.slice(0, 24)}`
+    );
+  };
+
+  const handleDownloadDocxGrades = () => {
+    const activeMembers = students.filter(s => memberIds.includes(s.id));
+    const ekskulName = currentEkskul.name;
+    const headmasterName = localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.';
+    const headers = ['No', 'Nama Siswa', 'Kelas', 'Nilai Angka', 'Predikat', 'Sikap', 'Catatan Perkembangan'];
+    const rows = activeMembers.map((m, idx) => {
+      const g = studentGrades.find(grade => grade.studentId === m.id);
+      return [
+        idx + 1,
+        m.name,
+        m.classId,
+        g ? g.score : '-',
+        g ? g.predicate : '-',
+        g ? g.attitude : '-',
+        g && g.notes ? g.notes : '-'
+      ];
+    });
+
+    downloadDocx(
+      `rekap_nilai_ekskul_${ekskulName.toLowerCase().replace(/\s+/g, '_')}.docx`,
+      `Laporan Rekapitulasi Nilai Ekstrakurikuler ${ekskulName}`,
+      headers,
+      rows,
+      headmasterName
+    );
   };
 
   const handleDownloadAttendanceRecap = (format: 'excel' | 'pdf' | 'docx' = 'excel') => {
@@ -929,52 +954,23 @@ export default function CoachPanel({
         attendancePercentage
       ];
     });
-    
-    if (format === 'excel') {
+
+    const slug = currentEkskul.name.toLowerCase().replace(/\s+/g, '_');
+    const title = `Rekapitulasi Kehadiran Ekskul ${currentEkskul.name}`;
+    const headmasterName = localStorage.getItem('siakad_headmaster_name') || 'Dra. Hj. Endah Purwani, M.M.';
+
+    if (format === 'docx') {
+      downloadDocx(`rekap_kehadiran_ekskul_${slug}.docx`, title, headers, rows, headmasterName);
+    } else if (format === 'pdf') {
+      printTablePDF(title, headers, rows, headmasterName);
+    } else {
       downloadExcel(
-        `rekap_kehadiran_ekskul_${currentEkskul.name.toLowerCase().replace(/\s+/g, '_')}.xlsx`,
+        `rekap_kehadiran_ekskul_${slug}.xlsx`,
         headers,
         rows,
         `Presensi ${currentEkskul.name.slice(0, 25)}`
       );
-    } else if (format === 'docx') {
-      downloadDocx(
-        `rekap_kehadiran_ekskul_${currentEkskul.name.toLowerCase().replace(/\s+/g, '_')}.docx`,
-        `Rekapitulasi Kehadiran Anggota Ekskul ${currentEkskul.name}`,
-        headers,
-        rows
-      );
-    } else {
-      printTablePDF(
-        `Rekapitulasi Kehadiran Anggota Ekskul ${currentEkskul.name}`,
-        headers,
-        rows
-      );
     }
-  };
-
-  const handleDownloadDocxGrades = () => {
-    const activeMembers = students.filter(s => memberIds.includes(s.id));
-    const ekskulName = currentEkskul.name;
-    const headers = ['No', 'Nama Siswa', 'Kelas', 'Nilai Angka', 'Predikat', 'Sikap', 'Catatan Perkembangan'];
-    const rows = activeMembers.map((m, idx) => {
-      const g = studentGrades.find(grade => grade.studentId === m.id);
-      return [
-        idx + 1,
-        m.name,
-        m.classId || '-',
-        g ? g.score : '-',
-        g ? g.predicate : '-',
-        g ? g.attitude : '-',
-        g?.notes || '-'
-      ];
-    });
-    downloadDocx(
-      `rekap_nilai_ekskul_${ekskulName.toLowerCase().replace(/\s+/g, '_')}.docx`,
-      `Rekapitulasi Nilai Akhir Anggota Ekskul ${ekskulName}`,
-      headers,
-      rows
-    );
   };
 
   // Handle Local Photo Selection Base64 helper
@@ -997,28 +993,30 @@ export default function CoachPanel({
 
   // Contextual download config for Coach Panel
   const getCoachDownloadConfig = () => {
+    const attendanceAction = {
+      label: 'Rekap Kehadiran Ekskul',
+      formats: {
+        docx: () => handleDownloadAttendanceRecap('docx'),
+        pdf: () => handleDownloadAttendanceRecap('pdf'),
+        excel: () => handleDownloadAttendanceRecap('excel'),
+      },
+    };
+    const gradesAction = {
+      label: 'Rekap Nilai Ekskul',
+      formats: {
+        docx: handleDownloadDocxGrades,
+        pdf: handleDownloadPDFGrades,
+        excel: handleDownloadExcelGrades,
+      },
+    };
+
     switch (activeTab) {
       case 'absensi':
-        return [
-          { label: 'Kehadiran (.docx)', onClick: () => handleDownloadAttendanceRecap('docx'), type: 'docx' as const },
-          { label: 'Kehadiran (.pdf)', onClick: () => handleDownloadAttendanceRecap('pdf'), type: 'pdf' as const },
-          { label: 'Kehadiran (.xlsx)', onClick: () => handleDownloadAttendanceRecap('excel'), type: 'excel' as const },
-        ];
+        return [attendanceAction];
       case 'nilai':
-        return [
-          { label: 'Nilai Ekskul (.docx)', onClick: handleDownloadDocxGrades, type: 'docx' as const },
-          { label: 'Nilai Ekskul (.pdf)', onClick: handleDownloadPDFGrades, type: 'pdf' as const },
-          { label: 'Nilai Ekskul (.xlsx)', onClick: handleDownloadExcelGrades, type: 'excel' as const },
-        ];
+        return [gradesAction];
       default:
-        return [
-          { label: 'Kehadiran (.docx)', onClick: () => handleDownloadAttendanceRecap('docx'), type: 'docx' as const },
-          { label: 'Kehadiran (.pdf)', onClick: () => handleDownloadAttendanceRecap('pdf'), type: 'pdf' as const },
-          { label: 'Kehadiran (.xlsx)', onClick: () => handleDownloadAttendanceRecap('excel'), type: 'excel' as const },
-          { label: 'Nilai Ekskul (.docx)', onClick: handleDownloadDocxGrades, type: 'docx' as const },
-          { label: 'Nilai Ekskul (.pdf)', onClick: handleDownloadPDFGrades, type: 'pdf' as const },
-          { label: 'Nilai Ekskul (.xlsx)', onClick: handleDownloadExcelGrades, type: 'excel' as const },
-        ];
+        return [attendanceAction, gradesAction];
     }
   };
 
@@ -1027,7 +1025,7 @@ export default function CoachPanel({
   useEffect(() => {
     setDownloadActions(getCoachDownloadConfig());
     return () => clearDownloadActions();
-  }, [activeTab]);
+  }, [activeTab, attendanceList.length, studentGrades.length, memberIds.length]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
@@ -1065,29 +1063,54 @@ export default function CoachPanel({
             {isCoachDownloadOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setIsCoachDownloadOpen(false)} />
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-40 text-slate-800 text-xs font-medium">
-                  <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 p-2.5 z-40 text-slate-800 text-xs font-medium">
+                  <div className="px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 flex items-center justify-between mb-1.5">
                     <span>Menu Unduh &amp; Ekspor</span>
                     <span className="text-amber-600 font-bold">Pelatih</span>
                   </div>
-                  <div className="py-1 space-y-1">
+                  <div className="py-1 space-y-2">
                     {getCoachDownloadConfig().map((action, idx) => (
-                      <button
+                      <div
                         key={idx}
-                        type="button"
-                        onClick={() => {
-                          action.onClick();
-                          setIsCoachDownloadOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-700 hover:text-amber-600"
+                        className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70 space-y-2"
                       >
-                        {action.type === 'excel' ? (
-                          <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
-                        ) : (
-                          <FileText className="w-4 h-4 text-rose-500 shrink-0" />
-                        )}
-                        <span className="truncate">{action.label}</span>
-                      </button>
+                        <p className="text-[11px] font-extrabold text-slate-800 truncate">{action.label}</p>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              action.formats.docx();
+                              setIsCoachDownloadOpen(false);
+                            }}
+                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
+                          >
+                            <FileText className="w-3 h-3 shrink-0" />
+                            <span>.docx</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              action.formats.pdf();
+                              setIsCoachDownloadOpen(false);
+                            }}
+                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
+                          >
+                            <FileText className="w-3 h-3 shrink-0" />
+                            <span>.pdf</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              action.formats.excel();
+                              setIsCoachDownloadOpen(false);
+                            }}
+                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
+                          >
+                            <FileSpreadsheet className="w-3 h-3 shrink-0" />
+                            <span>.xlsx</span>
+                          </button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>

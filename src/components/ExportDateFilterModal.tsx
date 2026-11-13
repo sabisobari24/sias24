@@ -158,35 +158,32 @@ export default function ExportDateFilterModal({
           </div>
         )}
 
-        {/* Export Action Buttons - 3 Formats (.docx, .pdf, .xlsx) */}
+        {/* Export Action Buttons (3 Formats: DOCX, PDF, XLSX) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2">
           <button
             type="button"
             onClick={() => handleExecute('docx')}
-            className="w-full py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-            title="Unduh dokumen dalam format Microsoft Word (.docx)"
+            className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
           >
-            <FileText className="w-4 h-4 text-blue-200 shrink-0" />
+            <FileText className="w-4 h-4 text-blue-100" />
             <span>Word (.docx)</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleExecute('pdf')}
-            className="w-full py-2.5 px-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-            title="Cetak atau simpan dokumen dalam format PDF (.pdf)"
+            className="w-full py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
           >
-            <Printer className="w-4 h-4 text-indigo-200 shrink-0" />
+            <Printer className="w-4 h-4 text-rose-100" />
             <span>PDF (.pdf)</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleExecute('excel')}
-            className="w-full py-2.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-            title="Unduh data dalam format Microsoft Excel (.xlsx)"
+            className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-200 shrink-0" />
+            <FileSpreadsheet className="w-4 h-4 text-emerald-100" />
             <span>Excel (.xlsx)</span>
           </button>
         </div>

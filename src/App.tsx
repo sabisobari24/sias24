@@ -4917,24 +4917,77 @@ export default function App({ initialMode }: AppProps = {}) {
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: -4, scale: 0.96 }}
                               transition={{ duration: 0.12 }}
-                              className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 p-2 z-40 text-slate-800 dark:text-slate-200 text-xs font-medium"
+                              className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 p-2.5 z-40 text-slate-800 dark:text-slate-200 text-xs font-medium"
                             >
-                              <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                              <div className="px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between mb-1.5">
                                 <span>Menu Unduh &amp; Ekspor</span>
                                 <span className="capitalize text-indigo-600 dark:text-indigo-400">{activeRole?.replace('_', ' ')}</span>
                               </div>
-                              <div className="py-1 space-y-1">
-                                {downloadActions.map((action, idx) => (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onClick={() => {
-                                      action.onClick();
-                                      setIsDownloadMenuOpen(false);
-                                    }}
-                                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors flex items-center justify-between gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
-                                  >
-                                    <div className="flex items-center gap-2.5 truncate">
+                              <div className="py-1 space-y-2 max-h-[70vh] overflow-y-auto">
+                                {downloadActions.map((action, idx) =>
+                                  action.formats ? (
+                                    <div
+                                      key={idx}
+                                      className="p-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-900/40 border border-slate-200/70 dark:border-slate-700/60 space-y-2"
+                                    >
+                                      <p className="text-[11px] font-extrabold text-slate-800 dark:text-slate-100 truncate">
+                                        {action.label}
+                                      </p>
+                                      <div className="grid grid-cols-3 gap-1.5">
+                                        {action.formats.docx && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              action.formats?.docx?.();
+                                              setIsDownloadMenuOpen(false);
+                                            }}
+                                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
+                                            title={`Unduh ${action.label} dalam format Word (.docx)`}
+                                          >
+                                            <FileText className="w-3 h-3 shrink-0" />
+                                            <span>.docx</span>
+                                          </button>
+                                        )}
+                                        {action.formats.pdf && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              action.formats?.pdf?.();
+                                              setIsDownloadMenuOpen(false);
+                                            }}
+                                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
+                                            title={`Unduh ${action.label} dalam format PDF (.pdf)`}
+                                          >
+                                            <FileText className="w-3 h-3 shrink-0" />
+                                            <span>.pdf</span>
+                                          </button>
+                                        )}
+                                        {action.formats.excel && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              action.formats?.excel?.();
+                                              setIsDownloadMenuOpen(false);
+                                            }}
+                                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200/80 transition-colors cursor-pointer text-[10px] font-extrabold"
+                                            title={`Unduh ${action.label} dalam format Excel (.xlsx)`}
+                                          >
+                                            <FileSpreadsheet className="w-3 h-3 shrink-0" />
+                                            <span>.xlsx</span>
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => {
+                                        action.onClick?.();
+                                        setIsDownloadMenuOpen(false);
+                                      }}
+                                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                    >
                                       {action.type === 'excel' ? (
                                         <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
                                       ) : action.type === 'docx' ? (
@@ -4943,16 +4996,9 @@ export default function App({ initialMode }: AppProps = {}) {
                                         <FileText className="w-4 h-4 text-rose-500 shrink-0" />
                                       )}
                                       <span className="truncate">{action.label}</span>
-                                    </div>
-                                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded shrink-0 border ${
-                                      action.type === 'excel' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' :
-                                      action.type === 'docx' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800' :
-                                      'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
-                                    }`}>
-                                      {action.type === 'excel' ? '.xlsx' : action.type === 'docx' ? '.docx' : '.pdf'}
-                                    </span>
-                                  </button>
-                                ))}
+                                    </button>
+                                  )
+                                )}
                               </div>
                             </motion.div>
                           </>

@@ -38,6 +38,7 @@ import { EcoCertificateModal } from './EcoCertificateModal';
 import StudentIdCardActivityScannerModal from '../common/StudentIdCardActivityScannerModal';
 import { downloadExcel } from '../../utils/excelExport';
 import { printTablePDF } from '../../utils/printHelper';
+import { downloadDocx } from '../../utils/docxExport';
 import { getEffectiveSchoolLogo, getEffectiveRegionalLogo } from '../../utils/schoolLogoHelper';
 
 interface AdminEcoTiketPanelProps {
@@ -479,6 +480,24 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
     notifySuccess('Laporan setoran sampah siap dicetak / disimpan ke PDF!');
   };
 
+  const exportDepositsDocx = () => {
+    const headers = ["ID Setoran", "Tanggal", "Nama Siswa", "Kelas", "Kategori Sampah", "Jumlah", "Satuan", "Poin Diperoleh", "Status", "Verifikator"];
+    const rows = deposits.map(d => [
+      d.id,
+      d.date,
+      d.studentName,
+      d.classId,
+      d.categoryName,
+      d.quantity,
+      d.unit,
+      d.pointsEarned,
+      d.status,
+      d.recordedBy
+    ]);
+    downloadDocx(`rekap_setoran_sampah_eco_tiket_${new Date().toISOString().split('T')[0]}.docx`, `Laporan Setoran Sampah ECo-Tiket - ${schoolName}`, headers, rows, headmasterName);
+    notifySuccess('Rekapitulasi setoran sampah berhasil diunduh (Word .docx)!');
+  };
+
   const exportLeaderboardExcel = () => {
     const headers = ["Peringkat", "Nama Siswa", "NISN", "Kelas", "Total Poin Terverifikasi", "Frekuensi Setor", "Status Gelar"];
     const rows = leaderboard.map((item, idx) => [
@@ -491,7 +510,37 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
       idx === 0 && item.totalPoints > 0 ? 'DUTA KEBERSIHAN UTAMA' : idx < 3 && item.totalPoints >= 100 ? 'Kandidat Duta Lingkungan' : 'Peserta'
     ]);
     downloadExcel(`leaderboard_eco_tiket_duta_kebersihan_${new Date().toISOString().split('T')[0]}.xlsx`, headers, rows, 'Leaderboard ECo-Tiket');
-    notifySuccess('Leaderboard Duta Kebersihan berhasil diunduh (Excel)!');
+    notifySuccess('Leaderboard Duta Kebersihan berhasil diunduh (Excel .xlsx)!');
+  };
+
+  const exportLeaderboardDocx = () => {
+    const headers = ["Peringkat", "Nama Siswa", "NISN", "Kelas", "Total Poin", "Frekuensi Setor", "Status Gelar"];
+    const rows = leaderboard.map((item, idx) => [
+      idx + 1,
+      item.name,
+      item.nisn || '-',
+      item.classId,
+      item.totalPoints,
+      `${item.depositCount} kali`,
+      idx === 0 && item.totalPoints > 0 ? 'DUTA KEBERSIHAN UTAMA' : idx < 3 && item.totalPoints >= 100 ? 'Kandidat Duta Lingkungan' : 'Peserta'
+    ]);
+    downloadDocx(`leaderboard_eco_tiket_duta_kebersihan_${new Date().toISOString().split('T')[0]}.docx`, `Peringkat Duta Kebersihan ECo-Tiket - ${schoolName}`, headers, rows, headmasterName);
+    notifySuccess('Leaderboard Duta Kebersihan berhasil diunduh (Word .docx)!');
+  };
+
+  const exportLeaderboardPDF = () => {
+    const headers = ["Peringkat", "Nama Siswa", "NISN", "Kelas", "Total Poin", "Frekuensi", "Gelar"];
+    const rows = leaderboard.map((item, idx) => [
+      idx + 1,
+      item.name,
+      item.nisn || '-',
+      item.classId,
+      item.totalPoints,
+      `${item.depositCount}x`,
+      idx === 0 && item.totalPoints > 0 ? 'DUTA KEBERSIHAN' : idx < 3 && item.totalPoints >= 100 ? 'Kandidat' : 'Peserta'
+    ]);
+    printTablePDF(`Peringkat Duta Kebersihan ECo-Tiket - ${schoolName}`, headers, rows, headmasterName);
+    notifySuccess('Leaderboard Duta Kebersihan siap dicetak / disimpan ke PDF!');
   };
 
   return (
@@ -543,21 +592,30 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
             </button>
             <button
               type="button"
-              onClick={exportDepositsExcel}
-              className="flex items-center justify-center gap-1.5 bg-emerald-900/60 hover:bg-emerald-900 text-white border border-emerald-600/50 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
-              title="Unduh rekap setoran ke Excel"
+              onClick={exportDepositsDocx}
+              className="flex items-center justify-center gap-1.5 bg-emerald-900/60 hover:bg-emerald-900 text-white border border-emerald-600/50 px-3 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
+              title="Unduh rekap setoran ke Word (.docx)"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
-              <span>Ekspor Excel</span>
+              <FileText className="w-4 h-4 text-blue-300" />
+              <span>.docx</span>
             </button>
             <button
               type="button"
               onClick={exportDepositsPDF}
-              className="flex items-center justify-center gap-1.5 bg-emerald-900/60 hover:bg-emerald-900 text-white border border-emerald-600/50 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
+              className="flex items-center justify-center gap-1.5 bg-emerald-900/60 hover:bg-emerald-900 text-white border border-emerald-600/50 px-3 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
               title="Cetak rekap setoran ke PDF"
             >
-              <FileText className="w-4 h-4 text-emerald-300" />
-              <span>Cetak PDF</span>
+              <Printer className="w-4 h-4 text-rose-300" />
+              <span>.pdf</span>
+            </button>
+            <button
+              type="button"
+              onClick={exportDepositsExcel}
+              className="flex items-center justify-center gap-1.5 bg-emerald-900/60 hover:bg-emerald-900 text-white border border-emerald-600/50 px-3 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95"
+              title="Unduh rekap setoran ke Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
+              <span>.xlsx</span>
             </button>
           </div>
         </div>
@@ -1006,14 +1064,32 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={exportLeaderboardExcel}
-                className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Unduh Leaderboard (Excel)</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={exportLeaderboardDocx}
+                  className="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all"
+                >
+                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Word (.docx)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={exportLeaderboardPDF}
+                  className="inline-flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all"
+                >
+                  <Printer className="w-3.5 h-3.5 text-rose-600" />
+                  <span>PDF (.pdf)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={exportLeaderboardExcel}
+                  className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Excel (.xlsx)</span>
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
