@@ -94,6 +94,7 @@ export default function ELearningPanel({
   const [newVideoUrl, setNewVideoUrl] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [materialError, setMaterialError] = useState('');
 
   // Subject Options List
   const subjectList = useMemo(() => {
@@ -119,9 +120,10 @@ export default function ELearningPanel({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setMaterialError('');
 
     if (file.size > 15 * 1024 * 1024) {
-      alert('Ukuran file terlalu besar! Maksimal ukuran file adalah 15MB.');
+      setMaterialError('Ukuran file terlalu besar! Maksimal ukuran file adalah 15MB.');
       return;
     }
 
@@ -139,7 +141,7 @@ export default function ELearningPanel({
       setIsUploading(false);
     };
     reader.onerror = () => {
-      alert('Gagal membaca file.');
+      setMaterialError('Gagal membaca file.');
       setIsUploading(false);
     };
     reader.readAsDataURL(file);
@@ -148,8 +150,9 @@ export default function ELearningPanel({
   // Submit New Material
   const handleSaveMaterial = (e: React.FormEvent) => {
     e.preventDefault();
+    setMaterialError('');
     if (!newTitle.trim()) {
-      alert('Judul materi wajib diisi!');
+      setMaterialError('Judul materi wajib diisi!');
       return;
     }
     if (!onAddMaterial) return;
@@ -769,6 +772,12 @@ export default function ELearningPanel({
             </div>
 
             <form onSubmit={handleSaveMaterial} className="space-y-4">
+              {materialError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{materialError}</span>
+                </div>
+              )}
               {/* Title */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Judul Materi / Bab *</label>

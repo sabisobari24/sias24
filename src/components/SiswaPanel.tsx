@@ -67,7 +67,8 @@ import { downloadSingleStudentCardPDF } from '../utils/cardPdfHelper';
 import ELearningPanel from './ELearningPanel';
 import { EcoTiketPanel } from './eco/EcoTiketPanel';
 import { EcoCertificateModal } from './eco/EcoCertificateModal';
-import { fileToBase64, convertGoogleDriveLink } from '../utils/imageHelper';
+import { fileToBase64, convertGoogleDriveLink, compressImageFile } from '../utils/imageHelper';
+import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 import { printCertificate, printTablePDF } from '../utils/printHelper';
 import { downloadExcel } from '../utils/excelExport';
 import { downloadDocx } from '../utils/docxExport';
@@ -191,13 +192,17 @@ export default function SiswaPanel({
   const [studentQrUrl, setStudentQrUrl] = useState<string>('');
   const [isCardModalOpen, setIsCardModalOpen] = useState<boolean>(false);
   const [isDownloadingCardPdf, setIsDownloadingCardPdf] = useState(false);
+  const [panelAlert, setPanelAlert] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+  const [showAvatarUrlBox, setShowAvatarUrlBox] = useState(false);
+  const [avatarUrlInput, setAvatarUrlInput] = useState('');
+
+  const resolvedClassName = getSchoolClassName(student.classId, classes, 'Belum Masuk Kelas');
 
   const handleQuickDownloadCardPdf = async () => {
     if (!student) return;
     setIsDownloadingCardPdf(true);
     try {
-      const currentClass = classes.find(c => c.id === student.classId);
-      const cName = currentClass?.name || student.classId || '-';
+      const cName = getSchoolClassName(student.classId, classes, '-');
       const effectiveSchool = schoolName || localStorage.getItem('siakad_kop_school_title') || 'SMP NEGERI 50 JAKARTA';
       await downloadSingleStudentCardPDF(
         student,
@@ -209,7 +214,7 @@ export default function SiswaPanel({
       );
     } catch (err) {
       console.error('Failed to download student card PDF:', err);
-      alert('Gagal mengunduh PDF kartu pelajar. Silakan coba buka modal kartu untuk mengunduh.');
+      setPanelAlert({ type: 'error', text: 'Gagal mengunduh PDF kartu pelajar. Silakan coba buka modal kartu untuk mengunduh.' });
     } finally {
       setIsDownloadingCardPdf(false);
     }
@@ -655,7 +660,7 @@ export default function SiswaPanel({
   };
 
   // Find class details
-  const studentClass = classes.find((c) => c.id === student.classId);
+  const studentClass = classes.find((c) => isSameClass(c.id, student.classId, classes) || isSameClass(c.name, student.classId, classes));
   const waliKelas = teachers.find((t) => t.id === studentClass?.homeroomTeacherId);
 
   // Filter attendance for this student
@@ -681,7 +686,10 @@ export default function SiswaPanel({
 
   // CBT Exam Filter: schedules matching this student's specific classId or "all"
   const matchedExams = examSchedules.filter(
-    (exam) => exam.classId === 'all' || exam.classId === student.classId || (exam.classId && exam.classId.split(',').map(c => c.trim()).includes(student.classId))
+    (exam) =>
+      exam.classId === 'all' ||
+      isSameClass(exam.classId, student.classId, classes) ||
+      (exam.classId && exam.classId.split(',').some((c) => isSameClass(c.trim(), student.classId, classes)))
   );
 
   // CBT Exam Grades for this student
@@ -698,14 +706,14 @@ export default function SiswaPanel({
 
   const matchedBimbinganSchedules = bimbinganSchedules ? bimbinganSchedules.filter((sched) => {
     if (sched.targetType === 'Kelas') {
-      return sched.targetId === 'all' || sched.targetId === student.classId;
+      return sched.targetId === 'all' || isSameClass(sched.targetId, student.classId, classes);
     }
     return sched.targetId === student.id;
   }) : [];
 
   const matchedPemberkasanSchedules = (pemberkasanSchedules || []).filter((sched) => {
     if (sched.targetClassId === 'all') return true;
-    return sched.targetClassId === student.classId || sched.targetClassId === studentClass?.name;
+    return isSameClass(sched.targetClassId, student.classId, classes);
   });
 
   const handleExportPrestasi = (format: 'docx' | 'pdf' | 'excel', range?: ExportDateRange) => {
@@ -890,6 +898,22 @@ export default function SiswaPanel({
 
   return (
     <div className="space-y-6">
+      {panelAlert && (
+        <div className={`px-4 py-3 rounded-xl border text-xs font-bold flex items-center justify-between gap-3 ${
+          panelAlert.type === 'error'
+            ? 'bg-rose-50 border-rose-200 text-rose-700'
+            : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+        }`}>
+          <span className="flex items-center gap-2">
+            {panelAlert.type === 'error' ? <AlertTriangle className="w-4 h-4 shrink-0" /> : <CheckCircle className="w-4 h-4 shrink-0" />}
+            {panelAlert.text}
+          </span>
+          <button type="button" onClick={() => setPanelAlert(null)} className="p-1 hover:opacity-75 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Welcome Banner: Hidden on sub-modules that provide their own dedicated header banner */}
       {!['elearning', 'eco-tiket'].includes(activeTab) && (
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
@@ -897,7 +921,7 @@ export default function SiswaPanel({
           <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex flex-col md:flex-row items-center gap-6">
               <img
-                src={student.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120"}
+                src={student.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=4f46e5&color=fff&size=160&bold=true`}
                 alt={student.name}
                 className="w-20 h-20 rounded-full border-4 border-white/30 object-cover shadow-lg"
               />
@@ -906,7 +930,7 @@ export default function SiswaPanel({
                 <h1 className="text-2xl font-bold tracking-tight">{student.name}</h1>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-blue-100 text-sm">
-                    NISN: {student.nisn} &bull; {studentClass?.name || 'Belum Masuk Kelas'}
+                    NISN: {student.nisn} &bull; {resolvedClassName}
                   </p>
                   {isDutaKebersihan && (
                     <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 font-black text-[11px] px-2.5 py-0.5 rounded-full shadow-md border border-yellow-200">
@@ -1082,7 +1106,7 @@ export default function SiswaPanel({
                     <div className="text-[11px] text-slate-600 space-y-1 bg-white/70 p-2.5 rounded-xl border border-amber-100 relative z-10">
                       <div className="flex justify-between items-center">
                         <span className="text-slate-400">Penerima:</span>
-                        <strong className="text-slate-800 font-bold">{student.name} ({student.classId})</strong>
+                        <strong className="text-slate-800 font-bold">{student.name} ({getSchoolClassName(student.classId, classes)})</strong>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-slate-400">Tanggal Raihan:</span>
@@ -1169,7 +1193,7 @@ export default function SiswaPanel({
                     )}
 
                     <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex justify-between items-center">
-                      <span>Target: <strong className="text-slate-600">{item.targetClassId === 'all' ? 'Seluruh Kelas' : item.targetClassId}</strong></span>
+                      <span>Target: <strong className="text-slate-600">{item.targetClassId === 'all' ? 'Seluruh Kelas' : getSchoolClassName(item.targetClassId, classes)}</strong></span>
                       <span>Petugas: <strong className="text-slate-600">{item.recordedBy}</strong></span>
                     </div>
                   </div>
@@ -1227,7 +1251,7 @@ export default function SiswaPanel({
                 <span className="text-slate-880 font-mono col-span-2">: {student.nisn}</span>
 
                 <span className="text-slate-500 font-medium">Kelas</span>
-                <span className="text-slate-800 font-semibold col-span-2">: {studentClass?.name}</span>
+                <span className="text-slate-800 font-semibold col-span-2">: {resolvedClassName}</span>
 
                 <span className="text-slate-500 font-medium">Jenis Kelamin</span>
                 <span className="text-slate-800 col-span-2">: {(student.gender || 'Laki-laki').toLowerCase() === 'perempuan' ? 'P' : 'L'}</span>
@@ -1312,7 +1336,7 @@ export default function SiswaPanel({
                     </button>
                     <label className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-3.5 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer">
                       <Camera className="w-4 h-4 text-indigo-300" />
-                      <span>Perbarui Foto Profil</span>
+                      <span>Upload Foto</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -1321,16 +1345,54 @@ export default function SiswaPanel({
                           const file = e.target.files?.[0];
                           if (file && onUpdateStudent) {
                             try {
-                              const b64 = await fileToBase64(file);
-                              onUpdateStudent({ ...student, avatarUrl: b64 });
+                              const compressed = await compressImageFile(file, 480, 480, 0.85);
+                              onUpdateStudent({ ...student, avatarUrl: compressed });
+                              setPanelAlert({ type: 'success', text: 'Foto profil berhasil diperbarui dari komputer.' });
                             } catch (err) {
                               console.warn('Error updating student photo:', err);
+                              setPanelAlert({ type: 'error', text: 'Gagal mengunggah foto profil.' });
                             }
                           }
+                          e.target.value = '';
                         }}
                       />
                     </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAvatarUrlInput(student.avatarUrl?.startsWith('http') ? student.avatarUrl : '');
+                        setShowAvatarUrlBox(v => !v);
+                      }}
+                      className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-3.5 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Link className="w-4 h-4 text-emerald-300" />
+                      <span>Link Foto</span>
+                    </button>
                   </div>
+                  {showAvatarUrlBox && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                      <input
+                        type="url"
+                        value={avatarUrlInput}
+                        onChange={(e) => setAvatarUrlInput(e.target.value)}
+                        placeholder="Tempel URL / Link Google Drive foto profil..."
+                        className="flex-1 min-w-[200px] bg-white/95 text-slate-900 rounded-xl px-3 py-2 text-xs border border-indigo-300 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!avatarUrlInput.trim() || !onUpdateStudent) return;
+                          const converted = convertGoogleDriveLink(avatarUrlInput.trim());
+                          onUpdateStudent({ ...student, avatarUrl: converted });
+                          setShowAvatarUrlBox(false);
+                          setPanelAlert({ type: 'success', text: 'Foto profil berhasil diperbarui dari tautan URL.' });
+                        }}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs px-3 py-2 rounded-xl cursor-pointer"
+                      >
+                        Simpan Link
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Mini Preview Kartu Pelajar */}
@@ -1366,7 +1428,7 @@ export default function SiswaPanel({
                     <div className="min-w-0 flex-1 text-[11px] leading-tight space-y-0.5">
                       <p className="font-bold text-slate-900 truncate">{student.name}</p>
                       <p className="text-[10px] text-slate-600 font-mono">NISN: {student.nisn}</p>
-                      <p className="text-[10px] text-slate-600">Kelas: <span className="font-semibold text-indigo-900">{studentClass?.name || student.classId}</span></p>
+                      <p className="text-[10px] text-slate-600">Kelas: <span className="font-semibold text-indigo-900">{getSchoolClassName(student.classId, classes)}</span></p>
                       {student.isKjpRecipient && (
                         <span className="inline-block text-[8px] font-extrabold bg-emerald-100 text-emerald-800 px-1 rounded">KJP PLUS</span>
                       )}
@@ -1588,7 +1650,7 @@ export default function SiswaPanel({
                             {student.name}
                           </h3>
                           <p className="text-xs text-slate-500 mt-0.5 font-semibold">
-                            {classes.find(c => c.id === student.classId)?.name || student.classId} &bull; SMP NEGERI 50 JAKARTA
+                            {getSchoolClassName(student.classId, classes)} &bull; SMP NEGERI 50 JAKARTA
                           </p>
                           <div className="mt-2 flex items-center gap-2">
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -1861,8 +1923,8 @@ export default function SiswaPanel({
                                       try {
                                         const b64 = await fileToBase64(file);
                                         setCapturedPhoto(b64);
-                                      } catch (err) {
-                                        alert('Gagal membaca file gambar. Silakan coba lagi.');
+                                      } catch {
+                                        setPanelAlert({ type: 'error', text: 'Gagal membaca file gambar. Silakan coba lagi.' });
                                       }
                                     }
                                   }}
@@ -1910,7 +1972,7 @@ export default function SiswaPanel({
                     type="button"
                     onClick={() => {
                       if (selfStatus === 'Hadir' && !capturedPhoto) {
-                        alert('Silakan ambil bukti foto ber-timestamp terlebih dahulu sebelum mengirim.');
+                        setPanelAlert({ type: 'error', text: 'Silakan ambil bukti foto ber-timestamp terlebih dahulu sebelum mengirim.' });
                         return;
                       }
                       onAddSelfAttendance(
@@ -2037,7 +2099,7 @@ export default function SiswaPanel({
               <div className="space-y-1">
                 <span className="text-[10px] bg-indigo-600 text-white font-bold px-2 py-0.5 rounded-full uppercase">CBT System</span>
                 <h3 className="text-base font-bold text-slate-800">Jadwal & Hasil Nilai Ujian CBT</h3>
-                <p className="text-xs text-slate-500">Sistem ujian berbasis komputer sinkron otomatis untuk kelas perwalian {studentClass?.name || 'Sekolah'}.</p>
+                <p className="text-xs text-slate-500">Sistem ujian berbasis komputer sinkron otomatis untuk kelas perwalian {getSchoolClassName(student.classId, classes, 'Sekolah')}.</p>
               </div>
             </div>
 
@@ -2302,6 +2364,7 @@ export default function SiswaPanel({
           <EcoTiketPanel
             student={student}
             allStudents={allStudents}
+            classes={classes}
             violations={violations}
             categories={ecoCategories}
             deposits={ecoDeposits}
@@ -2398,7 +2461,7 @@ export default function SiswaPanel({
               </div>
 
               <p className="text-xs font-semibold text-slate-600">
-                NISN: {student.nisn || '-'} &bull; Kelas: {student.classId || '-'}
+                NISN: {student.nisn || '-'} &bull; Kelas: {getSchoolClassName(student.classId, classes, '-')}
               </p>
 
               <p className="text-xs text-slate-600 pt-1">
@@ -2503,7 +2566,7 @@ export default function SiswaPanel({
           data={{
             studentName: student.name,
             studentNisn: student.nisn,
-            className: studentClass?.name || student.classId || 'Kelas 7A',
+            className: getSchoolClassName(student.classId, classes, '-'),
             totalEcoPoints: activeEcoPoints,
             totalDepositsCount: myVerifiedDeposits.length,
             dateStr: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),

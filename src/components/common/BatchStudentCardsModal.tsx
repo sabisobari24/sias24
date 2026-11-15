@@ -20,7 +20,8 @@ import {
   CheckCircle2,
   Users,
   FileDown,
-  Loader2
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 interface BatchStudentCardsModalProps {
@@ -127,6 +128,7 @@ export default function BatchStudentCardsModal({
 
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [pdfProgressMsg, setPdfProgressMsg] = useState('');
+  const [pdfError, setPdfError] = useState('');
 
   if (!isOpen) return null;
 
@@ -185,6 +187,7 @@ export default function BatchStudentCardsModal({
     const targetStudents = filteredStudents.filter(s => selectedStudentIds.has(s.id));
     if (targetStudents.length === 0) return;
 
+    setPdfError('');
     setIsDownloadingPdf(true);
     try {
       await downloadBatchStudentCardsPDF(targetStudents, classes, headmasterName, effectiveSchoolName, {
@@ -196,7 +199,7 @@ export default function BatchStudentCardsModal({
       });
     } catch (err) {
       console.error('Gagal mengunduh berkas PDF massal:', err);
-      alert('Terjadi kendala saat memproses berkas PDF. Silakan coba kembali.');
+      setPdfError('Terjadi kendala saat memproses berkas PDF. Silakan coba kembali.');
     } finally {
       setIsDownloadingPdf(false);
       setPdfProgressMsg('');
@@ -251,7 +254,7 @@ export default function BatchStudentCardsModal({
                   Pilih Filter Kelas:
                 </label>
                 <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-100">
-                  {selectedClassId === 'all' ? 'Seluruh Siswa' : `Kelas ${classes.find(c => c.id === selectedClassId)?.name || selectedClassId}`}
+                  {selectedClassId === 'all' ? 'Seluruh Siswa' : `Kelas ${getSchoolClassName(selectedClassId, classes)}`}
                 </span>
               </div>
 
@@ -350,7 +353,7 @@ export default function BatchStudentCardsModal({
                 </span>
                 {selectedClassId !== 'all' && (
                   <span className="text-[11px] text-slate-400">
-                    Filter aktif: Kelas {classes.find(c => c.id === selectedClassId)?.name}
+                    Filter aktif: Kelas {getSchoolClassName(selectedClassId, classes)}
                   </span>
                 )}
               </div>
@@ -364,7 +367,7 @@ export default function BatchStudentCardsModal({
                 ) : (
                   filteredStudents.map((student) => {
                     const isChecked = selectedStudentIds.has(student.id);
-                    const cName = classes.find(c => c.id === student.classId)?.name || student.classId || '-';
+                    const cName = getSchoolClassName(student.classId, classes) || '-';
                     const avatar = student.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=4f46e5&color=fff&size=100&bold=true`;
 
                     return (
@@ -687,6 +690,13 @@ export default function BatchStudentCardsModal({
                   <p className="text-[11px] text-emerald-700 leading-snug">
                     {pdfProgressMsg || 'Merender kartu siswa dalam resolusi tinggi...'}
                   </p>
+                </div>
+              )}
+
+              {pdfError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center gap-2 font-semibold">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{pdfError}</span>
                 </div>
               )}
 

@@ -5527,6 +5527,7 @@ export default function App({ initialMode }: AppProps = {}) {
           onClose={() => setIsProfileModalOpen(false)}
           activeUser={activeUser}
           activeRole={activeRole}
+          classes={sortedClasses}
           onSave={handleSaveProfile}
         />
       )}

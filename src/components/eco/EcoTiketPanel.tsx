@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { 
   Student, 
+  SchoolClass,
   StudentViolation, 
   EcoWasteCategory, 
   EcoWasteDeposit, 
@@ -33,10 +34,12 @@ import {
 } from '../../types';
 import { EcoCertificateModal } from './EcoCertificateModal';
 import ConfirmModal from '../ConfirmModal';
+import { getSchoolClassName } from '../../utils/classUtils';
 
 interface EcoTiketPanelProps {
   student: Student;
   allStudents?: Student[];
+  classes?: SchoolClass[];
   violations: StudentViolation[];
   categories: EcoWasteCategory[];
   deposits: EcoWasteDeposit[];
@@ -54,6 +57,7 @@ interface EcoTiketPanelProps {
 export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
   student,
   allStudents = [],
+  classes = [],
   violations,
   categories,
   deposits,
@@ -142,7 +146,7 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
         totalPoints: 0,
         count: 0,
         name: s.name,
-        classId: s.classId || '-'
+        classId: getSchoolClassName(s.classId, classes)
       });
       if (s.nisn) {
         nisnToIdMap.set(s.nisn, s.id);
@@ -157,7 +161,7 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
           totalPoints: 0,
           count: 0,
           name: d.studentName,
-          classId: d.classId
+          classId: getSchoolClassName(d.classId, classes)
         };
         existing.totalPoints += (d.pointsEarned || 0);
         existing.count += 1;
@@ -175,7 +179,7 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
     }));
 
     return list.sort((a, b) => b.totalPoints - a.totalPoints);
-  }, [deposits, allStudents]);
+  }, [deposits, allStudents, classes]);
 
   // Find my rank
   const myRank = useMemo(() => {
@@ -217,7 +221,7 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
         await onAddDeposit({
           studentId: student.id,
           studentName: student.name,
-          classId: student.classId || 'Kelas 7A',
+          classId: student.classId || '',
           categoryId: cat.id,
           categoryName: cat.name,
           quantity: qty,
@@ -273,7 +277,7 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
         await onRedeemReward({
           studentId: student.id,
           studentName: student.name,
-          classId: student.classId || 'Kelas 7A',
+          classId: student.classId || '',
           type: 'tukar_hadiah',
           rewardId: reward.id,
           rewardName: reward.name,
@@ -800,7 +804,7 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
                           </div>
                         </td>
 
-                        <td className="px-5 py-3.5 text-slate-600">{item.classId}</td>
+                        <td className="px-5 py-3.5 text-slate-600">{getSchoolClassName(item.classId, classes)}</td>
                         <td className="px-5 py-3.5 text-center text-slate-600">{item.depositCount}x Setor</td>
                         <td className="px-5 py-3.5 text-right font-black text-emerald-700 text-sm">
                           {item.totalPoints}
@@ -926,7 +930,7 @@ export const EcoTiketPanel: React.FC<EcoTiketPanelProps> = ({
         data={{
           studentName: student.name,
           studentNisn: student.nisn,
-          className: student.classId || 'Kelas 7A',
+          className: getSchoolClassName(student.classId, classes),
           totalEcoPoints: totalEarnedPoints,
           totalDepositsCount: myDeposits.length,
           dateStr: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),

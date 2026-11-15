@@ -41,6 +41,7 @@ import {
   getRangeFileSuffix,
   getRangeTitleSuffix
 } from '../utils/exportDateFilter';
+import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 
 interface GuruPanelProps {
   teacher: Teacher;
@@ -163,6 +164,7 @@ export default function GuruPanel({
   };
 
   const [cbtPin, setCbtPin] = useState<string>(cbtBypassPin || '9999');
+  const [pinStatusMsg, setPinStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [previewPhotoRecord, setPreviewPhotoRecord] = useState<Attendance | null>(null);
   useEffect(() => {
     if (cbtBypassPin) setCbtPin(cbtBypassPin);
@@ -201,7 +203,7 @@ export default function GuruPanel({
   useEffect(() => {
     if (!journalClass || !journalDate) return;
     const classAttendance = attendance.filter(
-      (a) => a.classId === journalClass && a.date === journalDate
+      (a) => isSameClass(a.classId, journalClass, classes) && a.date === journalDate
     );
     if (classAttendance.length > 0) {
       const hadirCount = classAttendance.filter((a) => a.status === 'Hadir').length;
@@ -209,16 +211,16 @@ export default function GuruPanel({
       setJournalPresent(hadirCount);
       setJournalAbsent(tidakHadirCount);
     } else {
-      const totalInClass = students.filter((s) => s.classId === journalClass).length;
+      const totalInClass = students.filter((s) => isSameClass(s.classId, journalClass, classes)).length;
       setJournalPresent(totalInClass);
       setJournalAbsent(0);
     }
-  }, [journalClass, journalDate, attendance, students]);
+  }, [journalClass, journalDate, attendance, students, classes]);
 
   const syncJournalFromAttendance = () => {
     if (!journalClass || !journalDate) return;
     const classAttendance = attendance.filter(
-      (a) => a.classId === journalClass && a.date === journalDate
+      (a) => isSameClass(a.classId, journalClass, classes) && a.date === journalDate
     );
     if (classAttendance.length > 0) {
       const hadirCount = classAttendance.filter((a) => a.status === 'Hadir').length;
@@ -227,7 +229,7 @@ export default function GuruPanel({
       setJournalAbsent(tidakHadirCount);
       setSuccessMsg('Data kehadiran otomatis diperbarui dari Data Absensi Kelas terpilih!');
     } else {
-      const totalInClass = students.filter((s) => s.classId === journalClass).length;
+      const totalInClass = students.filter((s) => isSameClass(s.classId, journalClass, classes)).length;
       setJournalPresent(totalInClass);
       setJournalAbsent(0);
       setSuccessMsg('Belum ada presensi tercatat hari ini. Memuat total siswa kelas sebagai default Hadir.');
@@ -362,7 +364,7 @@ export default function GuruPanel({
 
   // Print/Download journal as PDF
   const handlePrintJournal = (j: TeachingJournal) => {
-    const className = classes.find(c => c.id === j.classId)?.name || j.classId;
+    const className = getSchoolClassName(j.classId, classes) || j.classId;
 
     // Load custom logos from Admin Settings (with default fallbacks)
     const logoLeftSaved = localStorage.getItem('siakad_logo_left') || '';
@@ -622,12 +624,12 @@ export default function GuruPanel({
     if (!onAddExamSchedule) return;
 
     if (!examClass) {
-      alert('Silakan pilih minimal 1 Kelas Target!');
+      showError('Silakan pilih minimal 1 Kelas Target!');
       return;
     }
 
     if (examMethod === 'bank_soal' && !selectedBankId) {
-      alert('Silakan pilih salah satu Bank Soal yang ingin diujikan!');
+      showError('Silakan pilih salah satu Bank Soal yang ingin diujikan!');
       return;
     }
 
@@ -679,13 +681,18 @@ export default function GuruPanel({
 
   // Status message
   const [successMsg, setSuccessMsg] = useState<string>('');
+  const [errorMsg, setErrorMsg] = useState<string>('');
+  const showError = (msg: string) => {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(''), 5000);
+  };
 
   // Filters
-  const filteredStudents = students.filter((s) => s.classId === selectedClassId);
+  const filteredStudents = students.filter((s) => isSameClass(s.classId, selectedClassId, classes));
 
   // Initialize batch attendance states when class/date is changed
   const initializeAttendance = () => {
-    const existing = attendance.filter((a) => a.classId === selectedClassId && a.date === attendanceDate);
+    const existing = attendance.filter((a) => isSameClass(a.classId, selectedClassId, classes) && a.date === attendanceDate);
     const initial: Record<string, { status: 'Hadir' | 'Sakit' | 'Izin' | 'Alpa'; notes: string }> = {};
 
     filteredStudents.forEach((student) => {
@@ -770,10 +777,9 @@ export default function GuruPanel({
 
   // Export Handlers
   const handleExportPresensiGuru = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
-    const classObj = classes.find(c => c.id === selectedClassId);
-    const className = classObj ? classObj.name : selectedClassId;
+    const className = getSchoolClassName(selectedClassId, classes) || selectedClassId;
     const classAttendance = filterItemsByDateRange(
-      attendance.filter(a => a.classId === selectedClassId),
+      attendance.filter(a => isSameClass(a.classId, selectedClassId, classes)),
       a => a.date,
       range
     );
@@ -816,7 +822,7 @@ export default function GuruPanel({
 
     const headers = ["Tanggal", "Kelas", "Mata Pelajaran", "Materi / KD", "Siswa Hadir", "Siswa Absen", "Catatan Kegiatan"];
     const rows = myJournals.map(j => {
-      const clsName = classes.find(c => c.id === j.classId)?.name || j.classId;
+      const clsName = getSchoolClassName(j.classId, classes) || j.classId;
       return [
         j.date,
         clsName,
@@ -856,7 +862,7 @@ export default function GuruPanel({
       return [
         v.date,
         s?.name || 'Siswa Terhapus',
-        classes.find(c => c.id === s?.classId)?.name || '-',
+        getSchoolClassName(s?.classId, classes) || '-',
         type?.name || 'Pelanggaran Khusus',
         v.points,
         v.notes || '',
@@ -940,12 +946,11 @@ export default function GuruPanel({
     const headers = ["Tanggal", "Waktu Check-In", "Nama Siswa", "Kelas", "Status Diajukan", "Verifikasi Guru Mapel", "Keterangan"];
     const rows = selfRecords.map(a => {
       const s = students.find(std => std.id === a.studentId);
-      const c = classes.find(cls => cls.id === a.classId);
       return [
         a.date,
         a.timestamp || '-',
         s?.name || 'Siswa Terhapus',
-        c?.name || '-',
+        getSchoolClassName(a.classId || s?.classId, classes) || '-',
         a.status,
         a.isVerifiedByMapel ? 'Disetujui' : 'Belum/Ditolak',
         a.notes || '-'
@@ -974,7 +979,7 @@ export default function GuruPanel({
       e.date,
       e.time || '-',
       e.subject,
-      e.classId === 'all' ? 'Semua Kelas' : classes.find(c => c.id === e.classId)?.name || e.classId,
+      e.classId === 'all' ? 'Semua Kelas' : e.classId.split(',').map(id => getSchoolClassName(id.trim(), classes) || id.trim()).join(', '),
       e.type,
       e.room || 'Ruang CBT'
     ]);
@@ -1000,7 +1005,7 @@ export default function GuruPanel({
     const rows = filtered.map(b => [
       b.title,
       b.subject,
-      b.classId || (b as any).gradeClass || 'Semua Tingkat',
+      (b.classId ? getSchoolClassName(b.classId, classes) : '') || (b as any).gradeClass || 'Semua Tingkat',
       b.questions?.length || 0,
       b.createdAt || '-',
       teacher.name
@@ -1026,12 +1031,11 @@ export default function GuruPanel({
     const scopedNotes = filterItemsByDateRange(counselorNotes, n => n.date, range);
     const headers = ["NISN", "Nama Siswa", "Kelas", "Kategori Bimbingan", "Catatan Perkembangan", "Bakat & Minat"];
     const rows = myWaliStudents.map(s => {
-      const c = classes.find(cls => cls.id === s.classId);
       const note = scopedNotes.filter(n => n.studentId === s.id).pop();
       return [
         s.nisn,
         s.name,
-        c?.name || '-',
+        getSchoolClassName(s.classId, classes) || '-',
         note?.notes ? 'Bimbingan Aktif' : 'Pemantauan Rutin',
         note?.notes || 'Perkembangan belajar terpantau baik',
         s.bakatMinat || 'Belum diisi'
@@ -1063,7 +1067,7 @@ export default function GuruPanel({
       p.timeIn || 'Belum Kembali',
       p.nisn || students.find(s => s.id === p.studentId)?.nisn || '-',
       p.studentName || students.find(s => s.id === p.studentId)?.name || '-',
-      classes.find(c => c.id === p.classId)?.name || p.classId || '-',
+      getSchoolClassName(p.classId, classes) || '-',
       p.type,
       p.destination || p.reason || '-',
       p.status,
@@ -1087,7 +1091,7 @@ export default function GuruPanel({
   const handleExportEcoDepositsGuru = (format: 'excel' | 'pdf' | 'docx', range?: ExportDateRange) => {
     const filtered = filterItemsByDateRange(ecoDeposits || [], d => d.date, range);
     const headers = ['Tanggal', 'Nama Siswa', 'Kelas', 'Jenis Sampah', 'Volume', 'Poin', 'Status', 'Pencatat'];
-    const rows = filtered.map(d => [d.date, d.studentName, d.classId, d.categoryName, `${d.quantity} ${d.unit}`, d.pointsEarned, d.status, d.recordedBy]);
+    const rows = filtered.map(d => [d.date, d.studentName, getSchoolClassName(d.classId, classes) || '-', d.categoryName, `${d.quantity} ${d.unit}`, d.pointsEarned, d.status, d.recordedBy]);
     const suffix = getRangeFileSuffix(range);
     const title = `Rekapitulasi Setoran ECo-Tiket${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
@@ -1105,7 +1109,7 @@ export default function GuruPanel({
 
   // Helper for dynamic contextual download config based on activeTab
   const getContextualDownloadConfig = () => {
-    const clsName = classes.find(c => c.id === selectedClassId)?.name || 'Kelas';
+    const clsName = getSchoolClassName(selectedClassId, classes) || 'Kelas';
     const allActions = [
       {
         key: 'presensi',
@@ -1326,9 +1330,16 @@ export default function GuruPanel({
       )}
 
       {successMsg && (
-        <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 p-4 rounded-xl flex items-center gap-2.5 font-medium shadow-sm transition-all animate-bounce">
-          <Check className="w-5 h-5 text-emerald-600" />
+        <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 p-4 rounded-xl flex items-center gap-2.5 font-medium shadow-sm transition-all">
+          <Check className="w-5 h-5 text-emerald-600 shrink-0" />
           <span>{successMsg}</span>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl flex items-center gap-2.5 font-medium shadow-sm transition-all">
+          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+          <span>{errorMsg}</span>
         </div>
       )}
 
@@ -1564,11 +1575,10 @@ export default function GuruPanel({
                       <>
                         <option value="">-- Pilih Siswa Pelanggar --</option>
                         {students
-                          .filter(s => violationFilterClassId === 'all' || s.classId === violationFilterClassId)
+                          .filter(s => violationFilterClassId === 'all' || isSameClass(s.classId, violationFilterClassId, classes))
                           .map((s) => {
-                            const sClass = classes.find((c) => c.id === s.classId);
                             return (
-                              <option key={s.id} value={s.id}>{s.name} ({sClass?.name})</option>
+                              <option key={s.id} value={s.id}>{s.name} ({getSchoolClassName(s.classId, classes)})</option>
                             );
                           })}
                       </>
@@ -1643,7 +1653,7 @@ export default function GuruPanel({
                           <p className="text-sm font-semibold text-slate-800">{student?.name}</p>
                           <p className="text-xs text-slate-400">{new Date(rec.date).toLocaleDateString('id-ID')} &bull; Status: {rec.status}</p>
                         </div>
-                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{rec.classId.replace('c-', '').toUpperCase()}</span>
+                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{getSchoolClassName(rec.classId || student?.classId, classes) || '-'}</span>
                       </div>
                     );
                   })
@@ -1745,7 +1755,7 @@ export default function GuruPanel({
                     .filter((a) => a.isSelfAttendance && (!verifyDateFilter || a.date === verifyDateFilter))
                     .map((record) => {
                     const student = students.find((s) => s.id === record.studentId);
-                    const sClass = classes.find((c) => c.id === record.classId);
+                    const sClassName = getSchoolClassName(record.classId || student?.classId, classes) || 'N/A';
 
                     return (
                       <div key={record.id} className="p-4 border rounded-xl hover:bg-slate-50/50 transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs">
@@ -1773,7 +1783,7 @@ export default function GuruPanel({
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-slate-800 text-sm">{student?.name}</span>
-                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-teal-100 text-teal-800 font-bold uppercase">{sClass?.name || 'N/A'}</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-teal-100 text-teal-800 font-bold uppercase">{sClassName}</span>
                             </div>
                             <p className="text-xs text-slate-600">
                               Status Diajukan: <span className="font-bold text-slate-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">{record.status}</span>
@@ -2043,7 +2053,7 @@ export default function GuruPanel({
                         .map((j) => (
                           <tr key={j.id} className="hover:bg-slate-50/50">
                             <td className="p-3 font-medium">{j.date}</td>
-                            <td className="p-3 font-semibold text-teal-700">{classes.find(c => c.id === j.classId)?.name || j.classId}</td>
+                            <td className="p-3 font-semibold text-teal-700">{getSchoolClassName(j.classId, classes) || j.classId}</td>
                             <td className="p-3 font-semibold">{j.subject}</td>
                             <td className="p-3 leading-relaxed">
                               <p className="font-semibold text-slate-800">{j.competensiDasar}</p>
@@ -2067,7 +2077,7 @@ export default function GuruPanel({
                                     onClick={() => {
                                       triggerConfirm(
                                         'Hapus Jurnal Mengajar',
-                                        `Apakah Anda yakin ingin menghapus jurnal mengajar tanggal ${j.date} kelas ${classes.find(c => c.id === j.classId)?.name || j.classId}?`,
+                                        `Apakah Anda yakin ingin menghapus jurnal mengajar tanggal ${j.date} kelas ${getSchoolClassName(j.classId, classes) || j.classId}?`,
                                         () => onDeleteTeachingJournal(j.id)
                                       );
                                     }}
@@ -2128,7 +2138,8 @@ export default function GuruPanel({
                       } else {
                         safeLocalStorageSet('siakad_cbt_bypass_pin', generated);
                       }
-                      alert(`Kode/Password Pengawas baru berhasil digenerate otomatis: ${generated}`);
+                      setPinStatusMsg({ type: 'success', text: `Kode/Password Pengawas baru berhasil dibuat otomatis: ${generated}` });
+                      setTimeout(() => setPinStatusMsg(null), 5000);
                     }}
                     className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition-all shadow-sm cursor-pointer h-10 flex items-center justify-center gap-1.5 text-xs active:scale-95"
                     title="Generate acak 6 digit angka kode/password CBT"
@@ -2139,7 +2150,8 @@ export default function GuruPanel({
                     type="button"
                     onClick={() => {
                       if (!cbtPin) {
-                        alert('PIN tidak boleh kosong!');
+                        setPinStatusMsg({ type: 'error', text: 'PIN Pengawas tidak boleh kosong!' });
+                        setTimeout(() => setPinStatusMsg(null), 4000);
                         return;
                       }
                       if (onUpdateCbtBypassPin) {
@@ -2147,7 +2159,8 @@ export default function GuruPanel({
                       } else {
                         safeLocalStorageSet('siakad_cbt_bypass_pin', cbtPin);
                       }
-                      alert(`PIN Pengawas berhasil diperbarui secara tersinkronisasi menjadi: ${cbtPin}`);
+                      setPinStatusMsg({ type: 'success', text: `PIN Pengawas berhasil diperbarui secara tersinkronisasi menjadi: ${cbtPin}` });
+                      setTimeout(() => setPinStatusMsg(null), 5000);
                     }}
                     className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg transition-all shadow-sm cursor-pointer h-10 flex items-center justify-center text-xs active:scale-95"
                   >
@@ -2155,6 +2168,16 @@ export default function GuruPanel({
                   </button>
                 </div>
               </div>
+              {pinStatusMsg && (
+                <div className={`px-3 py-2 rounded-lg border text-xs font-semibold flex items-center gap-2 ${
+                  pinStatusMsg.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}>
+                  {pinStatusMsg.type === 'success' ? <Check className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                  <span>{pinStatusMsg.text}</span>
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-xl p-6 border shadow-sm space-y-6">
@@ -2200,7 +2223,7 @@ export default function GuruPanel({
                       </label>
                       {classes.map((c) => {
                         const classIds = examClass === 'all' ? [] : examClass.split(',').map(x => x.trim()).filter(Boolean);
-                        const isChecked = classIds.includes(c.id);
+                        const isChecked = classIds.some(id => isSameClass(id, c.id, classes));
                         return (
                           <label key={c.id} className="flex items-center gap-1.5 cursor-pointer">
                             <input
@@ -2210,7 +2233,7 @@ export default function GuruPanel({
                               onChange={() => {
                                 let newIds;
                                 if (isChecked) {
-                                  newIds = classIds.filter(id => id !== c.id);
+                                  newIds = classIds.filter(id => !isSameClass(id, c.id, classes));
                                 } else {
                                   newIds = [...classIds, c.id];
                                 }
@@ -2412,7 +2435,7 @@ export default function GuruPanel({
                         </div>
                         <div>
                           <h5 className="font-bold text-slate-800 text-sm leading-tight">{s.subject}</h5>
-                          <p className="text-xs text-teal-700 font-bold mt-1">Kelas: {s.classId === 'all' ? 'Semua Kelas' : s.classId.split(',').map(id => classes.find(c => c.id === id.trim())?.name || id.trim()).join(', ')}</p>
+                          <p className="text-xs text-teal-700 font-bold mt-1">Kelas: {s.classId === 'all' ? 'Semua Kelas' : s.classId.split(',').map(id => getSchoolClassName(id.trim(), classes) || id.trim()).join(', ')}</p>
                         </div>
                         <div className="text-xs text-slate-500 space-y-1 bg-white p-2 rounded-lg border border-slate-100">
                           <p>📅 <strong>Tanggal:</strong> {s.date}</p>
@@ -2469,7 +2492,7 @@ export default function GuruPanel({
                   .filter(s => s.guruWaliTeacherId === teacher.id)
                   .map((s) => {
                     const isSelected = selectedAdvisingStudentId === s.id;
-                    const studentClass = classes.find(c => c.id === s.classId);
+                    const studentClassName = getSchoolClassName(s.classId, classes);
                     return (
                       <button
                         key={s.id}
@@ -2488,7 +2511,7 @@ export default function GuruPanel({
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-xs text-slate-800 truncate">{s.name}</p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">NISN: {s.nisn} &bull; {studentClass?.name || '-'}</p>
+                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">NISN: {s.nisn} &bull; {studentClassName || '-'}</p>
                         </div>
                       </button>
                     );
@@ -2510,7 +2533,7 @@ export default function GuruPanel({
                   );
                 }
 
-                const sClass = classes.find(c => c.id === s.classId);
+                const sClassName = getSchoolClassName(s.classId, classes);
                 const sAttendance = attendance.filter(a => a.studentId === s.id);
                 const presentDays = sAttendance.filter(a => a.status === 'Hadir').length;
                 const totalDays = sAttendance.length || 1;
@@ -2530,7 +2553,7 @@ export default function GuruPanel({
                       </div>
                       <div className="flex-1 text-center sm:text-left">
                         <h4 className="font-bold text-slate-800 text-base">{s.name}</h4>
-                        <p className="text-xs text-slate-400 mt-0.5">NISN: {s.nisn} &bull; Kelas: {sClass?.name || '-'}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">NISN: {s.nisn} &bull; Kelas: {sClassName || '-'}</p>
                         <p className="text-[11px] text-slate-500 mt-1">Wali Murid: {s.parentName} ({s.parentPhone})</p>
                       </div>
                       <div className="flex gap-3 shrink-0">
@@ -2716,7 +2739,7 @@ export default function GuruPanel({
         <AttendancePhotoPreviewModal
           record={previewPhotoRecord}
           student={students.find((s) => s.id === previewPhotoRecord.studentId)}
-          sClass={classes.find((c) => c.id === previewPhotoRecord.classId)}
+          sClass={classes.find((c) => isSameClass(c.id, previewPhotoRecord.classId, classes))}
           onClose={() => setPreviewPhotoRecord(null)}
           onVerify={onVerifyAttendance}
           canVerify={true}

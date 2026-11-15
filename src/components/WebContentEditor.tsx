@@ -1825,7 +1825,7 @@ export default function WebContentEditor() {
                             onClick={() => {
                               const currentImgs = [...(progForm.images || [])];
                               if (currentImgs.length >= 10) {
-                                alert('Maksimal 10 foto slider per program unggulan.');
+                                notifyEditorError('Maksimal 10 foto slider per program unggulan.');
                                 return;
                               }
                               currentImgs.push('');
@@ -2069,7 +2069,7 @@ export default function WebContentEditor() {
                                   const file = e.target.files?.[0];
                                   if (!file) return;
                                   if (file.size > 50 * 1024 * 1024) {
-                                    alert('Ukuran video maksimal 50MB. Disarankan memasukkan link YouTube untuk performa terbaik.');
+                                    notifyEditorError('Ukuran video maksimal 50MB. Disarankan memasukkan link YouTube untuk performa terbaik.');
                                     return;
                                   }
                                   const reader = new FileReader();
@@ -2389,7 +2389,7 @@ export default function WebContentEditor() {
                               onClick={() => {
                                 const currentImgs = [...(subjectForm.images || [])];
                                 if (currentImgs.length >= 10) {
-                                  alert('Maksimal 10 foto slider per mata pelajaran.');
+                                  notifyEditorError('Maksimal 10 foto slider per mata pelajaran.');
                                   return;
                                 }
                                 currentImgs.push('');
@@ -2656,7 +2656,7 @@ export default function WebContentEditor() {
                               onClick={() => {
                                 const currentImgs = [...(extraForm.images || [])];
                                 if (currentImgs.length >= 10) {
-                                  alert('Maksimal 10 foto slider per ekstrakurikuler.');
+                                  notifyEditorError('Maksimal 10 foto slider per ekstrakurikuler.');
                                   return;
                                 }
                                 currentImgs.push('');
@@ -2923,7 +2923,7 @@ export default function WebContentEditor() {
                               onClick={() => {
                                 const currentImgs = [...(facilityForm.images || [])];
                                 if (currentImgs.length >= 10) {
-                                  alert('Maksimal 10 foto slider per sarana prasarana.');
+                                  notifyEditorError('Maksimal 10 foto slider per sarana prasarana.');
                                   return;
                                 }
                                 currentImgs.push('');

@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, User, Lock, Mail, Phone, MapPin, Key, Check, AlertCircle, Shield, Camera, Upload, Link2, Calendar, Heart, Quote, RefreshCw } from 'lucide-react';
-import { Student, Teacher, UserRole } from '../types';
+import { Student, Teacher, UserRole, SchoolClass } from '../types';
 import { compressImageFile, compressBase64Image, convertGoogleDriveLink } from '../utils/imageHelper';
+import { getSchoolClassName } from '../utils/classUtils';
 
 interface ProfileEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   activeUser: any;
   activeRole: UserRole;
+  classes?: SchoolClass[];
   onSave: (updatedUser: any) => void;
 }
 
@@ -16,6 +18,7 @@ export default function ProfileEditModal({
   onClose,
   activeUser,
   activeRole,
+  classes = [],
   onSave,
 }: ProfileEditModalProps) {
   // Input fields state
@@ -74,7 +77,7 @@ export default function ProfileEditModal({
       setConfirmPassword('');
 
       // Populate avatar
-      const currentAvatar = activeUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120';
+      const currentAvatar = activeUser.avatarUrl || '';
       setAvatarUrl(currentAvatar);
       setLinkInputVal(currentAvatar.startsWith('data:') ? '' : currentAvatar);
 
@@ -277,7 +280,7 @@ export default function ProfileEditModal({
                   <RefreshCw className="w-6 h-6 text-indigo-600 animate-spin" />
                 ) : (
                   <img 
-                    src={avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120'} 
+                    src={avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || parentName || activeUser.name || 'User')}&background=4f46e5&color=fff`} 
                     alt="Avatar Preview" 
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
@@ -424,7 +427,7 @@ export default function ProfileEditModal({
 
               <div className="pt-2">
                 <div className="bg-amber-50 p-3 border border-amber-100 rounded-xl text-[11px] text-amber-800">
-                  <span className="font-bold">Info Siswa:</span> Anda saat ini masuk mendampingi siswa bernama <span className="font-bold">{activeUser.name}</span> (Kelas {activeUser.classId}).
+                  <span className="font-bold">Info Siswa:</span> Anda saat ini masuk mendampingi siswa bernama <span className="font-bold">{activeUser.name}</span> ({getSchoolClassName(activeUser.classId, classes)}).
                 </div>
               </div>
             </div>

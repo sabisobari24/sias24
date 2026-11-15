@@ -307,7 +307,7 @@ export default function MediaUploadSelector({
                 style={{ imageRendering: '-webkit-optimize-contrast' }}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&q=80&w=100';
+                  (e.target as HTMLImageElement).style.display = 'none';
                 }}
               />
             </div>

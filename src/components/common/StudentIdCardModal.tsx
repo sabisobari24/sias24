@@ -5,7 +5,7 @@ import { generateNISNQRCode, printSingleStudentCard } from '../../utils/qrHelper
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from '../../utils/schoolLogoHelper';
 import { getCardDesignConfig, getPresetById, CardDesignConfig } from '../../utils/cardDesignHelper';
 import { downloadSingleStudentCardPDF } from '../../utils/cardPdfHelper';
-import { X, Printer, QrCode, CreditCard, RotateCw, CheckCircle2, ShieldCheck, Download, Sparkles, FileDown, Loader2, ChevronDown, Check } from 'lucide-react';
+import { X, Printer, QrCode, CreditCard, RotateCw, CheckCircle2, ShieldCheck, Download, Sparkles, FileDown, Loader2, ChevronDown, Check, AlertCircle } from 'lucide-react';
 
 interface StudentIdCardModalProps {
   isOpen: boolean;
@@ -80,6 +80,7 @@ export default function StudentIdCardModal({
 
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [pdfProgressMsg, setPdfProgressMsg] = useState('');
+  const [pdfError, setPdfError] = useState('');
   const [showPdfMenu, setShowPdfMenu] = useState(false);
   const pdfMenuRef = useRef<HTMLDivElement>(null);
 
@@ -103,6 +104,7 @@ export default function StudentIdCardModal({
 
   const handleDownloadPdf = async (format: 'card' | 'a4' = 'card') => {
     if (!student) return;
+    setPdfError('');
     setIsDownloadingPdf(true);
     setShowPdfMenu(false);
     try {
@@ -119,7 +121,7 @@ export default function StudentIdCardModal({
       );
     } catch (err) {
       console.error('Download PDF error:', err);
-      alert('Terjadi kendala saat memproses berkas PDF. Silakan coba kembali.');
+      setPdfError('Terjadi kendala saat memproses berkas PDF. Silakan coba kembali.');
     } finally {
       setIsDownloadingPdf(false);
       setPdfProgressMsg('');
@@ -346,6 +348,13 @@ export default function StudentIdCardModal({
               <span className="font-semibold">{pdfProgressMsg || 'Memproses berkas PDF resolusi tinggi...'}</span>
             </div>
             <span className="text-[10px] text-purple-600 font-mono">Tunggu sebentar</span>
+          </div>
+        )}
+
+        {pdfError && (
+          <div className="px-5 py-2.5 bg-rose-50 border-t border-rose-200 flex items-center gap-2 text-xs font-semibold text-rose-800">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{pdfError}</span>
           </div>
         )}
 

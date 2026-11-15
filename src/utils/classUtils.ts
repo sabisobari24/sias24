@@ -143,16 +143,17 @@ export function normalizeClassId(
  */
 export function getSchoolClassName(
   classId: string | undefined | null,
-  existingClasses: SchoolClass[] = []
+  existingClasses: SchoolClass[] = [],
+  fallback: string = '-'
 ): string {
-  if (!classId || !classId.trim()) return '-';
+  if (!classId || !classId.trim()) return fallback;
   const trimmed = classId.trim();
   if (trimmed.toLowerCase() === 'all') return 'Semua Kelas';
 
   const found = findMatchingClass(trimmed, existingClasses);
   if (found) return found.name;
 
-  return trimmed;
+  return trimmed || fallback;
 }
 
 /**

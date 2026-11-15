@@ -7,6 +7,7 @@ import { downloadDocx } from '../utils/docxExport';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import { useDownload } from '../context/DownloadContext';
 import { ExportDateRange, filterItemsByDateRange, getRangeFileSuffix, getRangeTitleSuffix } from '../utils/exportDateFilter';
+import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 
 interface OrangTuaPanelProps {
   student: Student;
@@ -56,8 +57,10 @@ export default function OrangTuaPanel({
   };
   const [newMessage, setNewMessage] = useState('');
 
-  const studentClass = classes.find((c) => c.id === student.classId);
+  const studentClass = classes.find((c) => isSameClass(c.id, student.classId, classes) || isSameClass(c.name, student.classId, classes));
+  const resolvedClassName = getSchoolClassName(student.classId, classes, '-');
   const waliKelas = teachers.find((t) => t.id === studentClass?.homeroomTeacherId);
+  const bkTeacher = teachers.find((t) => t.role === 'bk');
 
   // Stats
   const studentAttendance = attendance.filter((a) => a.studentId === student.id);
@@ -231,7 +234,7 @@ export default function OrangTuaPanel({
               <p className="text-orange-100 text-xs font-semibold uppercase tracking-wide">Portal Wali Siswa</p>
               <h1 className="text-2xl font-bold">Bapak/Ibu {student.parentName}</h1>
               <p className="text-orange-100 text-sm">
-                Orang Tua Wali dari: <span className="font-bold">{student.name}</span> ({studentClass?.name})
+                Orang Tua Wali dari: <span className="font-bold">{student.name}</span> ({resolvedClassName})
               </p>
             </div>
           </div>
@@ -344,7 +347,7 @@ export default function OrangTuaPanel({
                         <div className="text-[11px] text-slate-600 space-y-1 bg-white/70 p-2.5 rounded-xl border border-amber-100 relative z-10">
                           <div className="flex justify-between items-center">
                             <span className="text-slate-400">Putra/Putri:</span>
-                            <strong className="text-slate-800 font-bold">{student.name} ({student.classId})</strong>
+                            <strong className="text-slate-800 font-bold">{student.name} ({resolvedClassName})</strong>
                           </div>
                           <div className="flex justify-between items-center">
                             <span className="text-slate-400">Tanggal Raihan:</span>
@@ -378,7 +381,7 @@ export default function OrangTuaPanel({
           {(() => {
             const matchedPemberkasanSchedules = (pemberkasanSchedules || []).filter((sched) => {
               if (sched.targetClassId === 'all') return true;
-              return sched.targetClassId === student.classId || sched.targetClassId === studentClass?.name;
+              return isSameClass(sched.targetClassId, student.classId, classes);
             });
 
             return (
@@ -429,7 +432,7 @@ export default function OrangTuaPanel({
                         )}
 
                         <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex justify-between items-center">
-                          <span>Target: <strong className="text-slate-600">{item.targetClassId === 'all' ? 'Seluruh Kelas' : item.targetClassId}</strong></span>
+                          <span>Target: <strong className="text-slate-600">{item.targetClassId === 'all' ? 'Seluruh Kelas' : getSchoolClassName(item.targetClassId, classes)}</strong></span>
                           <span>Petugas TU: <strong className="text-slate-600">{item.recordedBy}</strong></span>
                         </div>
                       </div>
@@ -444,7 +447,7 @@ export default function OrangTuaPanel({
           {(() => {
             const matchedBimbinganSchedules = bimbinganSchedules ? bimbinganSchedules.filter((sched) => {
               if (sched.targetType === 'Kelas') {
-                return sched.targetId === 'all' || sched.targetId === student.classId;
+                return sched.targetId === 'all' || isSameClass(sched.targetId, student.classId, classes);
               }
               return sched.targetId === student.id;
             }) : [];
@@ -507,7 +510,7 @@ export default function OrangTuaPanel({
                   </div>
                   <div className="flex justify-between border-b pb-1">
                     <span className="text-slate-500">Kelas / Angkatan</span>
-                    <span className="text-slate-800 font-semibold">{studentClass?.name}</span>
+                    <span className="text-slate-800 font-semibold">{resolvedClassName}</span>
                   </div>
                   <div className="flex justify-between border-b pb-1">
                     <span className="text-slate-500">Jenis Kelamin</span>
@@ -665,7 +668,7 @@ export default function OrangTuaPanel({
             <div className="bg-white rounded-xl p-5 border space-y-4">
               <h4 className="font-bold text-slate-800 border-b pb-2 flex items-center justify-between">
                 <span>Catatan Wali Kelas</span>
-                <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-normal">Siti Rohmah, S.Pd.</span>
+                <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-normal">{waliKelas?.name || 'Wali Kelas'}</span>
               </h4>
 
               <div className="space-y-4">
@@ -711,7 +714,7 @@ export default function OrangTuaPanel({
             <div className="bg-white rounded-xl p-5 border space-y-4">
               <h4 className="font-bold text-slate-800 border-b pb-2 flex items-center justify-between">
                 <span>Catatan Bimbingan BK</span>
-                <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-normal">Ahmad Fauzi, S.Psi.</span>
+                <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-normal">{bkTeacher?.name || 'Guru BK'}</span>
               </h4>
 
               <div className="space-y-4">

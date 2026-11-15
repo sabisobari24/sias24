@@ -47,6 +47,7 @@ import ExportDateFilterModal from './ExportDateFilterModal';
 import AttendanceQrScannerModal from './common/AttendanceQrScannerModal';
 import StudentPermitMonitoringPanel from './common/StudentPermitMonitoringPanel';
 import { AdminEcoTiketPanel } from './eco/AdminEcoTiketPanel';
+import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 
 interface PiketPanelProps {
   teacher: Teacher;
@@ -253,7 +254,7 @@ export default function PiketPanel({
       return [
         s?.name || 'Siswa Terhapus',
         s?.nisn || '-',
-        classes.find(c => c.id === a.classId)?.name || '-',
+        getSchoolClassName(a.classId || s?.classId, classes) || '-',
         a.date,
         a.status,
         a.notes || '',
@@ -286,7 +287,7 @@ export default function PiketPanel({
       const type = violationTypes.find(vt => vt.id === v.violationTypeId);
       return [
         s?.name || 'Siswa Terhapus',
-        classes.find(c => c.id === s?.classId)?.name || '-',
+        getSchoolClassName(s?.classId, classes) || '-',
         v.date,
         type?.name || 'Pelanggaran Khusus',
         v.points,
@@ -330,7 +331,7 @@ export default function PiketPanel({
         at.date,
         at.teacherName,
         `Mapel: ${at.subject}`,
-        classes.find(c => c.id === at.classId)?.name || '-',
+        at.classId ? at.classId.split(',').map(id => getSchoolClassName(id.trim(), classes) || id.trim()).join(', ') : '-',
         `Alasan: ${at.reason} | Guru Pengganti: ${at.substituteTeacher || '-'}`
       ]);
     });
@@ -602,7 +603,6 @@ export default function PiketPanel({
     const headers = ['No', 'Tanggal', 'Jam Keluar', 'Jam Kembali', 'Durasi', 'NISN', 'Nama Siswa', 'Kelas', 'Jenis Izin', 'Tujuan', 'Status', 'Petugas'];
     const rows = filtered.map((p, idx) => {
       const stu = students.find(s => s.id === p.studentId);
-      const cls = classes.find(c => c.id === p.classId);
       return [
         idx + 1,
         p.date || '-',
@@ -611,7 +611,7 @@ export default function PiketPanel({
         p.durationMinutes !== undefined ? `${p.durationMinutes} menit` : '-',
         stu?.nisn || p.nisn || '-',
         p.studentName || stu?.name || '-',
-        cls?.name || p.classId || '-',
+        getSchoolClassName(p.classId || stu?.classId, classes) || '-',
         p.type,
         p.destination || p.reason || '-',
         p.status,
@@ -636,7 +636,7 @@ export default function PiketPanel({
   const handleDownloadEcoPiket = (range: ExportDateRange | undefined, format: 'excel' | 'pdf' | 'docx') => {
     const filtered = filterItemsByDateRange(ecoDeposits || [], d => d.date, range);
     const headers = ['Tanggal', 'Nama Siswa', 'Kelas', 'Kategori Sampah', 'Volume', 'Poin', 'Status', 'Pencatat'];
-    const rows = filtered.map(d => [d.date, d.studentName, d.classId, d.categoryName, `${d.quantity} ${d.unit}`, d.pointsEarned, d.status, d.recordedBy]);
+    const rows = filtered.map(d => [d.date, d.studentName, getSchoolClassName(d.classId, classes) || '-', d.categoryName, `${d.quantity} ${d.unit}`, d.pointsEarned, d.status, d.recordedBy]);
     const suffix = getRangeFileSuffix(range);
     const title = `Rekapitulasi Setoran ECo-Tiket (Piket)${getRangeTitleSuffix(range)}`;
     if (format === 'excel') {
@@ -970,10 +970,10 @@ export default function PiketPanel({
                       <>
                         <option value="">-- Cari / Pilih Siswa --</option>
                         {students
-                          .filter((s) => gateClassId === 'all' || s.classId === gateClassId)
+                          .filter((s) => gateClassId === 'all' || isSameClass(s.classId, gateClassId, classes))
                           .map((s) => (
                             <option key={s.id} value={s.id}>
-                              {s.name} ({classes.find((c) => c.id === s.classId)?.name})
+                              {s.name} ({getSchoolClassName(s.classId, classes)})
                             </option>
                           ))}
                       </>
@@ -1087,11 +1087,11 @@ export default function PiketPanel({
                   </select>
                   {quickClassId && quickClassId !== 'all' && (
                     <div className="mt-2 flex flex-wrap items-center gap-2 px-3 py-2 bg-emerald-50/70 border border-emerald-200 rounded-lg text-xs font-semibold text-slate-700">
-                      <span>👥 Total Siswa: <strong>{students.filter(s => s.classId === quickClassId).length}</strong></span>
+                      <span>👥 Total Siswa: <strong>{students.filter(s => isSameClass(s.classId, quickClassId, classes)).length}</strong></span>
                       <span className="text-slate-300">|</span>
-                      <span className="text-blue-700">👨 Laki-laki (L): <strong>{students.filter(s => s.classId === quickClassId && (s.gender || 'Laki-laki').toLowerCase() === 'laki-laki').length}</strong></span>
+                      <span className="text-blue-700">👨 Laki-laki (L): <strong>{students.filter(s => isSameClass(s.classId, quickClassId, classes) && (s.gender || 'Laki-laki').toLowerCase() === 'laki-laki').length}</strong></span>
                       <span className="text-slate-300">|</span>
-                      <span className="text-rose-700">👩 Perempuan (P): <strong>{students.filter(s => s.classId === quickClassId && (s.gender || '').toLowerCase() === 'perempuan').length}</strong></span>
+                      <span className="text-rose-700">👩 Perempuan (P): <strong>{students.filter(s => isSameClass(s.classId, quickClassId, classes) && (s.gender || '').toLowerCase() === 'perempuan').length}</strong></span>
                     </div>
                   )}
                 </div>
@@ -1110,10 +1110,10 @@ export default function PiketPanel({
                       <>
                         <option value="">-- Cari Siswa --</option>
                         {students
-                          .filter((s) => quickClassId === 'all' || s.classId === quickClassId)
+                          .filter((s) => quickClassId === 'all' || isSameClass(s.classId, quickClassId, classes))
                           .map((s) => (
                             <option key={s.id} value={s.id}>
-                              {s.name} ({classes.find((c) => c.id === s.classId)?.name})
+                              {s.name} ({getSchoolClassName(s.classId, classes)})
                             </option>
                           ))}
                       </>
@@ -1194,9 +1194,9 @@ export default function PiketPanel({
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[160px] overflow-y-auto pr-1">
                   {classes.map((cls) => {
-                    const classStudents = students.filter(s => s.classId === cls.id || (cls.name && s.classId === cls.name));
+                    const classStudents = students.filter(s => isSameClass(s.classId, cls.id, classes));
                     const totalSiswa = classStudents.length;
-                    const classAtts = todayAttendance.filter(a => a.classId === cls.id || classStudents.some(s => s.id === a.studentId));
+                    const classAtts = todayAttendance.filter(a => isSameClass(a.classId, cls.id, classes) || classStudents.some(s => s.id === a.studentId));
                     const hadir = classAtts.filter(a => a.status === 'Hadir').length;
                     const tidakHadir = classAtts.filter(a => a.status !== 'Hadir').length;
 
@@ -1235,8 +1235,7 @@ export default function PiketPanel({
                   ) : (
                     todayAttendance.filter((a) => a.status !== 'Hadir').map((a) => {
                       const student = students.find((s) => s.id === a.studentId);
-                      const matchedClass = classes.find(c => c.id === a.classId || c.id === student?.classId || c.name === student?.classId);
-                      const className = matchedClass ? matchedClass.name : (student?.classId || '-');
+                      const className = getSchoolClassName(a.classId || student?.classId, classes) || '-';
 
                       return (
                         <div key={a.id} className="py-2 flex justify-between items-start gap-2">
@@ -1336,7 +1335,7 @@ export default function PiketPanel({
                   <div className="grid grid-cols-2 gap-2 bg-white p-3 rounded-lg border border-slate-200 max-h-36 overflow-y-auto shadow-inner">
                     {classes.map((c) => {
                       const classIds = absentClassId.split(',').map(x => x.trim()).filter(Boolean);
-                      const isChecked = classIds.includes(c.id);
+                      const isChecked = classIds.some(id => isSameClass(id, c.id, classes));
                       return (
                         <label key={c.id} className="flex items-center gap-1.5 cursor-pointer">
                           <input
@@ -1345,7 +1344,7 @@ export default function PiketPanel({
                             onChange={() => {
                               let newIds;
                               if (isChecked) {
-                                newIds = classIds.filter(id => id !== c.id);
+                                newIds = classIds.filter(id => !isSameClass(id, c.id, classes));
                               } else {
                                 newIds = [...classIds, c.id];
                               }
@@ -1417,7 +1416,7 @@ export default function PiketPanel({
                           <td className="py-3 font-semibold text-slate-900">{at.teacherName}</td>
                           <td className="py-3">
                             <span className="block font-medium">{at.subject}</span>
-                            <span className="text-[10px] text-slate-400">Kelas: {at.classId.split(',').map(id => classes.find(c => c.id === id.trim())?.name || id.trim()).join(', ')}</span>
+                            <span className="text-[10px] text-slate-400">Kelas: {at.classId.split(',').map(id => getSchoolClassName(id.trim(), classes) || id.trim()).join(', ')}</span>
                           </td>
                           <td className="py-3">
                             <span
@@ -1613,7 +1612,7 @@ export default function PiketPanel({
                     .filter((a) => a.isSelfAttendance && (!verifyDateFilter || a.date === verifyDateFilter))
                     .map((record) => {
                     const student = students.find((s) => s.id === record.studentId);
-                    const sClass = classes.find((c) => c.id === record.classId);
+                    const sClassName = getSchoolClassName(record.classId || student?.classId, classes) || 'N/A';
 
                     return (
                       <div key={record.id} className="p-4 border rounded-xl hover:bg-slate-50/50 transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs">
@@ -1641,7 +1640,7 @@ export default function PiketPanel({
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-slate-800 text-sm">{student?.name}</span>
-                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-800 font-bold uppercase">{sClass?.name || 'N/A'}</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-800 font-bold uppercase">{sClassName}</span>
                             </div>
                             <p className="text-xs text-slate-600">
                               Status Diajukan: <span className="font-bold text-slate-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">{record.status}</span>
@@ -1911,9 +1910,9 @@ export default function PiketPanel({
                         </thead>
                         <tbody className="divide-y divide-slate-200">
                           {classes.map((c, idx) => {
-                            const classStudents = students.filter(s => s.classId === c.id || (c.name && s.classId === c.name));
+                            const classStudents = students.filter(s => isSameClass(s.classId, c.id, classes));
                             const totalClassStudents = classStudents.length;
-                            const classAtts = reportAttendance.filter(a => a.classId === c.id || classStudents.some(s => s.id === a.studentId));
+                            const classAtts = reportAttendance.filter(a => isSameClass(a.classId, c.id, classes) || classStudents.some(s => s.id === a.studentId));
                             const hadir = classAtts.filter(a => a.status === 'Hadir').length;
                             const sakit = classAtts.filter(a => a.status === 'Sakit').length;
                             const izin = classAtts.filter(a => a.status === 'Izin').length;
@@ -1974,8 +1973,7 @@ export default function PiketPanel({
                           <tbody className="divide-y divide-slate-200">
                             {reportAttendance.filter(a => a.status !== 'Hadir').map((a, idx) => {
                               const std = students.find(s => s.id === a.studentId);
-                              const matchedClass = classes.find(c => c.id === a.classId || c.id === std?.classId || c.name === std?.classId);
-                              const className = matchedClass ? matchedClass.name : (std?.classId || '-');
+                              const className = getSchoolClassName(a.classId || std?.classId, classes) || '-';
 
                               return (
                                 <tr key={a.id} className="hover:bg-slate-50">
@@ -2027,7 +2025,7 @@ export default function PiketPanel({
                             const tObj = violationTypes.find(t => t.id === v.violationTypeId);
                             return (
                               <tr key={v.id}>
-                                <td className="p-1 px-2 font-bold">{sObj?.name} ({classes.find(c => c.id === sObj?.classId)?.name})</td>
+                                <td className="p-1 px-2 font-bold">{sObj?.name} ({getSchoolClassName(sObj?.classId, classes)})</td>
                                 <td className="p-1 px-2 text-slate-600 font-mono">{v.date}</td>
                                 <td className="p-1 px-2">{tObj?.name}</td>
                                 <td className="p-1 px-2 italic">"{v.notes}"</td>
@@ -2063,7 +2061,7 @@ export default function PiketPanel({
                               <td className="p-1 px-2 font-bold">{at.teacherName}</td>
                               <td className="p-1 px-2 text-slate-600 font-mono">{at.date}</td>
                               <td className="p-1 px-2">{at.subject}</td>
-                              <td className="p-1 px-2">{classes.find(c => c.id === at.classId)?.name || at.classId}</td>
+                              <td className="p-1 px-2">{at.classId ? at.classId.split(',').map(id => getSchoolClassName(id.trim(), classes) || id.trim()).join(', ') : '-'}</td>
                               <td className="p-1 px-2 font-semibold text-amber-700">{at.reason}</td>
                               <td className="p-1 px-2 italic">{at.substituteTeacher || '-'}</td>
                             </tr>
@@ -2165,7 +2163,7 @@ export default function PiketPanel({
         <AttendancePhotoPreviewModal
           record={previewPhotoRecord}
           student={students.find((s) => s.id === previewPhotoRecord.studentId)}
-          sClass={classes.find((c) => c.id === previewPhotoRecord.classId)}
+          sClass={classes.find((c) => isSameClass(c.id, previewPhotoRecord.classId, classes))}
           onClose={() => setPreviewPhotoRecord(null)}
           onVerify={onVerifyAttendance}
           canVerify={true}

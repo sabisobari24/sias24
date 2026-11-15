@@ -13,6 +13,7 @@ import {
   getRangeFileSuffix,
   getRangeTitleSuffix
 } from '../utils/exportDateFilter';
+import { isSameClass } from '../utils/classUtils';
 
 interface WaliKelasPanelProps {
   teacher: Teacher;
@@ -49,11 +50,11 @@ export default function WaliKelasPanel({
 }: WaliKelasPanelProps) {
   // Find managed class
   const managedClass = classes.find((c) => c.homeroomTeacherId === teacher.id);
-  const classStudents = students.filter((s) => s.classId === managedClass?.id);
+  const classStudents = students.filter((s) => managedClass ? isSameClass(s.classId, managedClass.id, classes) : false);
   const classStudentIds = classStudents.map((s) => s.id);
 
   // Class achievements
-  const classAchievements = studentAchievements.filter(a => classStudentIds.includes(a.studentId) || a.classId === managedClass?.id || a.classId === managedClass?.name);
+  const classAchievements = studentAchievements.filter(a => classStudentIds.includes(a.studentId) || (managedClass && isSameClass(a.classId, managedClass.id, classes)));
 
   // Calculate roles this teacher holds
   const qualifiedRoles: { role: string; label: string }[] = [
@@ -135,7 +136,7 @@ export default function WaliKelasPanel({
   const selectedStudent = students.find((s) => s.id === selectedStudentId);
 
   // Stats for the class
-  const classAttendances = attendance.filter((a) => a.classId === managedClass?.id);
+  const classAttendances = attendance.filter((a) => managedClass ? (isSameClass(a.classId, managedClass.id, classes) || classStudentIds.includes(a.studentId)) : false);
   const totalAttendanceDays = classAttendances.length;
   const totalHadir = classAttendances.filter((a) => a.status === 'Hadir').length;
   const attendanceRate = totalAttendanceDays > 0 ? Math.round((totalHadir / totalAttendanceDays) * 100) : 100;

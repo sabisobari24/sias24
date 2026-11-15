@@ -38,7 +38,8 @@ import {
 } from '../../utils/cardDesignHelper';
 import { saveCardDesignToFirestore } from '../../lib/firebase';
 import { printSingleStudentCard } from '../../utils/qrHelper';
-import { downloadSingleStudentCardPDF } from '../../utils/cardPdfHelper';
+import { downloadSingleStudentCardPDF, createStudentAvatarPng } from '../../utils/cardPdfHelper';
+import { getSchoolClassName } from '../../utils/classUtils';
 import { Student, SchoolClass } from '../../types';
 
 export default function SettingKartuPelajar({ classes = [] }: { classes?: SchoolClass[] }) {
@@ -259,26 +260,27 @@ export default function SettingKartuPelajar({ classes = [] }: { classes?: School
 
   // Sample Student for Preview and Test Print using active class list
   const sampleClassId = classes[0]?.id || '';
-  const sampleClassName = classes[0]?.name || '-';
+  const sampleClassName = sampleClassId ? getSchoolClassName(sampleClassId, classes, '-') : 'Belum Ada Kelas';
   const sampleStudent: Student = {
-    id: 'sample-001',
-    name: 'MUHAMMAD RIZKY PRATAMA',
-    nisn: '0098765432',
+    id: 'sample-preview',
+    name: 'NAMA PESERTA DIDIK',
+    nisn: '0000000000',
     classId: sampleClassId,
     gender: 'Laki-laki',
-    address: 'Jl. Slamet Riyadi IV No. 50, Matraman',
-    phone: '081234567890',
-    parentName: 'Bambang Pratama',
-    parentNik: '3175012345670001',
-    parentPhone: '081298765432',
-    parentEmail: 'bambang@example.com',
-    avatarUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200&auto=format&fit=crop'
+    address: schoolAddress || '-',
+    phone: '-',
+    parentName: 'Orang Tua / Wali',
+    parentNik: '',
+    parentPhone: '-',
+    parentEmail: '',
+    avatarUrl: createStudentAvatarPng('SISWA', 'Laki-laki')
   };
 
   const [isDownloadingTestPdf, setIsDownloadingTestPdf] = useState(false);
 
   const handleTestDownloadPdf = async (format: 'card' | 'a4' = 'card') => {
     setIsDownloadingTestPdf(true);
+    setUploadError(null);
     try {
       // Temporarily sync current input state to localStorage so config reflects unsaved edits
       localStorage.setItem('siakad_card_title', cardTitle);
@@ -299,7 +301,7 @@ export default function SettingKartuPelajar({ classes = [] }: { classes?: School
       );
     } catch (err) {
       console.error('Error downloading test PDF:', err);
-      alert('Gagal mengunduh contoh PDF kartu pelajar.');
+      setUploadError('Gagal mengunduh contoh PDF kartu pelajar.');
     } finally {
       setIsDownloadingTestPdf(false);
     }

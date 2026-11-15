@@ -3,6 +3,7 @@ import { Student, SchoolClass } from '../types';
 import { printHTML } from './printHelper';
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from './schoolLogoHelper';
 import { getCardDesignConfig, getPresetById } from './cardDesignHelper';
+import { getSchoolClassName } from './classUtils';
 
 /**
  * Generate high-resolution Data URL for a given NISN QR code.
@@ -536,7 +537,7 @@ export async function printBatchStudentCards(
   const cardsData = await Promise.all(
     studentList.map(async (student) => {
       const qrDataUrl = await generateNISNQRCode(student.nisn || student.id, 240);
-      const cName = classes.find(c => c.id === student.classId)?.name || student.classId || '-';
+      const cName = getSchoolClassName(student.classId, classes, '-');
       const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=4f46e5&color=fff&size=160&bold=true`;
       return {
         student,

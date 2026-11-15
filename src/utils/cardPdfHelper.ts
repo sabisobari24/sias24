@@ -4,6 +4,7 @@ import html2canvas from 'html2canvas';
 import QRCode from 'qrcode';
 import { Student, SchoolClass } from '../types';
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from './schoolLogoHelper';
+import { getSchoolClassName } from './classUtils';
 
 const escapeHtml = (val: unknown): string => {
   if (val === null || val === undefined) return '';
@@ -836,7 +837,7 @@ export async function downloadBatchStudentCardsPDF(
 
     for (let i = 0; i < totalStudents; i++) {
       const student = studentList[i];
-      const cName = classes.find(c => c.id === student.classId)?.name || student.classId || '-';
+      const cName = getSchoolClassName(student.classId, classes, '-');
 
       options?.onProgress?.(i + 1, totalStudents, `Memproses kartu ${i + 1} dari ${totalStudents} (${student.name})...`);
 
@@ -901,7 +902,7 @@ export async function downloadBatchStudentCardsPDF(
 
     for (let i = 0; i < totalStudents; i++) {
       const student = studentList[i];
-      const cName = classes.find(c => c.id === student.classId)?.name || student.classId || '-';
+      const cName = getSchoolClassName(student.classId, classes, '-');
 
       options?.onProgress?.(i + 1, totalStudents, `Memproses kartu ${i + 1} dari ${totalStudents} (${student.name})...`);
 

@@ -34,6 +34,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   const [isCompleted, setIsCompleted] = useState(false);
   const [computedScore, setComputedScore] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(5400); // 90 minutes default
+  const [submitError, setSubmitError] = useState('');
 
   // Synchronize the linked Question Bank from Firestore (one-time fetch to save quota)
   useEffect(() => {
@@ -94,6 +95,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   // Submit and Auto-Grade the exam answers
   const submitAnswers = async (answersToSubmit: typeof selectedAnswers) => {
     if (!questionBank) return;
+    setSubmitError('');
     
     const questions = questionBank.questions;
     let totalScoreableQuestions = 0;
@@ -176,7 +178,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
       setIsCompleted(true);
     } catch (err) {
       console.error("Error saving exam results to Firestore:", err);
-      alert("Gagal mengirim lembar jawaban. Koneksi terputus. Silakan hubungi pengawas.");
+      setSubmitError("Gagal mengirim lembar jawaban. Koneksi terputus. Silakan periksa internet Anda dan coba kirim ulang atau hubungi pengawas.");
     }
   };
 
@@ -554,6 +556,22 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
               </button>
             </div>
           </div>
+
+          {submitError && (
+            <div className="bg-rose-50 border-b border-rose-200 px-4 py-2.5 flex items-center justify-between gap-3 text-rose-800 text-xs font-bold shrink-0">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{submitError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSubmitError('')}
+                className="text-rose-600 hover:text-rose-800 underline text-[11px] shrink-0 cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          )}
 
           {/* Locked Content Area */}
           {isCompleted ? (

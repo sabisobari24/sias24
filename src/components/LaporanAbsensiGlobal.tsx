@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Attendance, Student, SchoolClass } from '../types';
 import { ShieldCheck, Clock, CheckCircle2, XCircle, Info, Image, MapPin, Eye } from 'lucide-react';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
+import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 
 interface LaporanAbsensiGlobalProps {
   attendance: Attendance[];
@@ -66,7 +67,7 @@ export default function LaporanAbsensiGlobal({
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                 {sortedList.map((record) => {
                   const student = students.find((s) => s.id === record.studentId);
-                  const sClass = classes.find((c) => c.id === record.classId);
+                  const classDisplayName = getSchoolClassName(record.classId || student?.classId, classes, 'N/A');
 
                   return (
                     <tr key={record.id} className="hover:bg-slate-50/80 transition-colors">
@@ -85,7 +86,7 @@ export default function LaporanAbsensiGlobal({
                           )}
                           <div>
                             <span className="font-bold text-slate-800 block">{student?.name || 'Siswa'}</span>
-                            <span className="text-[10px] text-slate-400 font-semibold">{sClass?.name || 'N/A'}</span>
+                            <span className="text-[10px] text-slate-400 font-semibold">{classDisplayName}</span>
                           </div>
                         </div>
                       </td>
@@ -183,7 +184,7 @@ export default function LaporanAbsensiGlobal({
         <AttendancePhotoPreviewModal
           record={selectedRecord}
           student={students.find((s) => s.id === selectedRecord.studentId)}
-          sClass={classes.find((c) => c.id === selectedRecord.classId)}
+          sClass={classes.find((c) => isSameClass(c.id, selectedRecord.classId, classes))}
           onClose={() => setSelectedRecord(null)}
           canVerify={false}
         />

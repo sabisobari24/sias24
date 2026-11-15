@@ -11,6 +11,7 @@ import {
   getRangeFileSuffix,
   getRangeTitleSuffix
 } from '../utils/exportDateFilter';
+import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 
 interface BKPanelProps {
   teacher: Teacher;
@@ -221,7 +222,7 @@ export default function BKPanel({
       return [
         n.date,
         s?.name || 'Siswa Terhapus',
-        classes.find(c => c.id === s?.classId)?.name || '-',
+        getSchoolClassName(s?.classId, classes, '-'),
         n.notes,
         n.followUp || '-',
         n.status,
@@ -254,7 +255,7 @@ export default function BKPanel({
       return [
         v.date,
         s?.name || 'Siswa Terhapus',
-        classes.find(c => c.id === s?.classId)?.name || '-',
+        getSchoolClassName(s?.classId, classes, '-'),
         type?.name || 'Pelanggaran Khusus',
         v.points,
         v.notes || '',
@@ -281,7 +282,7 @@ export default function BKPanel({
     const filtered = filterItemsByDateRange(bimbinganJournals, j => j.date, range);
     const headers = ["Tanggal", "Tipe", "Kelas / Siswa", "Kategori Bidang", "Catatan Jurnal Layanan"];
     const rows = filtered.map(j => {
-      const cls = classes.find(c => c.id === j.classId)?.name || j.classId;
+      const cls = getSchoolClassName(j.classId, classes, '-');
       const stdNames = (j.studentIds || []).map(sid => students.find(s => s.id === sid)?.name || '').filter(Boolean).join(', ');
       const target = j.type === 'Individu' ? `Siswa: ${stdNames} (${cls})` : `Kelas: ${cls}`;
       return [
@@ -312,7 +313,7 @@ export default function BKPanel({
     const filtered = filterItemsByDateRange(bimbinganSchedules, s => s.date, range);
     const headers = ["Tanggal", "Waktu", "Target", "Subjek / Sasaran", "Topik / Agenda", "Catatan Persiapan"];
     const rows = filtered.map(s => {
-      const clsName = classes.find(c => c.id === s.targetId)?.name || '';
+      const clsName = getSchoolClassName(s.targetId, classes, '');
       const stdName = students.find(std => std.id === s.targetId)?.name || '';
       const sasaran = s.targetType === 'Kelas' ? `Kelas ${clsName}` : s.targetType === 'Individu' ? `Siswa: ${stdName}` : `Orang Tua: ${stdName}`;
       return [
@@ -378,7 +379,7 @@ export default function BKPanel({
       i + 1,
       students.find(s => s.id === a.studentId)?.nisn || '-',
       a.studentName,
-      a.classId,
+      getSchoolClassName(a.classId, classes, '-'),
       a.title,
       a.category,
       a.level,
@@ -522,7 +523,7 @@ export default function BKPanel({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-1">
                 {filteredStudents.map((s) => {
-                  const sClass = classes.find((c) => c.id === s.classId);
+                  const sClassName = getSchoolClassName(s.classId, classes, '-');
                   const sViolations = violations.filter((v) => v.studentId === s.id || (s.nisn && v.studentId === s.nisn));
                   const sPoints = sViolations.reduce((sum, v) => sum + v.points, 0);
                   const sNotes = counselorNotes.filter((n) => n.studentId === s.id);
@@ -531,7 +532,7 @@ export default function BKPanel({
                     <div key={s.id} className="p-4 border rounded-xl hover:border-rose-300 transition-all bg-slate-50/50 flex justify-between gap-3">
                       <div className="space-y-1">
                         <p className="font-bold text-slate-800">{s.name}</p>
-                        <p className="text-xs text-slate-400">NISN: {s.nisn} &bull; {sClass?.name}</p>
+                        <p className="text-xs text-slate-400">NISN: {s.nisn} &bull; {sClassName}</p>
                         <p className="text-[10px] text-slate-500">Parent: {s.parentName} ({s.parentPhone})</p>
                         {sNotes.length > 0 && (
                           <div className="text-[10px] bg-rose-50 text-rose-800 px-2 py-0.5 rounded-full inline-block mt-1 font-semibold">
@@ -574,7 +575,7 @@ export default function BKPanel({
                   return (
                     <div key={v.id} className="py-2.5 flex justify-between items-start">
                       <div>
-                        <p className="font-bold text-slate-800">{student?.name} ({classes.find(c => c.id === student?.classId)?.name})</p>
+                        <p className="font-bold text-slate-800">{student?.name} ({getSchoolClassName(student?.classId, classes, '-')})</p>
                         <p className="text-slate-500 font-medium">[{type?.category}] {type?.name}</p>
                         {v.notes && <p className="text-slate-400 italic">"Keterangan: {v.notes}"</p>}
                       </div>
@@ -635,9 +636,9 @@ export default function BKPanel({
                       <>
                         <option value="">-- Pilih Siswa --</option>
                         {students
-                          .filter((s) => bimbinganClassFilter === 'all' || s.classId === bimbinganClassFilter)
+                          .filter((s) => bimbinganClassFilter === 'all' || isSameClass(s.classId, bimbinganClassFilter, classes))
                           .map((s) => (
-                            <option key={s.id} value={s.id}>{s.name} ({classes.find(c => c.id === s.classId)?.name})</option>
+                            <option key={s.id} value={s.id}>{s.name} ({getSchoolClassName(s.classId, classes, '-')})</option>
                           ))}
                       </>
                     )}
@@ -803,9 +804,9 @@ export default function BKPanel({
                         >
                           <option value="">-- Pilih Siswa --</option>
                           {students
-                            .filter(s => jurnalClassId === 'all' || jurnalClassId === '' || s.classId === jurnalClassId)
+                            .filter(s => jurnalClassId === 'all' || jurnalClassId === '' || isSameClass(s.classId, jurnalClassId, classes))
                             .map((s) => (
-                              <option key={s.id} value={s.id}>{s.name} ({classes.find(c => c.id === s.classId)?.name})</option>
+                              <option key={s.id} value={s.id}>{s.name} ({getSchoolClassName(s.classId, classes, '-')})</option>
                             ))}
                         </select>
                       </div>
@@ -841,7 +842,7 @@ export default function BKPanel({
                           <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">Ceklis Siswa Anggota Kelompok Bimbingan:</label>
                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 border p-4 rounded-xl max-h-[160px] overflow-y-auto bg-slate-50">
                             {students
-                              .filter((s) => s.classId === jurnalClassId)
+                              .filter((s) => isSameClass(s.classId, jurnalClassId, classes))
                               .map((s) => {
                                 const isChecked = jurnalSelectedStudents.includes(s.id);
                                 return (
@@ -927,7 +928,7 @@ export default function BKPanel({
                       </tr>
                     ) : (
                       bimbinganJournals.slice().reverse().map((j) => {
-                        const sClass = classes.find((c) => c.id === j.classId);
+                        const sClassName = getSchoolClassName(j.classId, classes, '-');
                         return (
                           <tr key={j.id} className="hover:bg-slate-50/50">
                             <td className="p-3 font-medium text-slate-700">{j.date}</td>
@@ -946,7 +947,7 @@ export default function BKPanel({
                                     : `${j.studentIds.length} Siswa`
                                   }
                                 </p>
-                                <p className="text-[10px] text-slate-400">Kelas: {sClass?.name || '-'}</p>
+                                <p className="text-[10px] text-slate-400">Kelas: {sClassName}</p>
                               </div>
                             </td>
                             <td className="p-3">
@@ -1085,7 +1086,7 @@ export default function BKPanel({
                         >
                           <option value="">-- Pilih Siswa --</option>
                           {students
-                            .filter(s => s.classId === scheduleClassId)
+                            .filter(s => isSameClass(s.classId, scheduleClassId, classes))
                             .map((s) => (
                               <option key={s.id} value={s.id}>{s.name}</option>
                             ))}
@@ -1139,7 +1140,7 @@ export default function BKPanel({
                   bimbinganSchedules.slice().reverse().map((sched) => {
                     let targetLabel = '';
                     if (sched.targetType === 'Kelas') {
-                      targetLabel = sched.targetId === 'all' ? 'Semua Kelas' : `Kelas ${classes.find(c => c.id === sched.targetId)?.name || sched.targetId}`;
+                      targetLabel = sched.targetId === 'all' ? 'Semua Kelas' : `Kelas ${getSchoolClassName(sched.targetId, classes)}`;
                     } else {
                       const studentName = students.find(s => s.id === sched.targetId)?.name || 'Siswa Terhapus';
                       targetLabel = `${sched.targetType}: ${studentName}`;
@@ -1272,7 +1273,7 @@ export default function BKPanel({
                       <tr key={a.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3">
                           <div className="font-bold text-slate-900">{a.studentName}</div>
-                          <div className="text-[10px] text-slate-400">{a.classId}</div>
+                          <div className="text-[10px] text-slate-400">{getSchoolClassName(a.classId, classes, '-')}</div>
                         </td>
                         <td className="px-4 py-3 font-bold text-slate-800">{a.title}</td>
                         <td className="px-4 py-3">

@@ -17,10 +17,12 @@ import {
   MessageSquare,
   GraduationCap,
   ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { downloadExcel } from '../../utils/excelExport';
 import { printTablePDF } from '../../utils/printHelper';
+import { getSchoolClassName, isSameClass } from '../../utils/classUtils';
 
 interface AdminOrangTuaPanelProps {
   students: Student[];
@@ -50,11 +52,12 @@ export default function AdminOrangTuaPanel({
   // Send Message Modal
   const [messagingStudent, setMessagingStudent] = useState<Student | null>(null);
   const [noticeMessage, setNoticeMessage] = useState('');
+  const [messageError, setMessageError] = useState('');
 
   // Filtered Parents
   const filteredStudents = useMemo(() => {
     return students.filter((s) => {
-      const matchClass = classFilter === 'all' || s.classId === classFilter;
+      const matchClass = classFilter === 'all' || isSameClass(s.classId, classFilter, classes);
       const q = searchQuery.toLowerCase();
       const matchSearch = 
         !searchQuery.trim() ||
@@ -64,7 +67,7 @@ export default function AdminOrangTuaPanel({
         (s.parentPhone && s.parentPhone.includes(q));
       return matchClass && matchSearch;
     });
-  }, [students, classFilter, searchQuery]);
+  }, [students, classFilter, searchQuery, classes]);
 
   const handleOpenEdit = (s: Student) => {
     setEditingStudent(s);
@@ -119,6 +122,7 @@ export default function AdminOrangTuaPanel({
       replies: []
     };
 
+    setMessageError('');
     saveDocument('parent_messages', id, newMsg)
       .then(() => {
         // Also update local storage if available
@@ -133,7 +137,7 @@ export default function AdminOrangTuaPanel({
         setTimeout(() => setSuccessMsg(''), 4000);
       })
       .catch((err) => {
-        alert(`Gagal mengirim pesan: ${err.message}`);
+        setMessageError(`Gagal mengirim pesan: ${err.message}`);
       });
   };
 
@@ -147,7 +151,7 @@ export default function AdminOrangTuaPanel({
       s.parentEmail || '-',
       s.name,
       s.nisn || '-',
-      classes.find(c => c.id === s.classId)?.name || s.classId,
+      getSchoolClassName(s.classId, classes) || '-',
       s.parentPassword || 'ortu123'
     ]);
     downloadExcel(`Data_Orang_Tua_Murid_${new Date().toISOString().split('T')[0]}.xlsx`, headers, rows, 'Orang Tua');
@@ -162,7 +166,7 @@ export default function AdminOrangTuaPanel({
       s.parentName || 'Wali Murid',
       s.parentPhone || '-',
       s.name,
-      classes.find(c => c.id === s.classId)?.name || s.classId,
+      getSchoolClassName(s.classId, classes) || '-',
       s.parentPassword || 'ortu123'
     ]);
     printTablePDF('Daftar Kontak & Akun Orang Tua Siswa', headers, rows, headmasterName);
@@ -205,7 +209,7 @@ export default function AdminOrangTuaPanel({
               <option value="all">Semua Kelas ({students.length} Wali)</option>
               {classes.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({students.filter(s => s.classId === c.id).length} Wali)
+                  {c.name} ({students.filter(s => isSameClass(s.classId, c.id, classes)).length} Wali)
                 </option>
               ))}
             </select>
@@ -284,7 +288,7 @@ export default function AdminOrangTuaPanel({
                     </td>
                     <td className="px-4 py-3">
                       <span className="bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-black px-2 py-0.5 rounded uppercase">
-                        {classes.find(c => c.id === s.classId)?.name || s.classId}
+                        {getSchoolClassName(s.classId, classes) || '-'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -299,6 +303,7 @@ export default function AdminOrangTuaPanel({
                           onClick={() => {
                             setMessagingStudent(s);
                             setNoticeMessage('');
+                            setMessageError('');
                           }}
                           className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg cursor-pointer transition-colors"
                           title="Kirim Pesan Resmi ke Akun Orang Tua"
@@ -449,6 +454,13 @@ export default function AdminOrangTuaPanel({
                   className="w-full px-3 py-2 bg-slate-50 border rounded-xl focus:bg-white text-xs"
                 />
               </div>
+
+              {messageError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{messageError}</span>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <button

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Student, Teacher, SchoolClass, StudentAchievement, WebSectionContent } from '../../types';
 import { syncCollection, saveDocument, deleteDocument, saveDocumentsBatch } from '../../lib/firebase';
 import { safeLocalStorageSet } from '../../utils/storageHelper';
-import { compressImageFile } from '../../utils/imageHelper';
+import { compressImageFile, compressBase64Image, convertGoogleDriveLink } from '../../utils/imageHelper';
+import { getSchoolClassName, isSameClass } from '../../utils/classUtils';
 import { INITIAL_WEB_CONTENT } from '../../data/initialWebContent';
 import { 
   Users, 
@@ -25,7 +26,10 @@ import {
   Shield,
   Layers,
   ChevronRight,
-  UserPlus
+  UserPlus,
+  Upload,
+  Link2,
+  AlertCircle
 } from 'lucide-react';
 import { downloadExcel } from '../../utils/excelExport';
 import { printTablePDF } from '../../utils/printHelper';
@@ -128,6 +132,7 @@ export default function AdminPelatihPanel({
   const [coachPassword, setCoachPassword] = useState('');
   const [coachEkskulId, setCoachEkskulId] = useState('pramuka');
   const [coachEkskulName, setCoachEkskulName] = useState('Pramuka (Wajib)');
+  const [coachFormError, setCoachFormError] = useState('');
 
   // Coach Data states for selectedEkskulId
   const [memberIds, setMemberIds] = useState<string[]>([]);
@@ -153,6 +158,7 @@ export default function AdminPelatihPanel({
   const [journalMaterial, setJournalMaterial] = useState('');
   const [journalNotes, setJournalNotes] = useState('');
   const [journalPhoto, setJournalPhoto] = useState('');
+  const [journalPhotoMode, setJournalPhotoMode] = useState<'upload' | 'link'>('upload');
   const [journalAttendees, setJournalAttendees] = useState<number>(0);
 
   // Nilai Form
@@ -203,6 +209,7 @@ export default function AdminPelatihPanel({
 
   // Handlers for Coach Teacher CRUD
   const handleOpenAddCoach = () => {
+    setCoachFormError('');
     setEditingCoach(null);
     setCoachName('');
     setCoachNip(`PELATIH-${Math.floor(1000 + Math.random() * 9000)}`);
@@ -214,6 +221,7 @@ export default function AdminPelatihPanel({
   };
 
   const handleOpenEditCoach = (c: Teacher) => {
+    setCoachFormError('');
     setEditingCoach(c);
     setCoachName(c.name);
     setCoachNip(c.nip);
@@ -226,8 +234,9 @@ export default function AdminPelatihPanel({
 
   const handleSaveCoach = (e: React.FormEvent) => {
     e.preventDefault();
+    setCoachFormError('');
     if (!coachName.trim()) {
-      alert('Nama pelatih wajib diisi!');
+      setCoachFormError('Nama pelatih wajib diisi!');
       return;
     }
 
@@ -1124,6 +1133,12 @@ export default function AdminPelatihPanel({
             </div>
 
             <form onSubmit={handleSaveCoach} className="space-y-3.5 text-xs">
+              {coachFormError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{coachFormError}</span>
+                </div>
+              )}
               <div className="space-y-1">
                 <label className="font-bold text-slate-700 uppercase tracking-wide text-[10px]">Nama Lengkap Pelatih <span className="text-rose-500">*</span></label>
                 <input
@@ -1456,22 +1471,72 @@ export default function AdminPelatihPanel({
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 uppercase tracking-wide text-[10px]">Foto Dokumentasi Kegiatan</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const compressed = await compressImageFile(file, 800, 0.7);
-                      setJournalPhoto(compressed);
-                    }
-                  }}
-                  className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700"
-                />
+              <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="font-bold text-slate-700 uppercase tracking-wide text-[10px]">Foto Dokumentasi Kegiatan</label>
+                  <div className="inline-flex bg-slate-200/80 p-0.5 rounded-lg text-[10px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setJournalPhotoMode('upload')}
+                      className={`px-2 py-0.5 rounded-md cursor-pointer flex items-center gap-1 ${
+                        journalPhotoMode === 'upload' ? 'bg-white text-purple-700 shadow-2xs' : 'text-slate-600'
+                      }`}
+                    >
+                      <Upload className="w-3 h-3" />
+                      <span>Upload Komputer</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setJournalPhotoMode('link')}
+                      className={`px-2 py-0.5 rounded-md cursor-pointer flex items-center gap-1 ${
+                        journalPhotoMode === 'link' ? 'bg-white text-purple-700 shadow-2xs' : 'text-slate-600'
+                      }`}
+                    >
+                      <Link2 className="w-3 h-3" />
+                      <span>Link URL</span>
+                    </button>
+                  </div>
+                </div>
+                {journalPhotoMode === 'upload' ? (
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const compressed = await compressImageFile(file, 800, 600, 0.75);
+                        setJournalPhoto(compressed);
+                      }
+                    }}
+                    className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 cursor-pointer"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="Tempel Link URL Gambar / Google Drive..."
+                    value={journalPhoto.startsWith('data:') ? '' : journalPhoto}
+                    onChange={(e) => {
+                      const converted = convertGoogleDriveLink(e.target.value);
+                      if (converted.startsWith('data:image/')) {
+                        compressBase64Image(converted, 800, 600, 0.75).then(res => setJournalPhoto(res));
+                      } else {
+                        setJournalPhoto(converted);
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono"
+                  />
+                )}
                 {journalPhoto && (
-                  <img src={journalPhoto} alt="Preview" className="h-20 w-auto rounded border mt-1 object-cover" />
+                  <div className="relative inline-block mt-1">
+                    <img src={journalPhoto} alt="Preview" className="h-20 w-auto rounded-lg border object-cover" referrerPolicy="no-referrer" />
+                    <button
+                      type="button"
+                      onClick={() => setJournalPhoto('')}
+                      className="mt-1 block text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                    >
+                      Hapus Foto
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1512,7 +1577,8 @@ export default function AdminPelatihPanel({
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!achStudentId || !achTitle.trim()) {
-                  alert('Mohon pilih siswa dan isi judul prestasi!');
+                  setErrorMsg('Mohon pilih siswa dan isi judul prestasi!');
+                  setTimeout(() => setErrorMsg(''), 3500);
                   return;
                 }
                 const st = students.find(s => s.id === achStudentId);

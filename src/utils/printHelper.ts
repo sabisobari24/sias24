@@ -1,5 +1,6 @@
 import { CertificateConfig, InventoryLoan } from '../types';
 import { getEffectiveSchoolLogo } from './schoolLogoHelper';
+import { getSchoolClassName } from './classUtils';
 
 const escapeHtml = (val: unknown): string => {
   if (val === null || val === undefined) return '';
@@ -662,7 +663,7 @@ export const printCertificate = (
   const safeCertNumber = escapeHtml(certNumber);
   const safeStudentName = escapeHtml(student.name);
   const safeStudentNisn = escapeHtml(student.nisn || '-');
-  const safeStudentClass = escapeHtml(student.classId || '-');
+  const safeStudentClass = escapeHtml(getSchoolClassName(student.classId, [], '-'));
   const safeAchTitle = escapeHtml(achievement.title);
   const safeAchCategory = escapeHtml(achievement.category);
   const safeAchLevel = escapeHtml(achievement.level);

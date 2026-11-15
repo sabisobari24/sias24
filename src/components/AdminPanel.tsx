@@ -5,7 +5,7 @@ import { downloadExcel, parseExcel } from '../utils/excelExport';
 import { printHTML, printTablePDF, printCertificate } from '../utils/printHelper';
 import { downloadDocx } from '../utils/docxExport';
 import { useDownload } from '../context/DownloadContext';
-import { getSchoolClassName } from '../utils/classUtils';
+import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 import ConfirmModal from './ConfirmModal';
 import WebContentEditor from './WebContentEditor';
 import { CbtScoreExporter } from './CbtScoreExporter';
@@ -21,7 +21,7 @@ import AdminOrangTuaPanel from './admin/AdminOrangTuaPanel';
 import { printBatchStudentCards } from '../utils/qrHelper';
 import { syncCollection, saveDocument } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
-import { compressImageFile, compressAvatarImage } from '../utils/imageHelper';
+import { compressImageFile, compressAvatarImage, convertGoogleDriveLink } from '../utils/imageHelper';
 import MediaUploadSelector from './MediaUploadSelector';
 import { getEffectiveSchoolLogo, getEffectiveRegionalLogo, saveSchoolCardLogo } from '../utils/schoolLogoHelper';
 import {
@@ -249,11 +249,11 @@ export default function AdminPanel({
   const handleSaveAchievement = (e: React.FormEvent) => {
     e.preventDefault();
     if (!achStudentId) {
-      alert('Pilih siswa terlebih dahulu!');
+      showErrorToast('Pilih siswa terlebih dahulu!');
       return;
     }
     if (!achTitle.trim()) {
-      alert('Judul / Raihan prestasi wajib diisi!');
+      showErrorToast('Judul / Raihan prestasi wajib diisi!');
       return;
     }
     const studentObj = students.find(s => s.id === achStudentId);
@@ -425,7 +425,7 @@ export default function AdminPanel({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const compressed = await compressImageFile(file, 1600, 0.85);
+      const compressed = await compressImageFile(file, 1600, 1200, 0.82);
       if (target === 'akademik') {
         setCertAcademicBgUrl(compressed);
         safeLocalStorageSet('siakad_cert_academic_bg_url', compressed);
@@ -436,7 +436,7 @@ export default function AdminPanel({
       setSuccessMsg(`Background sertifikat ${target} berhasil diunggah!`);
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
-      alert('Gagal mengunggah file background. Pastikan format gambar JPG/PNG valid.');
+      showErrorToast('Gagal mengunggah file background. Pastikan format gambar JPG/PNG valid.');
     }
   };
 
@@ -445,7 +445,7 @@ export default function AdminPanel({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const compressed = await compressImageFile(file, 512, 0.9);
+      const compressed = await compressImageFile(file, 512, 512, 0.9);
       setCertLogoRight(compressed);
       safeLocalStorageSet('siakad_cert_logo_right', compressed);
       // Also update school logo so the whole app stays unified
@@ -453,7 +453,7 @@ export default function AdminPanel({
       setSuccessMsg('Logo sertifikat & sekolah berhasil diperbarui dan disinkronkan!');
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
-      alert('Gagal mengunggah logo.');
+      showErrorToast('Gagal mengunggah logo.');
     }
   };
 
@@ -559,6 +559,7 @@ export default function AdminPanel({
   }, [propsCbtBypassPin]);
 
   // Kop Surat Detail Text States
+  const [logoLeftInput, setLogoLeftInput] = useState<string>(() => localStorage.getItem('siakad_logo_left') || '');
   const [logoRightInput, setLogoRightInput] = useState<string>(() => headmasterLogoRight || localStorage.getItem('siakad_logo_right') || '');
   const [headmasterNipInput, setHeadmasterNipInput] = useState(() => localStorage.getItem('siakad_headmaster_nip') || '196711261991032004');
   const [headmasterPhotoInput, setHeadmasterPhotoInput] = useState<string>(() => localStorage.getItem('siakad_headmaster_photo') || webHomeContent?.headImage || 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj');
@@ -631,7 +632,7 @@ export default function AdminPanel({
     parentNik: '',
     parentPhone: '',
     parentEmail: '',
-    avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120',
+    avatarUrl: '',
     guruWaliTeacherId: '',
     password: '',
     parentPassword: '',
@@ -647,6 +648,7 @@ export default function AdminPanel({
     roles: ['guru'],
     classId: '',
     password: '',
+    avatarUrl: '',
   });
 
   const [isAddingClass, setIsAddingClass] = useState(false);
@@ -665,6 +667,11 @@ export default function AdminPanel({
   });
 
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const showErrorToast = (msg: string) => {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(''), 5000);
+  };
 
   const [showStudentBatch, setShowStudentBatch] = useState(false);
   const [showTeacherBatch, setShowTeacherBatch] = useState(false);
@@ -672,14 +679,14 @@ export default function AdminPanel({
   // Download Student Template Excel
   const downloadStudentTemplate = () => {
     const headers = ['Nama', 'NISN', 'ID_Kelas', 'Jenis_Kelamin', 'Alamat', 'HP_Siswa', 'Nama_Orang_Tua', 'HP_Orang_Tua', 'Email_Orang_Tua', 'ID_Guru_Wali', 'NIK_Orang_Tua'];
-    const exampleRow = ['Ahmad Syarif', '1234567890', classes[0]?.id || 'Kelas 7A', 'Laki-laki', 'Jl. Merdeka No. 10', '08123456789', 'Budi Syarif', '08129876543', 'budi@gmail.com', teachers[0]?.id || 't-guru-1', '3171011111110008'];
+    const exampleRow = ['Nama Lengkap Siswa', '0012345678', classes[0]?.id || '', 'Laki-laki', 'Alamat Rumah', '0812xxxxxxxx', 'Nama Wali Murid', '0812xxxxxxxx', 'email@example.com', teachers[0]?.id || '', '3171xxxxxxxxxxxx'];
     downloadExcel('template_import_siswa.xlsx', headers, [exampleRow]);
   };
 
   // Download Teacher Template Excel
   const downloadTeacherTemplate = () => {
     const headers = ['Nama', 'NIP', 'Email', 'Peran', 'ID_Kelas'];
-    const exampleRow = ['Siti Aminah, S.Pd.', '198506122010012003', 'siti.aminah@sekolah.sch.id', 'guru', classes[0]?.id || 'Kelas 7A'];
+    const exampleRow = ['Nama Guru, S.Pd.', '198506122010012003', 'guru@sekolah.sch.id', 'guru', classes[0]?.id || ''];
     downloadExcel('template_import_pendidik.xlsx', headers, [exampleRow]);
   };
 
@@ -781,7 +788,7 @@ export default function AdminPanel({
     parseExcel(file, (rows) => {
       try {
         if (rows.length < 2) {
-          alert('File Excel kosong atau format tidak valid.');
+          showErrorToast('File Excel kosong atau format tidak valid.');
           return;
         }
 
@@ -899,7 +906,7 @@ export default function AdminPanel({
               }
             }
           } else {
-            classIdToUse = classes[0]?.id || 'Kelas 7A';
+            classIdToUse = classes[0]?.id || '';
           }
 
           // Gender mapping
@@ -923,7 +930,7 @@ export default function AdminPanel({
             parentPhone: formatPhoneNumber(valAt(parentPhoneIdx)),
             parentEmail: valAt(parentEmailIdx),
             parentNik: formatScientificNumber(valAt(parentNikIdx, nisnVal ? `3171${nisnVal}0` : '')),
-            avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120',
+            avatarUrl: '',
             guruWaliTeacherId: valAt(guruWaliIdx),
           });
         });
@@ -934,15 +941,15 @@ export default function AdminPanel({
           setShowStudentBatch(false);
           setTimeout(() => setSuccessMsg(''), 5000);
         } else {
-          alert('Tidak ada data siswa valid yang terdeteksi. Pastikan baris data terisi Nama.');
+          showErrorToast('Tidak ada data siswa valid yang terdeteksi. Pastikan baris data terisi Nama.');
         }
       } catch (err) {
         console.error(err);
-        alert('Terjadi kesalahan saat memproses file Excel.');
+        showErrorToast('Terjadi kesalahan saat memproses file Excel.');
       }
     }, (err) => {
       console.error(err);
-      alert('Gagal membaca file Excel. Pastikan format file benar (.xlsx atau .csv).');
+      showErrorToast('Gagal membaca file Excel. Pastikan format file benar (.xlsx atau .csv).');
     });
 
     e.target.value = '';
@@ -956,7 +963,7 @@ export default function AdminPanel({
     parseExcel(file, (rows) => {
       try {
         if (rows.length < 2) {
-          alert('File Excel kosong atau format tidak valid.');
+          showErrorToast('File Excel kosong atau format tidak valid.');
           return;
         }
 
@@ -1044,15 +1051,15 @@ export default function AdminPanel({
           setShowTeacherBatch(false);
           setTimeout(() => setSuccessMsg(''), 5000);
         } else {
-          alert('Tidak ada data pendidik valid yang terdeteksi. Pastikan baris data terisi Nama.');
+          showErrorToast('Tidak ada data pendidik valid yang terdeteksi. Pastikan baris data terisi Nama.');
         }
       } catch (err) {
         console.error(err);
-        alert('Terjadi kesalahan saat memproses file Excel.');
+        showErrorToast('Terjadi kesalahan saat memproses file Excel.');
       }
     }, (err) => {
       console.error(err);
-      alert('Gagal membaca file Excel. Pastikan format file benar (.xlsx atau .csv).');
+      showErrorToast('Gagal membaca file Excel. Pastikan format file benar (.xlsx atau .csv).');
     });
 
     e.target.value = '';
@@ -1071,11 +1078,11 @@ export default function AdminPanel({
     e.preventDefault();
     const targetNisn = studentForm.nisn.trim();
     if (!targetNisn) {
-      alert('NISN tidak boleh kosong!');
+      showErrorToast('NISN tidak boleh kosong!');
       return;
     }
     if (targetNisn.length !== 10 || isNaN(Number(targetNisn))) {
-      alert('NISN Siswa harus berupa 10 digit angka!');
+      showErrorToast('NISN Siswa harus berupa 10 digit angka!');
       return;
     }
 
@@ -1084,7 +1091,7 @@ export default function AdminPanel({
       (s) => s.nisn === targetNisn && s.id !== editingStudentId
     );
     if (duplicateNisn) {
-      alert(`Gagal: NISN ${targetNisn} sudah terdaftar dalam sistem oleh siswa lain.`);
+      showErrorToast(`Gagal: NISN ${targetNisn} sudah terdaftar dalam sistem oleh siswa lain.`);
       return;
     }
 
@@ -1114,7 +1121,7 @@ export default function AdminPanel({
       parentNik: '',
       parentPhone: '',
       parentEmail: '',
-      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120',
+      avatarUrl: '',
       guruWaliTeacherId: '',
       password: '',
       parentPassword: '',
@@ -1141,7 +1148,7 @@ export default function AdminPanel({
       setSuccessMsg('Tenaga pendidik baru berhasil didaftarkan!');
     }
     setIsAddingTeacher(false);
-    setTeacherForm({ name: '', nip: '', email: '', role: 'guru', roles: ['guru'], classId: '', password: '' });
+    setTeacherForm({ name: '', nip: '', email: '', role: 'guru', roles: ['guru'], classId: '', password: '', avatarUrl: '' });
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
@@ -1693,7 +1700,7 @@ export default function AdminPanel({
     const rows = filtered.map(d => [
       d.date,
       d.studentName,
-      d.classId,
+      getSchoolClassName(d.classId, classes),
       d.categoryName,
       `${d.quantity} ${d.unit}`,
       d.pointsEarned,
@@ -1719,7 +1726,7 @@ export default function AdminPanel({
     const studentPointsMap = new Map<string, { total: number; name: string; classId: string; count: number }>();
     filterItemsByDateRange(ecoDeposits || [], d => d.date, range).forEach(d => {
       if (d.status === 'Diverifikasi') {
-        const cur = studentPointsMap.get(d.studentId) || { total: 0, name: d.studentName, classId: d.classId, count: 0 };
+        const cur = studentPointsMap.get(d.studentId) || { total: 0, name: d.studentName, classId: getSchoolClassName(d.classId, classes), count: 0 };
         cur.total += (d.pointsEarned || 0);
         cur.count += 1;
         studentPointsMap.set(d.studentId, cur);
@@ -1733,7 +1740,7 @@ export default function AdminPanel({
     const rows = sorted.map((s, idx) => [
       idx + 1,
       s.name,
-      s.classId,
+      getSchoolClassName(s.classId, classes),
       s.total,
       `${s.count} kali`,
       idx === 0 && s.total > 0 ? 'DUTA KEBERSIHAN RESMI' : idx < 3 ? 'Kandidat Duta Lingkungan' : 'Peserta'
@@ -1763,7 +1770,7 @@ export default function AdminPanel({
       p.nipOrNisnOrNik || '-',
       p.email || '-',
       p.phone || '-',
-      p.classId || p.studentNisnOrName || '-'
+      (p.classId ? getSchoolClassName(p.classId, classes) : '') || p.studentNisnOrName || '-'
     ]);
     const suffix = getRangeFileSuffix(range);
     const title = `Daftar Antrean Permohonan Registrasi Akun Pengguna${getRangeTitleSuffix(range)}`;
@@ -1785,12 +1792,11 @@ export default function AdminPanel({
     const headers = ["Tanggal Ujian", "Nama Siswa", "NISN", "Kelas", "Mata Pelajaran", "Jenis Ujian", "Skor CBT", "Status"];
     const rows = filtered.map(g => {
       const s = students.find(std => std.id === g.studentId);
-      const sClass = classes.find(c => c.id === s?.classId || c.name.toLowerCase() === (s?.classId || '').toLowerCase());
       return [
         g.date,
         s?.name || 'Siswa Terhapus',
         s?.nisn || '-',
-        sClass?.name || '-',
+        getSchoolClassName(s?.classId || g.classId, classes, '-'),
         g.subject,
         g.examType,
         g.score,
@@ -1819,7 +1825,6 @@ export default function AdminPanel({
     const headers = ['No', 'Tanggal', 'Jam Keluar', 'Jam Kembali', 'Durasi', 'NISN', 'Nama Siswa', 'Kelas', 'Jenis Izin', 'Tujuan & Keperluan', 'Status', 'Petugas', 'Keterangan'];
     const rows = permitData.map((p, idx) => {
       const stu = students.find(s => s.id === p.studentId);
-      const cls = classes.find(c => c.id === p.classId);
       const permitLabel = p.type === 'toilet' ? 'Ke Toilet' : p.type === 'pulang_cepat' ? 'Pulang Cepat' : p.type === 'uks' ? 'Ke UKS' : p.type === 'perpustakaan' ? 'Perpustakaan' : p.type === 'keluar_kelas' ? 'Keluar Kelas' : 'Izin Keluar';
       const statusLabel = p.status === 'kembali' ? 'Sudah Kembali' : p.status === 'izin_pulang' ? 'Izin Pulang' : 'Di Luar';
       return [
@@ -1830,7 +1835,7 @@ export default function AdminPanel({
         p.durationMinutes !== undefined ? `${p.durationMinutes} menit` : '-',
         stu?.nisn || p.nisn || '-',
         p.studentName || stu?.name || '-',
-        cls?.name || p.classId || '-',
+        getSchoolClassName(p.classId, classes, '-'),
         permitLabel,
         `${p.destination || '-'} (${p.reason || '-'})`,
         statusLabel,
@@ -2071,6 +2076,13 @@ export default function AdminPanel({
         <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 p-4 rounded-xl flex items-center gap-2 font-medium">
           <Check className="w-5 h-5 text-emerald-600" />
           <span>{successMsg}</span>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl flex items-center gap-2 font-medium">
+          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+          <span>{errorMsg}</span>
         </div>
       )}
 
@@ -2935,6 +2947,15 @@ export default function AdminPanel({
                       className="w-full px-3 py-2 bg-white border rounded-lg text-xs"
                     />
                   </div>
+                  <div className="md:col-span-3 pt-1">
+                    <MediaUploadSelector
+                      mode="avatar"
+                      label="Foto Profil Siswa (Upload dari Komputer atau Link URL)"
+                      value={studentForm.avatarUrl || ''}
+                      onChange={(val) => setStudentForm({ ...studentForm, avatarUrl: val })}
+                      placeholder="https://... atau klik Upload File"
+                    />
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2">
                   <button
@@ -3311,6 +3332,15 @@ export default function AdminPanel({
                       value={teacherForm.password || ''}
                       onChange={(e) => setTeacherForm({ ...teacherForm, password: e.target.value })}
                       className="w-full px-3 py-2 bg-white border rounded-lg font-mono text-xs"
+                    />
+                  </div>
+                  <div className="md:col-span-2 pt-1">
+                    <MediaUploadSelector
+                      mode="avatar"
+                      label="Foto Profil Pendidik / Staf (Upload dari Komputer atau Link URL)"
+                      value={teacherForm.avatarUrl || ''}
+                      onChange={(val) => setTeacherForm({ ...teacherForm, avatarUrl: val })}
+                      placeholder="https://... atau klik Upload File"
                     />
                   </div>
                 </div>
@@ -3837,12 +3867,12 @@ export default function AdminPanel({
               {/* Grid Inputs */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Logo Kiri */}
-                <div className="space-y-2 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <div className="space-y-2.5 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                   <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Logo Kiri (Logo Pemprov / Instansi Pembina)</label>
                   <div className="flex items-center gap-3">
                     <div className="w-16 h-16 rounded-xl border bg-white flex items-center justify-center p-1.5 shrink-0 shadow-xs">
                       <img
-                        src={localStorage.getItem('siakad_logo_left') || '/logo-dki.png'}
+                        src={logoLeftInput || localStorage.getItem('siakad_logo_left') || '/logo-dki.png'}
                         alt="Logo Kiri Preview"
                         className="max-w-full max-h-full object-contain"
                         onError={(e) => { e.currentTarget.src = '/logo-dki.png'; }}
@@ -3851,7 +3881,7 @@ export default function AdminPanel({
                     <div className="flex-1 space-y-1.5">
                       <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 border text-[10px] font-bold rounded-lg cursor-pointer transition-all shadow-2xs">
                         <Upload className="w-3 h-3 text-purple-600" />
-                        <span>Upload Logo Kiri (PNG/JPG)</span>
+                        <span>Upload dari Komputer (PNG/JPG)</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -3861,6 +3891,7 @@ export default function AdminPanel({
                             if (file) {
                               try {
                                 const compressed = await compressImageFile(file, 320, 320, 0.85);
+                                setLogoLeftInput(compressed);
                                 safeLocalStorageSet('siakad_logo_left', compressed);
                                 onUpdateHeadmasterName(headmasterName, compressed, undefined, {
                                   nip: headmasterNipInput,
@@ -3872,16 +3903,17 @@ export default function AdminPanel({
                                   contactText: contactTextInput
                                 });
                               } catch (err) {
-                                console.error('Error processing logo left:', err);
+                                showErrorToast('Gagal memproses Logo Kiri.');
                               }
                             }
                           }}
                         />
                       </label>
-                      {localStorage.getItem('siakad_logo_left') && (
+                      {(logoLeftInput || localStorage.getItem('siakad_logo_left')) && (
                         <button
                           type="button"
                           onClick={() => {
+                            setLogoLeftInput('');
                             safeLocalStorageSet('siakad_logo_left', '');
                             onUpdateHeadmasterName(headmasterName, '', undefined, {
                               nip: headmasterNipInput,
@@ -3901,10 +3933,33 @@ export default function AdminPanel({
                       <p className="text-[9px] text-slate-400">Rekomendasi rasio 1:1 format PNG transparan.</p>
                     </div>
                   </div>
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase">Atau Tempel Link URL Logo Kiri:</label>
+                    <input
+                      type="text"
+                      value={logoLeftInput.startsWith('data:') ? '' : logoLeftInput}
+                      onChange={(e) => {
+                        const converted = convertGoogleDriveLink(e.target.value);
+                        setLogoLeftInput(converted);
+                        safeLocalStorageSet('siakad_logo_left', converted);
+                        onUpdateHeadmasterName(headmasterName, converted, undefined, {
+                          nip: headmasterNipInput,
+                          govTitle: govTitleInput,
+                          deptTitle: deptTitleInput,
+                          sudinTitle: sudinTitleInput,
+                          schoolTitle: schoolTitleInput,
+                          addressText: addressTextInput,
+                          contactText: contactTextInput
+                        });
+                      }}
+                      placeholder="https://... link gambar Logo Kiri"
+                      className="w-full px-2.5 py-1.5 text-[11px] bg-white border border-slate-200 rounded-lg font-mono focus:ring-1 focus:ring-purple-500 outline-none"
+                    />
+                  </div>
                 </div>
 
                 {/* Logo Kanan */}
-                <div className="space-y-2 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <div className="space-y-2.5 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                   <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Logo Kanan (Logo Resmi Sekolah / Yayasan)</label>
                   <div className="flex items-center gap-3">
                     <div className="w-16 h-16 rounded-xl border bg-white flex items-center justify-center p-1.5 shrink-0 shadow-xs">
@@ -3918,7 +3973,7 @@ export default function AdminPanel({
                     <div className="flex-1 space-y-1.5">
                       <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 border text-[10px] font-bold rounded-lg cursor-pointer transition-all shadow-2xs">
                         <Upload className="w-3 h-3 text-purple-600" />
-                        <span>Upload Logo Kanan (PNG/JPG)</span>
+                        <span>Upload dari Komputer (PNG/JPG)</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -3940,7 +3995,7 @@ export default function AdminPanel({
                                   contactText: contactTextInput
                                 });
                               } catch (err) {
-                                console.error('Error processing logo right:', err);
+                                showErrorToast('Gagal memproses Logo Kanan.');
                               }
                             }
                           }}
@@ -3969,6 +4024,29 @@ export default function AdminPanel({
                       )}
                       <p className="text-[9px] text-slate-400">Rekomendasi rasio 1:1 format PNG transparan.</p>
                     </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase">Atau Tempel Link URL Logo Sekolah:</label>
+                    <input
+                      type="text"
+                      value={logoRightInput.startsWith('data:') ? '' : logoRightInput}
+                      onChange={(e) => {
+                        const converted = convertGoogleDriveLink(e.target.value);
+                        setLogoRightInput(converted);
+                        safeLocalStorageSet('siakad_logo_right', converted);
+                        onUpdateHeadmasterName(headmasterName, undefined, converted, {
+                          nip: headmasterNipInput,
+                          govTitle: govTitleInput,
+                          deptTitle: deptTitleInput,
+                          sudinTitle: sudinTitleInput,
+                          schoolTitle: schoolTitleInput,
+                          addressText: addressTextInput,
+                          contactText: contactTextInput
+                        });
+                      }}
+                      placeholder="https://... link gambar Logo Sekolah"
+                      className="w-full px-2.5 py-1.5 text-[11px] bg-white border border-slate-200 rounded-lg font-mono focus:ring-1 focus:ring-purple-500 outline-none"
+                    />
                   </div>
                 </div>
 
@@ -4325,9 +4403,10 @@ export default function AdminPanel({
                   onClick={() => {
                     if (onUpdateSocialLinks) {
                       onUpdateSocialLinks(adminInstagram, adminWhatsapp, adminEmail);
-                      alert('Link Media Sosial Sekolah berhasil disimpan dan diperbarui di footer website!');
+                      setSuccessMsg('Link Media Sosial Sekolah berhasil disimpan dan diperbarui di footer website!');
+                      setTimeout(() => setSuccessMsg(''), 4000);
                     } else {
-                      alert('Fitur sinkronisasi media sosial tidak tersedia.');
+                      showErrorToast('Fitur sinkronisasi media sosial tidak tersedia.');
                     }
                   }}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-sm cursor-pointer flex items-center justify-center text-xs gap-1.5"
@@ -4463,7 +4542,8 @@ export default function AdminPanel({
                       } else {
                         safeLocalStorageSet('siakad_cbt_bypass_pin', generated);
                       }
-                      alert(`Kode/Password Pengawas baru berhasil digenerate otomatis: ${generated}`);
+                      setSuccessMsg(`Kode/Password Pengawas baru berhasil digenerate otomatis: ${generated}`);
+                      setTimeout(() => setSuccessMsg(''), 4000);
                     }}
                     className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition-all shadow-sm cursor-pointer h-10 flex items-center justify-center gap-1.5 text-xs active:scale-95"
                     title="Generate acak 6 digit angka kode/password CBT"
@@ -4474,7 +4554,7 @@ export default function AdminPanel({
                     type="button"
                     onClick={() => {
                       if (!cbtBypassPin) {
-                        alert('PIN tidak boleh kosong!');
+                        showErrorToast('PIN tidak boleh kosong!');
                         return;
                       }
                       if (onUpdateCbtBypassPin) {
@@ -4482,7 +4562,8 @@ export default function AdminPanel({
                       } else {
                         safeLocalStorageSet('siakad_cbt_bypass_pin', cbtBypassPin);
                       }
-                      alert(`PIN Pengawas berhasil diperbarui secara tersinkronisasi menjadi: ${cbtBypassPin}`);
+                      setSuccessMsg(`PIN Pengawas berhasil diperbarui secara tersinkronisasi menjadi: ${cbtBypassPin}`);
+                      setTimeout(() => setSuccessMsg(''), 4000);
                     }}
                     className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-all shadow-sm cursor-pointer h-10 flex items-center justify-center text-xs active:scale-95"
                   >
@@ -4503,19 +4584,19 @@ export default function AdminPanel({
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (!cbtSubject || !cbtDate || !cbtStartTime || !cbtEndTime) {
-                      alert('Silakan lengkapi semua data wajib!');
+                      showErrorToast('Silakan lengkapi semua data wajib!');
                       return;
                     }
                     if (cbtMethod === 'gform' && !cbtGoogleFormUrl) {
-                      alert('Silakan masukan Tautan Google Form!');
+                      showErrorToast('Silakan masukan Tautan Google Form!');
                       return;
                     }
                     if (cbtMethod === 'bank_soal' && !selectedBankId) {
-                      alert('Silakan pilih salah satu Bank Soal yang dibuat oleh Guru!');
+                      showErrorToast('Silakan pilih salah satu Bank Soal yang dibuat oleh Guru!');
                       return;
                     }
                     if (!cbtClassId) {
-                      alert('Silakan pilih minimal 1 Kelas Target!');
+                      showErrorToast('Silakan pilih minimal 1 Kelas Target!');
                       return;
                     }
                     onAddExamSchedule({
@@ -5194,10 +5275,10 @@ export default function AdminPanel({
                   >
                     <option value="">-- Pilih Siswa --</option>
                     {students
-                      .filter(s => !achClassFilter || s.classId === achClassFilter)
+                      .filter(s => !achClassFilter || isSameClass(s.classId, achClassFilter, classes))
                       .map(s => (
                         <option key={s.id} value={s.id}>
-                          {s.name} ({s.classId}) - NISN: {s.nisn}
+                          {s.name} ({getSchoolClassName(s.classId, classes)}) - NISN: {s.nisn}
                         </option>
                       ))}
                   </select>
@@ -5269,14 +5350,13 @@ export default function AdminPanel({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">URL Foto / Piagam (Opsional)</label>
-                  <input
-                    type="text"
-                    placeholder="https://... atau foto piagam"
+                <div className="md:col-span-2">
+                  <MediaUploadSelector
+                    mode="standard"
+                    label="Foto Dokumentasi / Piagam (Upload Komputer atau Link URL)"
                     value={achCertificateUrl}
-                    onChange={(e) => setAchCertificateUrl(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-purple-600/25 focus:bg-white text-slate-800"
+                    onChange={setAchCertificateUrl}
+                    placeholder="https://... atau klik Upload File"
                   />
                 </div>
 
@@ -5353,14 +5433,14 @@ export default function AdminPanel({
                         const matchCat = achFilterCat === 'Semua' || a.category === achFilterCat;
                         const matchSearch = a.studentName.toLowerCase().includes(achSearch.toLowerCase()) ||
                                             a.title.toLowerCase().includes(achSearch.toLowerCase()) ||
-                                            a.classId.toLowerCase().includes(achSearch.toLowerCase());
+                                            getSchoolClassName(a.classId, classes).toLowerCase().includes(achSearch.toLowerCase());
                         return matchCat && matchSearch;
                       })
                       .map((a) => (
                         <tr key={a.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="px-4 py-3">
                             <div className="font-bold text-slate-800">{a.studentName}</div>
-                            <div className="text-[10px] text-slate-400">{a.classId}</div>
+                            <div className="text-[10px] text-slate-400">{getSchoolClassName(a.classId, classes)}</div>
                           </td>
                           <td className="px-4 py-3 max-w-xs">
                             <div className="font-bold text-slate-900">{a.title}</div>
@@ -5493,11 +5573,31 @@ export default function AdminPanel({
                         </div>
                         <input
                           type="text"
-                          value={certLogoLeft}
-                          onChange={(e) => setCertLogoLeft(e.target.value)}
+                          value={certLogoLeft.startsWith('data:') ? '' : certLogoLeft}
+                          onChange={(e) => setCertLogoLeft(convertGoogleDriveLink(e.target.value))}
                           placeholder="/logo-dki.png atau https://..."
                           className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 font-mono"
                         />
+                        <label className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold cursor-pointer">
+                          <Upload className="w-3 h-3" />
+                          <span>Upload dari Komputer</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const compressed = await compressImageFile(file, 512, 512, 0.9);
+                                setCertLogoLeft(compressed);
+                                safeLocalStorageSet('siakad_cert_logo_left', compressed);
+                              } catch {
+                                showErrorToast('Gagal mengunggah Logo Kiri sertifikat.');
+                              }
+                            }}
+                          />
+                        </label>
                       </div>
 
                       {/* Logo Kanan (Sekolah) */}
@@ -6036,9 +6136,11 @@ export default function AdminPanel({
                       <div className="text-center space-y-0.5 my-1.5">
                         <p className="text-[9.5px] text-slate-300 italic">Diberikan Kepada:</p>
                         <p className={`text-base font-black underline tracking-wide ${previewCertType === 'akademik' ? 'text-amber-200 decoration-amber-400' : 'text-emerald-200 decoration-emerald-400'}`}>
-                          AHMAD RIFAI
+                          {students[0]?.name || 'NAMA SISWA BERPRESTASI'}
                         </p>
-                        <p className="text-[9.5px] text-slate-300 font-mono">NISN: 0081234567 &bull; Kelas: VII-A</p>
+                        <p className="text-[9.5px] text-slate-300 font-mono">
+                          NISN: {students[0]?.nisn || '0000000000'} &bull; {getSchoolClassName(students[0]?.classId || classes[0]?.id || '', classes, 'Kelas')}
+                        </p>
                       </div>
 
                       {/* Achievement */}
@@ -6107,9 +6209,9 @@ export default function AdminPanel({
                             recordedBy: certLeftName
                           },
                           {
-                            name: 'AHMAD RIFAI',
-                            nisn: '0081234567',
-                            classId: 'VII-A'
+                            name: students[0]?.name || 'NAMA SISWA BERPRESTASI',
+                            nisn: students[0]?.nisn || '0000000000',
+                            classId: getSchoolClassName(students[0]?.classId || classes[0]?.id || '', classes, 'Kelas')
                           },
                           certRightName,
                           {
@@ -6144,7 +6246,7 @@ export default function AdminPanel({
 
         {/* Tab Setting Kartu Pelajar */}
         {activeTab === 'setting-kartu-pelajar' && (
-          <SettingKartuPelajar />
+          <SettingKartuPelajar classes={classes} />
         )}
 
         {/* Tab Kelola ECo-Tiket & Bank Sampah */}

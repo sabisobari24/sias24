@@ -29,7 +29,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { saveDocument, syncCollection, saveDocumentsBatch } from '../lib/firebase';
-import { compressImageFile } from '../utils/imageHelper';
+import { compressImageFile, convertGoogleDriveLink } from '../utils/imageHelper';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import { printHTML, printTablePDF } from '../utils/printHelper';
 import { downloadExcel } from '../utils/excelExport';
@@ -1942,11 +1942,18 @@ export default function CoachPanel({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide">Foto Dokumentasi Prestasi (Opsional)</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide">Foto Dokumentasi Prestasi (Upload / Link URL)</label>
+                    <input
+                      type="text"
+                      placeholder="Tempel link share foto Google Drive / URL gambar..."
+                      value={achievementPhoto.startsWith('data:') ? '' : achievementPhoto}
+                      onChange={(e) => setAchievementPhoto(convertGoogleDriveLink(e.target.value))}
+                      className="w-full text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
                     <div className="flex items-center gap-2">
                       <label className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold px-3 py-2 rounded-xl cursor-pointer flex items-center gap-1 transition-colors text-[11px] shadow-xs flex-1 justify-center">
                         <Upload className="w-3.5 h-3.5 text-slate-500" />
-                        <span>{achievementPhoto ? '✓ Foto Dipilih (Ubah)' : 'Pilih File Foto'}</span>
+                        <span>{achievementPhoto ? '✓ Foto Dipilih (Ganti File)' : 'Upload dari Komputer'}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -1958,8 +1965,8 @@ export default function CoachPanel({
                         <button
                           type="button"
                           onClick={() => setAchievementPhoto('')}
-                          className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-xl border border-rose-200 transition-colors"
-                          title="Batal Pilih Foto"
+                          className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-xl border border-rose-200 transition-colors cursor-pointer"
+                          title="Hapus Foto"
                         >
                           <X className="w-4 h-4" />
                         </button>

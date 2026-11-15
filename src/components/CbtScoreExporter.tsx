@@ -28,6 +28,7 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [exportWarning, setExportWarning] = useState<string | null>(null);
 
   // Extract unique subjects from schedules, submissions, and grades
   const availableSubjects = useMemo(() => {
@@ -143,14 +144,15 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
       }
       return true;
     });
-  }, [combinedResults, selectedClassId, selectedSubject, searchQuery]);
+  }, [combinedResults, selectedClassId, selectedSubject, searchQuery, classes]);
 
   // Excel Export Handler
   const handleExportExcel = () => {
     if (filteredResults.length === 0) {
-      alert('Tidak ada data nilai CBT yang memenuhi kriteria filter.');
+      setExportWarning('Tidak ada data nilai CBT yang memenuhi kriteria filter.');
       return;
     }
+    setExportWarning(null);
 
     const classNameStr = selectedClassId === 'all' ? 'Semua_Kelas' : getSchoolClassName(selectedClassId, classes);
     const subjectStr = selectedSubject === 'all' ? 'Semua_Mapel' : selectedSubject.replace(/[^a-zA-Z0-9]/g, '_');
@@ -175,9 +177,10 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
   // PDF Print Handler
   const handlePrintPdf = () => {
     if (filteredResults.length === 0) {
-      alert('Tidak ada data nilai CBT yang memenuhi kriteria filter.');
+      setExportWarning('Tidak ada data nilai CBT yang memenuhi kriteria filter.');
       return;
     }
+    setExportWarning(null);
 
     const classNameStr = selectedClassId === 'all' ? 'Semua Kelas' : getSchoolClassName(selectedClassId, classes);
     const subjectStr = selectedSubject === 'all' ? 'Semua Mata Pelajaran' : selectedSubject;
@@ -201,9 +204,10 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
   // Word (.docx) Export Handler
   const handleExportDocx = () => {
     if (filteredResults.length === 0) {
-      alert('Tidak ada data nilai CBT yang memenuhi kriteria filter.');
+      setExportWarning('Tidak ada data nilai CBT yang memenuhi kriteria filter.');
       return;
     }
+    setExportWarning(null);
 
     const classNameStr = selectedClassId === 'all' ? 'Semua Kelas' : getSchoolClassName(selectedClassId, classes);
     const subjectStr = selectedSubject === 'all' ? 'Semua Mata Pelajaran' : selectedSubject;
@@ -235,6 +239,17 @@ export const CbtScoreExporter: React.FC<CbtScoreExporterProps> = ({
 
   return (
     <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
+      {exportWarning && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+            {exportWarning}
+          </span>
+          <button type="button" onClick={() => setExportWarning(null)} className="text-amber-700 hover:text-amber-900 font-bold cursor-pointer">
+            Tutup
+          </button>
+        </div>
+      )}
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
         <div>

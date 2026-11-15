@@ -11,6 +11,7 @@ import {
   getRangeFileSuffix,
   getRangeTitleSuffix
 } from '../utils/exportDateFilter';
+import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 
 interface GuruWaliPanelProps {
   teacher: Teacher;
@@ -234,7 +235,7 @@ export default function GuruWaliPanel({
       return [
         n.date,
         s?.name || 'Siswa Terhapus',
-        classes.find(c => c.id === s?.classId)?.name || '-',
+        getSchoolClassName(s?.classId, classes, '-'),
         n.notes,
         n.followUp || '-',
         n.status,
@@ -262,7 +263,7 @@ export default function GuruWaliPanel({
     const rows = myStudents.map(s => [
       s.nisn,
       s.name,
-      classes.find(c => c.id === s.classId)?.name || '-',
+      getSchoolClassName(s.classId, classes, '-'),
       s.bakatMinat || 'Belum diisi',
       s.prestasi || 'Belum diisi'
     ]);
@@ -328,7 +329,7 @@ export default function GuruWaliPanel({
     const rows = myAchs.map((a, i) => [
       i + 1,
       a.studentName,
-      a.classId,
+      getSchoolClassName(a.classId, classes, '-'),
       a.title,
       a.category,
       a.level,
@@ -366,7 +367,7 @@ export default function GuruWaliPanel({
         idx + 1,
         s.nisn || '-',
         s.name,
-        classes.find(c => c.id === s.classId)?.name || s.classId,
+        getSchoolClassName(s.classId, classes, '-'),
         hadir,
         sakit,
         izin,
@@ -577,7 +578,7 @@ export default function GuruWaliPanel({
                             </td>
                             <td className="px-4 py-3 text-slate-500 font-mono">{s.nisn}</td>
                             <td className="px-4 py-3 font-semibold text-slate-600">
-                              {classes.find(c => c.id === s.classId)?.name || s.classId}
+                              {getSchoolClassName(s.classId, classes)}
                             </td>
                             <td className="px-4 py-3 truncate max-w-[150px] text-indigo-600 font-medium">
                               {s.bakatMinat || <span className="text-slate-300 font-normal italic">Belum diisi</span>}
@@ -695,7 +696,7 @@ export default function GuruWaliPanel({
                   <option value="all">Semua Siswa Binaan ({myStudents.length} Siswa)</option>
                   {myStudents.map(s => (
                     <option key={s.id} value={s.id}>
-                      {s.name} ({classes.find(c => c.id === s.classId)?.name || s.classId})
+                      {s.name} ({getSchoolClassName(s.classId, classes)})
                     </option>
                   ))}
                 </select>
@@ -787,7 +788,7 @@ export default function GuruWaliPanel({
                           </td>
                           <td className="px-4 py-3 font-mono text-slate-500">{s.nisn}</td>
                           <td className="px-4 py-3 font-semibold text-slate-600">
-                            {classes.find(c => c.id === s.classId)?.name || s.classId}
+                            {getSchoolClassName(s.classId, classes)}
                           </td>
                           <td className="px-4 py-3 text-center font-bold text-emerald-700 bg-emerald-50/50">{h}</td>
                           <td className="px-4 py-3 text-center font-bold text-blue-700 bg-blue-50/50">{sk}</td>
@@ -835,7 +836,7 @@ export default function GuruWaliPanel({
                         <div className="space-y-0.5">
                           <p className="font-bold text-slate-900">{st?.name || 'Siswa'}</p>
                           <p className="text-[11px] text-slate-400">
-                            {att.date} &bull; Kelas: {classes.find(c => c.id === att.classId)?.name || att.classId} &bull; Dicatat: {att.recordedBy}
+                            {att.date} &bull; Kelas: {getSchoolClassName(att.classId, classes)} &bull; Dicatat: {att.recordedBy}
                           </p>
                           {att.notes && <p className="text-[10px] text-slate-500 italic">"{att.notes}"</p>}
                         </div>
@@ -879,7 +880,7 @@ export default function GuruWaliPanel({
                     <option value="">-- Pilih Siswa Binaan --</option>
                     {myStudents.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.name} ({classes.find(c => c.id === s.classId)?.name || s.classId})
+                        {s.name} ({getSchoolClassName(s.classId, classes)})
                       </option>
                     ))}
                   </select>
@@ -990,7 +991,7 @@ export default function GuruWaliPanel({
                       <option value="">-- Pilih Siswa --</option>
                       {myStudents.map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.name} ({classes.find(c => c.id === s.classId)?.name || s.classId})
+                          {s.name} ({getSchoolClassName(s.classId, classes)})
                         </option>
                       ))}
                     </select>
@@ -1097,7 +1098,7 @@ export default function GuruWaliPanel({
                         </>
                       ) : (
                         myStudents.map(s => (
-                          <option key={s.id} value={s.id}>{s.name} ({classes.find(c => c.id === s.classId)?.name})</option>
+                          <option key={s.id} value={s.id}>{s.name} ({getSchoolClassName(s.classId, classes)})</option>
                         ))
                       )}
                     </select>
@@ -1217,7 +1218,7 @@ export default function GuruWaliPanel({
                 {(() => {
                   const filteredSchedules = bimbinganSchedules ? bimbinganSchedules.filter(s => {
                     if (s.targetType === 'Kelas') {
-                      return s.targetId === 'all' || myStudents.some(student => student.classId === s.targetId);
+                      return s.targetId === 'all' || myStudents.some(student => isSameClass(student.classId, s.targetId, classes));
                     }
                     return myStudents.some(student => student.id === s.targetId);
                   }) : [];
@@ -1225,7 +1226,9 @@ export default function GuruWaliPanel({
                     return <p className="text-slate-400 text-xs italic text-center py-12">Belum ada jadwal bimbingan dibuat.</p>;
                   }
                   return filteredSchedules.slice().reverse().map((sched) => {
-                    const targetObj = sched.targetType === 'Kelas' ? classes.find(c => c.id === sched.targetId) : students.find(s => s.id === sched.targetId);
+                    const targetLabel = sched.targetType === 'Kelas'
+                      ? getSchoolClassName(sched.targetId, classes)
+                      : (students.find(s => s.id === sched.targetId)?.name || 'Siswa');
                     return (
                       <div key={sched.id} className="p-3.5 border rounded-xl bg-slate-50/60 text-xs space-y-2 relative">
                         <button
@@ -1244,7 +1247,7 @@ export default function GuruWaliPanel({
                         <h5 className="font-bold text-slate-800">{sched.topic}</h5>
                         {sched.notes && <p className="text-slate-500 italic">"Catatan/Lokasi: {sched.notes}"</p>}
                         <p className="text-[10px] text-slate-400 border-t pt-1.5 mt-1.5">
-                          Target: <strong className="text-slate-600">{sched.targetId === 'all' ? 'Semua Kelas' : targetObj?.name || 'Siswa'}</strong>
+                          Target: <strong className="text-slate-600">{sched.targetId === 'all' ? 'Semua Kelas' : targetLabel}</strong>
                         </p>
                       </div>
                     );
@@ -1288,7 +1291,7 @@ export default function GuruWaliPanel({
                   <option value="">-- Pilih Siswa --</option>
                   {myStudents.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} ({classes.find(c => c.id === s.classId)?.name || s.classId})
+                      {s.name} ({getSchoolClassName(s.classId, classes)})
                     </option>
                   ))}
                 </select>
@@ -1341,7 +1344,7 @@ export default function GuruWaliPanel({
                     <img src={s.avatarUrl} alt="" className="w-6 h-6 rounded-full shrink-0" />
                     <div>
                       <p className="font-bold text-slate-800">{s.name}</p>
-                      <p className="text-[10px] text-slate-400">Kelas: {classes.find(c => c.id === s.classId)?.name || s.classId}</p>
+                      <p className="text-[10px] text-slate-400">Kelas: {getSchoolClassName(s.classId, classes)}</p>
                     </div>
                   </div>
                   <div>
@@ -1450,7 +1453,7 @@ export default function GuruWaliPanel({
                   >
                     <option value="">-- Pilih Siswa Binaan --</option>
                     {myStudents.map((s) => {
-                      const cName = classes.find((c) => c.id === s.classId)?.name || s.classId;
+                      const cName = getSchoolClassName(s.classId, classes);
                       return (
                         <option key={s.id} value={s.id}>
                           {s.name} ({cName}) - Wali: {s.parentName || 'Orang Tua'}
