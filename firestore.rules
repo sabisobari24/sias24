@@ -69,16 +69,23 @@ service cloud.firestore {
           'password', 'parentPassword', 'guruWaliTeacherId', 'bakatMinat',
           'prestasi', 'isKjpRecipient', 'createdAt', 'updatedAt'
         ]) &&
-        data.id is string && data.id.size() <= 128 &&
+        data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
         data.name is string && data.name.size() > 0 && data.name.size() <= 150 && isCleanText(data.name) &&
-        data.nisn is string && data.nisn.size() <= 20 &&
-        data.classId is string && data.classId.size() <= 50 &&
+        data.nisn is string && data.nisn.size() <= 30 &&
+        data.classId is string && data.classId.size() <= 128 &&
         isSafeOptionalText(data, 'phone', 30) &&
         isSafeOptionalText(data, 'address', 300) &&
-        (!('gender' in data) || (data.gender in ['Laki-laki', 'Perempuan'])) &&
+        (!('gender' in data) || data.gender == null || (data.gender in ['Laki-laki', 'Perempuan', ''])) &&
         isSafeOptionalText(data, 'parentName', 150) &&
+        isSafeOptionalText(data, 'parentNik', 50) &&
         isSafeOptionalText(data, 'parentPhone', 30) &&
-        isSafeOptionalText(data, 'parentEmail', 100);
+        isSafeOptionalText(data, 'parentEmail', 100) &&
+        isSafeOptionalText(data, 'password', 150) &&
+        isSafeOptionalText(data, 'parentPassword', 150) &&
+        isSafeOptionalText(data, 'guruWaliTeacherId', 128) &&
+        isSafeOptionalText(data, 'bakatMinat', 500) &&
+        isSafeOptionalText(data, 'prestasi', 500) &&
+        (!('avatarUrl' in data) || data.avatarUrl == null || (data.avatarUrl is string && data.avatarUrl.size() <= 250000 && isCleanText(data.avatarUrl)));
     }
 
     function isValidTeacher(data) {
@@ -174,17 +181,17 @@ service cloud.firestore {
           'gender', 'classId', 'studentNisnOrName', 'address',
           'password', 'createdAt', 'updatedAt', 'status'
         ]) &&
-        data.id is string && data.id.size() <= 128 &&
+        data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
         data.role in ['guru', 'siswa', 'orang_tua', 'pelatih'] &&
         data.name is string && data.name.size() > 0 && data.name.size() <= 150 && isCleanText(data.name) &&
         isSafeOptionalText(data, 'nipOrNisnOrNik', 50) &&
         isSafeOptionalText(data, 'email', 100) &&
         isSafeOptionalText(data, 'phone', 30) &&
         isSafeOptionalText(data, 'address', 300) &&
-        isSafeOptionalText(data, 'classId', 50) &&
-        isSafeOptionalText(data, 'gender', 20) &&
-        isSafeOptionalText(data, 'studentNisnOrName', 100) &&
-        isSafeOptionalText(data, 'password', 100) &&
+        isSafeOptionalText(data, 'classId', 128) &&
+        isSafeOptionalText(data, 'gender', 30) &&
+        isSafeOptionalText(data, 'studentNisnOrName', 150) &&
+        isSafeOptionalText(data, 'password', 150) &&
         isSafeOptionalText(data, 'createdAt', 50) &&
         isSafeOptionalText(data, 'updatedAt', 50) &&
         isSafeOptionalText(data, 'status', 30) &&

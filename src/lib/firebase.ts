@@ -11,10 +11,12 @@ import {
   initializeFirestore,
   getFirestore,
   persistentLocalCache,
+  persistentMultipleTabManager,
   memoryLocalCache,
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   setDoc,
   updateDoc,
   arrayUnion,
@@ -32,6 +34,40 @@ import {
   setLogLevel
 } from 'firebase/firestore';
 import { safeLocalStorageSet, safeLocalStorageGet, clearQuotaHeavyKeys } from '../utils/storageHelper';
+import { isSupabaseConfigured } from './supabase';
+import {
+  setSupabaseStatusNotifier,
+  formatSupabaseErrorMessage,
+  supabaseSyncCollection,
+  supabaseSyncSingleDoc,
+  supabaseSaveDocument,
+  supabaseDeleteDocument,
+  supabaseSaveDocumentsBatch,
+  supabaseDeleteDocumentsBatch,
+  supabaseSyncCollectionWithArray,
+  supabaseClearAllCollections,
+  supabaseGetDocument,
+  supabaseGetCollectionDocs,
+  supabaseQueryByField,
+  supabaseDeleteByField,
+  supabaseGetAttendanceWithFilter,
+  supabasePingServer,
+  supabaseTestReadWrite,
+  migrateAllFirestoreToSupabase,
+  buildFullMigrationSqlFromFirestore,
+  MigrationProgress,
+  MigrationSummary
+} from './supabaseDb';
+
+export type { MigrationProgress, MigrationSummary };
+export { isSupabaseConfigured };
+
+export function getActiveDbBackend(): 'supabase' | 'firebase' {
+  const configuredBackend = String((import.meta as any).env?.VITE_STORAGE_BACKEND || '').toLowerCase().trim();
+  if (configuredBackend === 'firebase') return 'firebase';
+  if (isSupabaseConfigured()) return 'supabase';
+  return 'firebase';
+}
 
 // Clean up any stale firestore_targets_ keys in localStorage that exceed quota
 clearQuotaHeavyKeys();
@@ -48,14 +84,24 @@ const firebaseConfig = {
   appId: "1:1059388982698:web:3d47c9f5ff1f063988d7d3"
 };
 
-// Connection status listener mechanism
+// Connection status & quota listener mechanism
 type FirestoreStatusCallback = (status: 'online' | 'offline' | 'high_latency', latency?: number) => void;
 const statusListeners: Set<FirestoreStatusCallback> = new Set();
+
+type FirestoreQuotaCallback = (isQuotaExceeded: boolean, detail?: string) => void;
+const quotaListeners: Set<FirestoreQuotaCallback> = new Set();
 
 export function onFirestoreStatusChange(callback: FirestoreStatusCallback) {
   statusListeners.add(callback);
   return () => {
     statusListeners.delete(callback);
+  };
+}
+
+export function onFirestoreQuotaChange(callback: FirestoreQuotaCallback) {
+  quotaListeners.add(callback);
+  return () => {
+    quotaListeners.delete(callback);
   };
 }
 
@@ -67,10 +113,21 @@ export function notifyFirestoreStatus(status: 'online' | 'offline' | 'high_laten
   });
 }
 
+export function notifyFirestoreQuota(isQuotaExceeded: boolean, detail?: string) {
+  safeLocalStorageSet('siakad_firestore_quota_exceeded', isQuotaExceeded ? 'true' : 'false');
+  quotaListeners.forEach((cb) => {
+    try {
+      cb(isQuotaExceeded, detail);
+    } catch { /* ignore */ }
+  });
+}
+
+setSupabaseStatusNotifier(notifyFirestoreStatus);
+
 // Initialize Firebase safely
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firestore with fallback to prevent localStorage QuotaExceededError crashes & handle standard Firebase Hosting
+// Initialize Firestore with multi-tab persistent cache & graceful fallback
 let firestoreInstance;
 const envDbId = (import.meta as any).env?.VITE_FIREBASE_DATABASE_ID;
 const defaultDbId = "ai-studio-portaladministra-da1cf664-8f69-44de-bd4f-4b85c7035cc8";
@@ -79,7 +136,7 @@ const DB_NAME = envDbId || defaultDbId;
 try {
   firestoreInstance = initializeFirestore(app, {
     ignoreUndefinedProperties: true,
-    localCache: persistentLocalCache({})
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
   }, DB_NAME);
 } catch (err) {
   console.warn('[Firestore] persistentLocalCache failed with DB_NAME, falling back:', err);
@@ -99,6 +156,183 @@ try {
 }
 
 export const db = firestoreInstance;
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function isQuotaExceededError(err: any): boolean {
+  if (!err) return false;
+  const code = String(err?.code || '').toLowerCase();
+  const msg = String(err?.message || err || '').toLowerCase();
+  return code === 'resource-exhausted' || msg.includes('quota') || msg.includes('resource-exhausted');
+}
+
+export function isPermissionDeniedError(err: any): boolean {
+  if (!err) return false;
+  const code = String(err?.code || '').toLowerCase();
+  const msg = String(err?.message || err || '').toLowerCase();
+  return code === 'permission-denied' || msg.includes('missing or insufficient permissions') || msg.includes('permission_denied');
+}
+
+export function formatFirestoreErrorMessage(err: any): string {
+  if (getActiveDbBackend() === 'supabase') {
+    return formatSupabaseErrorMessage(err);
+  }
+  const rawMsg = err instanceof Error ? err.message : String(err || 'Kesalahan tidak diketahui');
+  if (isQuotaExceededError(err)) {
+    return 'Kuota harian gratis Firebase Firestore (Spark Plan) terlampaui (Quota exceeded). Kuota akan reset besok atau tingkatkan paket proyek Firebase ke Blaze Plan.';
+  }
+  if (isPermissionDeniedError(err)) {
+    return 'Akses tulis ditolak oleh aturan keamanan Firestore (Missing or insufficient permissions). Pastikan panjang karakter data sesuai batas & aturan keamanan telah di-deploy.';
+  }
+  if (rawMsg.toLowerCase().includes('offline') || rawMsg.toLowerCase().includes('unavailable') || rawMsg.toLowerCase().includes('network')) {
+    return 'Server Firebase Firestore tidak dapat dijangkau (Offline/Timeout). Periksa koneksi internet Anda lalu coba lagi.';
+  }
+  return rawMsg;
+}
+
+export const FIRESTORE_UPGRADE_URL = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${DB_NAME}/data?openUpgradeDialog=true`;
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid ?? null,
+      email: auth.currentUser?.email ?? null,
+      emailVerified: auth.currentUser?.emailVerified ?? null,
+      isAnonymous: auth.currentUser?.isAnonymous ?? null,
+      tenantId: auth.currentUser?.tenantId ?? null,
+      providerInfo: auth.currentUser?.providerData?.map((provider) => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+export async function pingFirestoreServer(): Promise<void> {
+  if (getActiveDbBackend() === 'supabase') {
+    await supabasePingServer();
+    return;
+  }
+  const docRef = doc(db, 'settings', 'headmaster');
+  await getDocFromServer(docRef);
+}
+
+export async function testDatabaseReadWrite(): Promise<{ backend: 'supabase' | 'firebase'; readMs: number; totalMs: number }> {
+  if (getActiveDbBackend() === 'supabase') {
+    const res = await supabaseTestReadWrite();
+    return { backend: 'supabase', ...res };
+  }
+  const startTime = performance.now();
+  const docRef = doc(db, 'settings', 'headmaster');
+  await getDocFromServer(docRef);
+  const readMs = Math.round(performance.now() - startTime);
+  const testRef = doc(db, 'system_diagnostics', 'connection-test');
+  await setDoc(testRef, {
+    timestamp: new Date().toISOString(),
+    message: 'Tes diagnosa mandiri dari peramban pengguna',
+    test: true
+  }, { merge: true });
+  const totalMs = Math.round(performance.now() - startTime);
+  return { backend: 'firebase', readMs, totalMs };
+}
+
+export async function getDocumentById<T = any>(collectionPath: string, id: string): Promise<T | null> {
+  if (!id) return null;
+  if (getActiveDbBackend() === 'supabase') {
+    return supabaseGetDocument<T>(collectionPath, id);
+  }
+  const snap = await getDoc(doc(db, collectionPath, id));
+  if (!snap.exists()) return null;
+  return { ...(snap.data() as any), id: snap.id } as T;
+}
+
+export async function getCollectionDocs<T = any>(collectionPath: string): Promise<T[]> {
+  if (getActiveDbBackend() === 'supabase') {
+    return supabaseGetCollectionDocs<T>(collectionPath);
+  }
+  const snap = await getDocs(collection(db, collectionPath));
+  const items: T[] = [];
+  snap.forEach((docSnap) => {
+    items.push({ ...(docSnap.data() as any), id: docSnap.id } as T);
+  });
+  return items;
+}
+
+export async function queryDocumentsByField<T = any>(collectionPath: string, field: string, value: string): Promise<T[]> {
+  if (getActiveDbBackend() === 'supabase') {
+    return supabaseQueryByField<T>(collectionPath, field, value);
+  }
+  const q = query(collection(db, collectionPath), where(field, '==', value));
+  const snap = await getDocs(q);
+  const items: T[] = [];
+  snap.forEach((docSnap) => {
+    items.push({ ...(docSnap.data() as any), id: docSnap.id } as T);
+  });
+  return items;
+}
+
+export async function deleteDocumentsByField(collectionPath: string, field: string, value: string): Promise<number> {
+  if (!value) return 0;
+  if (getActiveDbBackend() === 'supabase') {
+    return supabaseDeleteByField(collectionPath, field, value);
+  }
+  const q = query(collection(db, collectionPath), where(field, '==', value));
+  const snap = await getDocs(q);
+  if (snap.empty) return 0;
+  let batch = writeBatch(db);
+  let count = 0;
+  for (const docSnap of snap.docs) {
+    trackDeletedId(collectionPath, docSnap.id);
+    batch.delete(docSnap.ref);
+    count++;
+    if (count >= 400) {
+      await batch.commit();
+      batch = writeBatch(db);
+      count = 0;
+    }
+  }
+  if (count > 0) {
+    await batch.commit();
+  }
+  return snap.size;
+}
+
+export async function migrateFirestoreToSupabase(onProgress?: (progress: MigrationProgress) => void): Promise<MigrationSummary> {
+  return migrateAllFirestoreToSupabase(db, onProgress);
+}
+
+export async function exportFirestoreSqlForSupabase(): Promise<string> {
+  return buildFullMigrationSqlFromFirestore(db);
+}
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
@@ -383,10 +617,13 @@ enableNetwork(db).catch(() => {});
 safeLocalStorageSet('siakad_firestore_quota_exceeded', 'false');
 
 function handleQuotaError(err: any) {
-  if (err && (err.code === 'resource-exhausted' || (typeof err.message === 'string' && (err.message.includes('Quota') || err.message.includes('quota') || err.message.includes('resource-exhausted'))))) {
-    console.warn('[Firestore] Daily write quota notice (local storage state preserved):', err.message || err);
+  if (isQuotaExceededError(err)) {
+    const detail = formatFirestoreErrorMessage(err);
+    notifyFirestoreQuota(true, detail);
+    notifyFirestoreStatus('offline');
+    console.warn('[Firestore] Daily read/write quota exceeded:', err?.message || err);
   } else if (err) {
-    console.warn('[Firestore notice]:', err.message || err);
+    console.warn('[Firestore notice]:', err?.message || err);
   }
 }
 
@@ -440,13 +677,16 @@ export function clearDeletedIds(collectionPath: string) {
   safeLocalStorageSet(key, JSON.stringify([]));
 }
 
-// Helper to monitor and sync a collection in real-time from Firestore (authoritative)
+// Helper to monitor and sync a collection in real-time (Supabase PostgreSQL or Firestore)
 export function syncCollection<T extends { id: string }>(
   collectionPath: string,
   onUpdate: (data: T[]) => void,
   initialData: T[] = [],
   forceRealtime: boolean = true
 ) {
+  if (getActiveDbBackend() === 'supabase') {
+    return supabaseSyncCollection<T>(collectionPath, onUpdate, initialData);
+  }
   const colRef = collection(db, collectionPath);
   const cacheKey = `siakad_${collectionPath}`;
   const initKey = `siakad_col_initialized_${collectionPath}`;
@@ -496,7 +736,10 @@ export function syncCollection<T extends { id: string }>(
 
   // 2. Real-time Firestore Listener: Firestore is the single authoritative source of truth.
   const unsubscribeSnapshot = onSnapshot(colRef, async (snapshot) => {
-    notifyFirestoreStatus('online');
+    if (!snapshot.metadata.fromCache) {
+      notifyFirestoreStatus('online');
+      notifyFirestoreQuota(false);
+    }
     const isInitializedLocally = safeLocalStorageGet(initKey) === 'true';
     const deletedIds = getDeletedIds(collectionPath);
 
@@ -560,7 +803,12 @@ export function syncCollection<T extends { id: string }>(
     onUpdate(serverItems);
   }, (error) => {
     handleQuotaError(error);
-    console.warn(`[Firestore Realtime Notice] ${collectionPath} network issue, maintaining cache:`, error.message || error);
+    if (isPermissionDeniedError(error)) {
+      console.error(`[Firestore Security Notice] ${collectionPath}:`, error.message || error);
+    } else {
+      console.warn(`[Firestore Realtime Notice] ${collectionPath} network issue, maintaining cache:`, error.message || error);
+    }
+    notifyFirestoreStatus('offline');
     loadFallback();
   });
 
@@ -587,26 +835,31 @@ export interface KopSuratSettings {
 
 // Single-document settings sync helper
 export function syncHeadmaster(onUpdate: (settings: KopSuratSettings) => void, defaultName: string) {
+  const defaultPhoto = safeLocalStorageGet('siakad_headmaster_photo') || 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
+  const defaults: KopSuratSettings = {
+    name: defaultName,
+    nip: '196711261991032004',
+    logoLeft: '',
+    logoRight: '',
+    govTitle: 'PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA',
+    deptTitle: 'DINAS PENDIDIKAN PROVINSI DKI JAKARTA',
+    sudinTitle: 'SUDIN PENDIDIKAN WILAYAH II KOTA ADMINISTRASI JAKARTA TIMUR',
+    schoolTitle: 'SMP NEGERI 50 JAKARTA',
+    addressText: 'Komplek Kodam Jaya Cililitan II Kramat Jati – Jakarta Timur – Kode Pos : 13510',
+    contactText: 'Telp. (021) 8091734 – Fax (021) 809173 – Email : smpnegeri50@gmail.com, smpn50.jt2@gmail.com',
+    docNumber: '',
+    photo: defaultPhoto,
+    headImage: defaultPhoto
+  };
+  if (getActiveDbBackend() === 'supabase') {
+    return supabaseSyncSingleDoc<KopSuratSettings>('settings', 'headmaster', (data) => {
+      onUpdate({ ...defaults, ...(data || {}) });
+    }, defaults);
+  }
   const docRef = doc(db, 'settings', 'headmaster');
   return onSnapshot(docRef, async (snapshot) => {
     notifyFirestoreStatus('online');
     if (!snapshot.exists()) {
-      const defaultPhoto = safeLocalStorageGet('siakad_headmaster_photo') || 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
-      const defaults: KopSuratSettings = {
-        name: defaultName,
-        nip: '196711261991032004',
-        logoLeft: '',
-        logoRight: '',
-        govTitle: 'PEMERINTAH PROVINSI DAERAH KHUSUS IBUKOTA JAKARTA',
-        deptTitle: 'DINAS PENDIDIKAN PROVINSI DKI JAKARTA',
-        sudinTitle: 'SUDIN PENDIDIKAN WILAYAH II KOTA ADMINISTRASI JAKARTA TIMUR',
-        schoolTitle: 'SMP NEGERI 50 JAKARTA',
-        addressText: 'Komplek Kodam Jaya Cililitan II Kramat Jati – Jakarta Timur – Kode Pos : 13510',
-        contactText: 'Telp. (021) 8091734 – Fax (021) 809173 – Email : smpnegeri50@gmail.com, smpn50.jt2@gmail.com',
-        docNumber: '',
-        photo: defaultPhoto,
-        headImage: defaultPhoto
-      };
       try {
         await setDoc(docRef, defaults);
       } catch (e) {
@@ -657,6 +910,11 @@ export function syncHeadmaster(onUpdate: (settings: KopSuratSettings) => void, d
 
 // Single-document CBT PIN settings sync helper
 export function syncCbtConfig(onUpdate: (pin: string) => void, defaultPin: string = '9999') {
+  if (getActiveDbBackend() === 'supabase') {
+    return supabaseSyncSingleDoc<{ bypassPin: string }>('settings', 'cbt_config', (data) => {
+      onUpdate(data?.bypassPin || defaultPin);
+    }, { bypassPin: defaultPin });
+  }
   const docRef = doc(db, 'settings', 'cbt_config');
   return onSnapshot(docRef, async (snapshot) => {
     notifyFirestoreStatus('online');
@@ -679,6 +937,10 @@ export function syncCbtConfig(onUpdate: (pin: string) => void, defaultPin: strin
 
 export async function saveCbtBypassPin(pin: string) {
   safeLocalStorageSet('siakad_cbt_pin', pin);
+  if (getActiveDbBackend() === 'supabase') {
+    await supabaseSaveDocument('settings', 'cbt_config', { bypassPin: pin });
+    return;
+  }
   try {
     const docRef = doc(db, 'settings', 'cbt_config');
     await setDoc(docRef, { bypassPin: pin }, { merge: true });
@@ -707,6 +969,11 @@ export interface CardDesignFirestoreSettings {
 }
 
 export function syncCardDesign(onUpdate: (settings: CardDesignFirestoreSettings) => void) {
+  if (getActiveDbBackend() === 'supabase') {
+    return supabaseSyncSingleDoc<CardDesignFirestoreSettings>('settings', 'card_design', (data) => {
+      if (data) onUpdate(data);
+    });
+  }
   const docRef = doc(db, 'settings', 'card_design');
   return onSnapshot(docRef, async (snapshot) => {
     notifyFirestoreStatus('online');
@@ -719,6 +986,10 @@ export function syncCardDesign(onUpdate: (settings: CardDesignFirestoreSettings)
 }
 
 export async function saveCardDesignToFirestore(settings: CardDesignFirestoreSettings): Promise<void> {
+  if (getActiveDbBackend() === 'supabase') {
+    await supabaseSaveDocument('settings', 'card_design', settings);
+    return;
+  }
   try {
     const docRef = doc(db, 'settings', 'card_design');
     await setDoc(docRef, sanitizeData(settings), { merge: true });
@@ -727,10 +998,17 @@ export async function saveCardDesignToFirestore(settings: CardDesignFirestoreSet
   }
 }
 
-// Write/Update document helper
-export function saveDocument(collectionPath: string, id: string, data: any) {
-  if (!id) return Promise.resolve();
+// Write/Update document helper (now propagates server/quota/permission errors to caller)
+export async function saveDocument(collectionPath: string, id: string, data: any): Promise<void> {
+  if (!id) return;
   untrackDeletedId(collectionPath, id);
+
+  if (getActiveDbBackend() === 'supabase') {
+    await supabaseSaveDocument(collectionPath, id, data);
+    notifyFirestoreStatus('online');
+    notifyFirestoreQuota(false);
+    return;
+  }
 
   const cleanData = sanitizeData({
     id,
@@ -738,7 +1016,7 @@ export function saveDocument(collectionPath: string, id: string, data: any) {
     updatedAt: new Date().toISOString()
   });
 
-  // Update local cache first for zero-latency local state persistence and offline support
+  // Update local cache first for zero-latency UI responsiveness
   try {
     const cacheKey = `siakad_${collectionPath}`;
     const cached = safeLocalStorageGet(cacheKey);
@@ -761,11 +1039,25 @@ export function saveDocument(collectionPath: string, id: string, data: any) {
   }
 
   const docRef = doc(db, collectionPath, id);
-  return setDoc(docRef, cleanData, { merge: true }).catch(handleQuotaError);
+  try {
+    await setDoc(docRef, cleanData, { merge: true });
+    notifyFirestoreStatus('online');
+    notifyFirestoreQuota(false);
+  } catch (error) {
+    handleQuotaError(error);
+    if (isPermissionDeniedError(error)) {
+      handleFirestoreError(error, OperationType.WRITE, `${collectionPath}/${id}`);
+    }
+    throw error;
+  }
 }
 
-// Write a full array to Firestore by syncing with existing documents (deleting missing, setting existing)
+// Write a full array to Firestore/Supabase by syncing with existing documents (deleting missing, setting existing)
 export async function syncCollectionWithArray(collectionPath: string, data: any[]) {
+  if (getActiveDbBackend() === 'supabase') {
+    await supabaseSyncCollectionWithArray(collectionPath, data);
+    return;
+  }
   const cacheKey = `siakad_${collectionPath}`;
   
   const newIds = new Set(data.map(item => item && item.id).filter(Boolean));
@@ -839,6 +1131,10 @@ export async function syncCollectionWithArray(collectionPath: string, data: any[
 export async function deleteDocument(collectionPath: string, id: string) {
   if (!id) return;
   trackDeletedId(collectionPath, id);
+  if (getActiveDbBackend() === 'supabase') {
+    await supabaseDeleteDocument(collectionPath, id);
+    return;
+  }
 
   // Prune from local cache immediately
   try {
@@ -868,15 +1164,25 @@ export async function deleteDocument(collectionPath: string, id: string) {
     }
   } catch (error) {
     handleQuotaError(error);
+    if (isPermissionDeniedError(error)) {
+      handleFirestoreError(error, OperationType.DELETE, `${collectionPath}/${id}`);
+    }
+    throw error;
   }
 }
 
-// Save multiple documents to Firestore in a single batch safely
+// Save multiple documents in a single batch safely
 export async function saveDocumentsBatch(collectionPath: string, items: any[]) {
   if (!items || items.length === 0) return;
   items.forEach((item) => {
     if (item && item.id) untrackDeletedId(collectionPath, item.id);
   });
+  if (getActiveDbBackend() === 'supabase') {
+    await supabaseSaveDocumentsBatch(collectionPath, items);
+    notifyFirestoreStatus('online');
+    notifyFirestoreQuota(false);
+    return;
+  }
 
   try {
     const cacheKey = `siakad_${collectionPath}`;
@@ -908,7 +1214,7 @@ export async function saveDocumentsBatch(collectionPath: string, items: any[]) {
     for (const item of items) {
       if (!item || !item.id) continue;
       const docRef = doc(db, collectionPath, item.id);
-      batch.set(docRef, sanitizeData(item), { merge: true });
+      batch.set(docRef, sanitizeData({ ...item, updatedAt: new Date().toISOString() }), { merge: true });
       count++;
       if (count >= 400) {
         await batch.commit();
@@ -919,15 +1225,25 @@ export async function saveDocumentsBatch(collectionPath: string, items: any[]) {
     if (count > 0) {
       await batch.commit();
     }
+    notifyFirestoreStatus('online');
+    notifyFirestoreQuota(false);
   } catch (error) {
     handleQuotaError(error);
+    if (isPermissionDeniedError(error)) {
+      handleFirestoreError(error, OperationType.WRITE, collectionPath);
+    }
+    throw error;
   }
 }
 
-// Delete multiple documents from Firestore in a single batch safely
+// Delete multiple documents in a single batch safely
 export async function deleteDocumentsBatch(collectionPath: string, ids: string[]) {
   if (!ids || ids.length === 0) return;
   ids.forEach(id => trackDeletedId(collectionPath, id));
+  if (getActiveDbBackend() === 'supabase') {
+    await supabaseDeleteDocumentsBatch(collectionPath, ids);
+    return;
+  }
 
   try {
     const cacheKey = `siakad_${collectionPath}`;
@@ -963,11 +1279,19 @@ export async function deleteDocumentsBatch(collectionPath: string, ids: string[]
     }
   } catch (error) {
     handleQuotaError(error);
+    if (isPermissionDeniedError(error)) {
+      handleFirestoreError(error, OperationType.DELETE, collectionPath);
+    }
+    throw error;
   }
 }
 
 // Clear database helper
 export async function clearAllCollections(collectionsToClear: string[]) {
+  if (getActiveDbBackend() === 'supabase') {
+    await supabaseClearAllCollections(collectionsToClear);
+    return;
+  }
   try {
     for (const colName of collectionsToClear) {
       const cacheKey = `siakad_${colName}`;
@@ -1006,12 +1330,15 @@ export async function clearAllCollections(collectionsToClear: string[]) {
   }
 }
 
-// LOGIKA PENGHEMATAN KUOTA: Mengambil data absensi terbatas menggunakan query, filter where (tanggal/bulan), dan limit(50) untuk paginasi guna menghemat kuota Read Firestore
+// LOGIKA PENGHEMATAN KUOTA: Mengambil data absensi terbatas menggunakan query, filter where (tanggal/bulan), dan limit(50) untuk paginasi guna menghemat kuota Read
 export async function getAttendanceWithFilter(
   dateFilter?: string,
   startAfterDoc?: any,
   limitCount: number = 50
 ) {
+  if (getActiveDbBackend() === 'supabase') {
+    return supabaseGetAttendanceWithFilter(dateFilter, limitCount);
+  }
   try {
     const colRef = collection(db, 'attendance');
     let q = query(colRef);

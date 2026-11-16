@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shield, AlertTriangle, Play, Lock, Unlock, LogOut, CheckCircle, Volume2, Database, ChevronLeft, ChevronRight, HelpCircle, FileText, Send, Sparkles, Clock, AlertCircle } from 'lucide-react';
 import { ExamSchedule, QuestionBank, CbtQuestion, StudentExamSubmission } from '../types';
-import { doc, getDoc } from 'firebase/firestore';
-import { db, saveDocument } from '../lib/firebase';
+import { saveDocument, getDocumentById } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import FormattedText from './common/FormattedText';
 
@@ -36,12 +35,11 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   const [timeLeft, setTimeLeft] = useState(5400); // 90 minutes default
   const [submitError, setSubmitError] = useState('');
 
-  // Synchronize the linked Question Bank from Firestore (one-time fetch to save quota)
+  // Synchronize the linked Question Bank (one-time fetch from active backend)
   useEffect(() => {
     if (exam.questionBankId) {
       setIsLoadingBank(true);
-      const docRef = doc(db, 'question_banks', exam.questionBankId);
-      
+
       // Try local cache first
       const cacheKey = `cbt_bank_${exam.questionBankId}`;
       const cached = localStorage.getItem(cacheKey);
@@ -54,10 +52,9 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
         }
       }
 
-      getDoc(docRef)
-        .then((snap) => {
-          if (snap.exists()) {
-            const bankData = { ...snap.data() as QuestionBank, id: snap.id };
+      getDocumentById<QuestionBank>('question_banks', exam.questionBankId)
+        .then((bankData) => {
+          if (bankData) {
             setQuestionBank(bankData);
             safeLocalStorageSet(cacheKey, JSON.stringify(bankData));
           }

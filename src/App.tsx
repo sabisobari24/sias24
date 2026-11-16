@@ -56,10 +56,21 @@ import {
 import { useDownload } from './context/DownloadContext';
 import UnifiedDownloadMenu from './components/UnifiedDownloadMenu';
 
-import { getDoc, getDocs, collection, doc, setDoc, writeBatch, deleteDoc, query, where } from 'firebase/firestore';
 import { normalizeClassId, getSchoolClassName } from './utils/classUtils';
 import { safeLocalStorageSet, safeLocalStorageGet } from './utils/storageHelper';
-import { signInWithGoogle, signOutUser } from './lib/firebase';
+import {
+  signInWithGoogle,
+  signOutUser,
+  pingFirestoreServer,
+  testDatabaseReadWrite,
+  getCollectionDocs,
+  deleteDocumentsByField,
+  getActiveDbBackend,
+  onFirestoreQuotaChange,
+  isQuotaExceededError,
+  formatFirestoreErrorMessage,
+  FIRESTORE_UPGRADE_URL
+} from './lib/firebase';
 import {
   sanitizeSecurityInput,
   checkLoginRateLimit,
@@ -161,7 +172,7 @@ import WebAkademik from './components/website/WebAkademik';
 import WebKesiswaan from './components/website/WebKesiswaan';
 import WebSarpras from './components/website/WebSarpras';
 import WebBerita from './components/website/WebBerita';
-import { syncCollection, syncHeadmaster, syncCbtConfig, saveCbtBypassPin, syncCollectionWithArray, saveDocument, deleteDocument, saveDocumentsBatch, deleteDocumentsBatch, clearAllCollections, clearDeletedIds, trackDeletedId, untrackDeletedId, db, deduplicateStudents, onFirestoreStatusChange, syncCardDesign } from './lib/firebase';
+import { syncCollection, syncHeadmaster, syncCbtConfig, saveCbtBypassPin, syncCollectionWithArray, saveDocument, deleteDocument, saveDocumentsBatch, deleteDocumentsBatch, clearAllCollections, clearDeletedIds, trackDeletedId, untrackDeletedId, deduplicateStudents, onFirestoreStatusChange, syncCardDesign } from './lib/firebase';
 import { saveSchoolCardLogo } from './utils/schoolLogoHelper';
 import { INITIAL_WEB_CONTENT } from './data/initialWebContent';
 
@@ -201,6 +212,8 @@ export default function App({ initialMode }: AppProps = {}) {
   const [dbLatency, setDbLatency] = useState<number>(0);
   const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
   const [hasSyncError, setHasSyncError] = useState<boolean>(false);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
+  const [quotaErrorDetail, setQuotaErrorDetail] = useState<string>('');
   const [isCheckingConnection, setIsCheckingConnection] = useState<boolean>(false);
   const [isMonitorOpen, setIsMonitorOpen] = useState<boolean>(false);
   const [diagnosticResult, setDiagnosticResult] = useState<string | null>(null);
@@ -208,35 +221,33 @@ export default function App({ initialMode }: AppProps = {}) {
 
   const consecutiveFailuresRef = useRef<number>(0);
 
-  // Connection check function
+  // Connection check function using getDocFromServer so offline/quota errors aren't masked by local cache
   const checkFirebaseConnection = useCallback(async () => {
     if (!navigator.onLine) {
       setDbStatus('offline');
       setHasSyncError(true);
       return;
     }
-    
+
     setIsCheckingConnection(true);
-    
+
     try {
       const startTime = performance.now();
-      
-      // Get the headmaster document as a lightweight ping with a 10s timeout
-      const docRef = doc(db, 'settings', 'headmaster');
-      const pingPromise = getDoc(docRef);
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Connection timeout')), 10000)
       );
-      
-      await Promise.race([pingPromise, timeoutPromise]);
-      
+
+      await Promise.race([pingFirestoreServer(), timeoutPromise]);
+
       const endTime = performance.now();
       const latencyVal = Math.round(endTime - startTime);
-      
+
       setDbLatency(latencyVal);
       consecutiveFailuresRef.current = 0;
       setHasSyncError(false);
-      
+      setIsQuotaExceeded(false);
+      setQuotaErrorDetail('');
+
       if (latencyVal > 2000) {
         setDbStatus('high_latency');
       } else {
@@ -246,12 +257,15 @@ export default function App({ initialMode }: AppProps = {}) {
     } catch (error) {
       console.warn("Connection ping notice:", error);
       consecutiveFailuresRef.current += 1;
-      // Only set offline if device is truly disconnected from browser network
-      if (!navigator.onLine) {
+      if (isQuotaExceededError(error)) {
+        setIsQuotaExceeded(true);
+        setQuotaErrorDetail(formatFirestoreErrorMessage(error));
+        setDbStatus('offline');
+        setHasSyncError(true);
+      } else if (!navigator.onLine) {
         setDbStatus('offline');
         setHasSyncError(true);
       } else if (consecutiveFailuresRef.current >= 5) {
-        // If device is online but individual ping was slow, set high_latency instead of hard offline
         setDbStatus('high_latency');
       }
     } finally {
@@ -260,36 +274,28 @@ export default function App({ initialMode }: AppProps = {}) {
   }, []);
 
   const runDbDiagnostics = useCallback(async () => {
+    const activeBackend = getActiveDbBackend();
+    const backendLabel = activeBackend === 'supabase' ? 'Supabase Pro (PostgreSQL)' : 'Firebase Firestore';
     setIsRunningDiagnostic(true);
-    setDiagnosticResult("Memulai diagnosis koneksi...");
+    setDiagnosticResult(`Memulai diagnosis koneksi ${backendLabel}...`);
     try {
-      const startTime = performance.now();
-      // 1. Get headmaster settings document
-      setDiagnosticResult("1/2: Membaca dokumen settings/headmaster...");
-      const docRef = doc(db, 'settings', 'headmaster');
-      await getDoc(docRef);
-      const readTime = Math.round(performance.now() - startTime);
-      
-      // 2. Try writing test data to system_diagnostics/connection-test
-      setDiagnosticResult(`Sukses membaca settings/headmaster (${readTime}ms). 2/2: Mencoba verifikasi hak tulis database...`);
-      const testRef = doc(db, 'system_diagnostics', 'connection-test');
-      await setDoc(testRef, {
-        timestamp: new Date().toISOString(),
-        message: 'Tes diagnosa mandiri dari peramban pengguna',
-        test: true
-      }, { merge: true });
-
-      // Clean up legacy test doc in pending_registrations if any exists
-      deleteDoc(doc(db, 'pending_registrations', 'test-diagnostics')).catch(() => {});
-      
-      const totalTime = Math.round(performance.now() - startTime);
-      setDiagnosticResult(`SUKSES: Koneksi database Firebase 100% Berhasil! (Bisa Baca & Tulis dalam ${totalTime}ms)`);
+      setDiagnosticResult(`1/2: Menguji pembacaan & hak tulis langsung ke server ${backendLabel}...`);
+      const { totalMs } = await testDatabaseReadWrite();
+      setDiagnosticResult(`SUKSES: Koneksi database ${backendLabel} 100% Berhasil! (Baca & Tulis server dalam ${totalMs}ms)`);
       setDbStatus('online');
       setHasSyncError(false);
+      setIsQuotaExceeded(false);
+      setQuotaErrorDetail('');
     } catch (err: any) {
       console.error("Diagnostic error:", err);
-      const msg = err?.message || err?.code || err?.toString() || 'Unknown error';
-      setDiagnosticResult(`GAGAL: ${msg}. Solusi: Nonaktifkan Adblocker/Brave Shields Anda, periksa jaringan internet, atau buka di tab baru.`);
+      const msg = formatFirestoreErrorMessage(err);
+      if (isQuotaExceededError(err)) {
+        setIsQuotaExceeded(true);
+        setQuotaErrorDetail(msg);
+        setDiagnosticResult(`KUOTA HABIS: ${msg} (Catatan: saat ini masih terhubung ke Firebase Firestore).`);
+      } else {
+        setDiagnosticResult(`GAGAL (${backendLabel}): ${msg}`);
+      }
       setDbStatus('offline');
       setHasSyncError(true);
     } finally {
@@ -310,7 +316,6 @@ export default function App({ initialMode }: AppProps = {}) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Listen to live snapshot confirmations from Firestore SDK
     const unsubscribeFirestoreStatus = onFirestoreStatusChange((status, latency) => {
       if (status === 'online') {
         consecutiveFailuresRef.current = 0;
@@ -318,21 +323,33 @@ export default function App({ initialMode }: AppProps = {}) {
         setHasSyncError(false);
         if (latency !== undefined) setDbLatency(latency);
         setLastSyncTime(Date.now());
+      } else if (status === 'offline') {
+        setDbStatus('offline');
+      }
+    });
+
+    const unsubscribeQuota = onFirestoreQuotaChange((exceeded, detail) => {
+      setIsQuotaExceeded(exceeded);
+      setQuotaErrorDetail(detail || '');
+      if (exceeded) {
+        setDbStatus('offline');
+        setHasSyncError(true);
       }
     });
 
     // Initial check
     checkFirebaseConnection();
 
-    // Regular interval ping every 60 seconds (avoids constant re-render jitter)
+    // Regular interval ping every 90 seconds (avoids excess quota reads & UI jitter)
     const interval = setInterval(() => {
       checkFirebaseConnection();
-    }, 60000);
+    }, 90000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       unsubscribeFirestoreStatus();
+      unsubscribeQuota();
       clearInterval(interval);
     };
   }, [checkFirebaseConnection]);
@@ -1083,9 +1100,8 @@ export default function App({ initialMode }: AppProps = {}) {
     return [...violationTypes].sort((a, b) => a.name.localeCompare(b.name, 'id'));
   }, [violationTypes]);
 
-  // Initialize and Synchronize with Firebase Firestore in Real-Time
+  // 1. Core Public & Auth Listeners (Lightweight: 5 collections only, prevents quota exhaustion from public traffic)
   useEffect(() => {
-    // 1. Subscribe to headmaster name & logos in real-time
     const unsubHeadmaster = syncHeadmaster((settings) => {
       setHeadmasterName(settings.name);
       safeLocalStorageSet('siakad_headmaster_name', settings.name);
@@ -1135,13 +1151,123 @@ export default function App({ initialMode }: AppProps = {}) {
       }
     }, 'Dra. Hj. Endah Purwani, M.M.');
 
-    // Subscribe to CBT PIN configuration in real-time
+    const unsubStudents = syncCollection<Student>('students', (data) => {
+      const { uniqueStudents } = deduplicateStudents(data);
+      setStudents(uniqueStudents);
+      safeLocalStorageSet('siakad_students', JSON.stringify(uniqueStudents));
+    }, INITIAL_STUDENTS);
+
+    const unsubTeachers = syncCollection<Teacher>('teachers', (data) => {
+      setTeachers(data);
+      safeLocalStorageSet('siakad_teachers', JSON.stringify(data));
+    }, INITIAL_TEACHERS);
+
+    const unsubClasses = syncCollection<SchoolClass>('classes', (data) => {
+      setClasses(data);
+      safeLocalStorageSet('siakad_classes', JSON.stringify(data));
+    }, INITIAL_CLASSES);
+
+    const unsubWebContent = syncCollection<any>('web_content', (data) => {
+      const homeDoc = data.find(doc => doc.id === 'home');
+      if (homeDoc) {
+        if (Array.isArray(homeDoc.slides)) {
+          homeDoc.slides = homeDoc.slides.map((s: any) => s ? {
+            ...s,
+            title: (s.title || '').replace(/<[^>]*>/g, '').trim(),
+            desc: (s.desc || '').replace(/<[^>]*>/g, '').trim()
+          } : s);
+        }
+        if (!homeDoc.headerMotto) {
+          homeDoc.headerMotto = 'Berpacu dalam Prestasi';
+        }
+        if (homeDoc.headImage) {
+          safeLocalStorageSet('siakad_headmaster_photo', homeDoc.headImage);
+        }
+        if (homeDoc.headName) {
+          safeLocalStorageSet('siakad_headmaster_name', homeDoc.headName);
+          setHeadmasterName(homeDoc.headName);
+        }
+        setWebHomeContent(homeDoc);
+        safeLocalStorageSet('siakad_web_home_content', JSON.stringify(homeDoc));
+      }
+    }, INITIAL_WEB_CONTENT);
+
+    // Active session headmaster migration
+    try {
+      const savedUser = localStorage.getItem('siakad_active_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && parsed.name === 'Dra. Hj. Endah Purwani, M.M.' && (parsed.nip === '196805151992032005' || parsed.nip === '197508122001121002')) {
+          parsed.nip = '196711261991032004';
+          localStorage.setItem('siakad_active_user', JSON.stringify(parsed));
+          setActiveUser(parsed);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+
+    return () => {
+      unsubHeadmaster();
+      unsubStudents();
+      unsubTeachers();
+      unsubClasses();
+      unsubWebContent();
+      clearTimeout(timer);
+    };
+  }, []);
+
+  // 2. Pending Registrations Listener (Only active on Portal/Register/Admin view, saves public landing reads)
+  useEffect(() => {
+    const shouldSyncRegistrations = pageMode === 'portal' || isRegisterModalOpen || activeRole === 'admin';
+    if (!shouldSyncRegistrations) return;
+
+    clearDeletedIds('pending_registrations');
+
+    const handleLocalRegCreated = (e: any) => {
+      if (e?.detail) {
+        setPendingRegistrations((prev) => {
+          if (prev.some((p) => p.id === e.detail.id)) return prev;
+          const next = [e.detail, ...prev];
+          safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(next));
+          return next;
+        });
+      }
+    };
+    window.addEventListener('siakad_registration_created', handleLocalRegCreated);
+
+    const unsubRegistrations = syncCollection<PendingRegistration>('pending_registrations', (data) => {
+      const validData = data.filter((item) => {
+        if (!item || typeof item !== 'object') return false;
+        if (!item.id || item.id === 'test-diagnostics' || (item as any).test === true) {
+          return false;
+        }
+        return Boolean(item.role && (item.name || item.nipOrNisnOrNik || item.phone));
+      });
+      validData.sort((a, b) => (b.id || '').localeCompare(a.id || ''));
+      setPendingRegistrations(validData);
+      safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(validData));
+    }, []);
+
+    return () => {
+      unsubRegistrations();
+      window.removeEventListener('siakad_registration_created', handleLocalRegCreated);
+    };
+  }, [pageMode, isRegisterModalOpen, activeRole]);
+
+  // 3. Operational Dashboard Listeners (Attached ONLY after login to prevent read-quota explosion on public traffic)
+  useEffect(() => {
+    if (!activeRole) return;
+
     const unsubCbtConfig = syncCbtConfig((pin) => {
       setCbtBypassPin(pin);
       safeLocalStorageSet('siakad_cbt_bypass_pin', pin);
     });
 
-    // Subscribe to Card Design configuration in real-time (propagates to all student accounts)
     const unsubCardDesign = syncCardDesign((design) => {
       if (design.presetId) safeLocalStorageSet('siakad_card_preset', design.presetId);
       if (design.bgType) safeLocalStorageSet('siakad_card_bg_type', design.bgType);
@@ -1166,28 +1292,6 @@ export default function App({ initialMode }: AppProps = {}) {
       window.dispatchEvent(new CustomEvent('siakad_card_design_updated'));
       window.dispatchEvent(new CustomEvent('siakad_logo_updated'));
     });
-
-    // 2. Subscribe to all collections in real-time with offline persistent cache
-    const unsubStudents = syncCollection<Student>('students', (data) => {
-      const { uniqueStudents, removedIds } = deduplicateStudents(data);
-      if (removedIds.length > 0) {
-        removedIds.forEach((id) => {
-          deleteDocument('students', id).catch(() => {});
-        });
-      }
-      setStudents(uniqueStudents);
-      safeLocalStorageSet('siakad_students', JSON.stringify(uniqueStudents));
-    }, INITIAL_STUDENTS);
-
-    const unsubTeachers = syncCollection<Teacher>('teachers', (data) => {
-      setTeachers(data);
-      safeLocalStorageSet('siakad_teachers', JSON.stringify(data));
-    }, INITIAL_TEACHERS);
-
-    const unsubClasses = syncCollection<SchoolClass>('classes', (data) => {
-      setClasses(data);
-      safeLocalStorageSet('siakad_classes', JSON.stringify(data));
-    }, INITIAL_CLASSES);
 
     const unsubViolationTypes = syncCollection<ViolationType>('violation_types', (data) => {
       setViolationTypes(data);
@@ -1218,34 +1322,6 @@ export default function App({ initialMode }: AppProps = {}) {
       setParentMessages(data);
       safeLocalStorageSet('siakad_parent_messages', JSON.stringify(data));
     }, INITIAL_PARENT_MESSAGES);
-
-    // Unblock any registrations that may have been trapped by previous stale deleted IDs
-    clearDeletedIds('pending_registrations');
-
-    const handleLocalRegCreated = (e: any) => {
-      if (e?.detail) {
-        setPendingRegistrations((prev) => {
-          if (prev.some((p) => p.id === e.detail.id)) return prev;
-          const next = [e.detail, ...prev];
-          safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(next));
-          return next;
-        });
-      }
-    };
-    window.addEventListener('siakad_registration_created', handleLocalRegCreated);
-
-    const unsubRegistrations = syncCollection<PendingRegistration>('pending_registrations', (data) => {
-      const validData = data.filter((item) => {
-        if (!item || typeof item !== 'object') return false;
-        if (!item.id || item.id === 'test-diagnostics' || (item as any).test === true) {
-          return false;
-        }
-        // Retain all actual user registrations with a role and identifying info
-        return Boolean(item.role && (item.name || item.nipOrNisnOrNik || item.phone));
-      });
-      setPendingRegistrations(validData);
-      safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(validData));
-    }, []);
 
     const unsubExamSchedules = syncCollection<ExamSchedule>('exam_schedules', (data) => {
       setExamSchedules(data);
@@ -1327,31 +1403,6 @@ export default function App({ initialMode }: AppProps = {}) {
       safeLocalStorageSet('siakad_bos_bop_reports', JSON.stringify(data));
     }, INITIAL_BOS_BOP_REPORTS);
 
-    const unsubWebContent = syncCollection<any>('web_content', (data) => {
-      const homeDoc = data.find(doc => doc.id === 'home');
-      if (homeDoc) {
-        if (Array.isArray(homeDoc.slides)) {
-          homeDoc.slides = homeDoc.slides.map((s: any) => s ? {
-            ...s,
-            title: (s.title || '').replace(/<[^>]*>/g, '').trim(),
-            desc: (s.desc || '').replace(/<[^>]*>/g, '').trim()
-          } : s);
-        }
-        if (!homeDoc.headerMotto) {
-          homeDoc.headerMotto = 'Berpacu dalam Prestasi';
-        }
-        if (homeDoc.headImage) {
-          safeLocalStorageSet('siakad_headmaster_photo', homeDoc.headImage);
-        }
-        if (homeDoc.headName) {
-          safeLocalStorageSet('siakad_headmaster_name', homeDoc.headName);
-          setHeadmasterName(homeDoc.headName);
-        }
-        setWebHomeContent(homeDoc);
-        safeLocalStorageSet('siakad_web_home_content', JSON.stringify(homeDoc));
-      }
-    }, INITIAL_WEB_CONTENT);
-
     const unsubEcoCategories = syncCollection<EcoWasteCategory>('eco_categories', (data) => {
       setEcoCategories(data);
       safeLocalStorageSet('siakad_eco_categories', JSON.stringify(data));
@@ -1384,23 +1435,8 @@ export default function App({ initialMode }: AppProps = {}) {
       safeLocalStorageSet('siakad_student_permits', JSON.stringify(data));
     }, []);
 
-    // Active session headmaster migration
-    try {
-      const savedUser = localStorage.getItem('siakad_active_user');
-      if (savedUser) {
-        const parsed = JSON.parse(savedUser);
-        if (parsed && parsed.name === 'Dra. Hj. Endah Purwani, M.M.' && (parsed.nip === '196805151992032005' || parsed.nip === '197508122001121002')) {
-          parsed.nip = '196711261991032004';
-          localStorage.setItem('siakad_active_user', JSON.stringify(parsed));
-          setActiveUser(parsed);
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-
-    // One-time safe purge of legacy seeded dummy records in Firestore (does not touch classes or real accounts)
-    if (typeof window !== 'undefined' && localStorage.getItem('siakad_dummy_purged_v2') !== 'true') {
+    // One-time legacy dummy cleanup executed ONLY when Admin logs in (never on student/parent public loads)
+    if (activeRole === 'admin' && typeof window !== 'undefined' && localStorage.getItem('siakad_dummy_purged_v2') !== 'true') {
       safeLocalStorageSet('siakad_dummy_purged_v2', 'true');
       const dummyCleanupMap: Record<string, string[]> = {
         teachers: ['t-sri', 't-budi', 't-endah', 't-tendik', 'T1'],
@@ -1424,25 +1460,13 @@ export default function App({ initialMode }: AppProps = {}) {
         bimbingan_schedules: ['bs-1']
       };
       Object.entries(dummyCleanupMap).forEach(([col, ids]) => {
-        ids.forEach((docId) => {
-          trackDeletedId(col, docId);
-          deleteDocument(col, docId).catch(() => {});
-        });
+        deleteDocumentsBatch(col, ids).catch(() => {});
       });
     }
 
-    // Set loading false after initial load
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1200);
-
     return () => {
-      unsubHeadmaster();
       unsubCbtConfig();
       unsubCardDesign();
-      unsubStudents();
-      unsubTeachers();
-      unsubClasses();
       unsubViolationTypes();
       unsubViolations();
       unsubAttendance();
@@ -1452,9 +1476,8 @@ export default function App({ initialMode }: AppProps = {}) {
       unsubPemberkasan();
       unsubNomorSurat();
       unsubInventory();
+      unsubInventoryLoans();
       unsubBosBop();
-      unsubRegistrations();
-      window.removeEventListener('siakad_registration_created', handleLocalRegCreated);
       unsubExamSchedules();
       unsubExamGrades();
       unsubAbsentTeachers();
@@ -1466,16 +1489,14 @@ export default function App({ initialMode }: AppProps = {}) {
       unsubELearningMaterials();
       unsubELearningProgress();
       unsubStudentSubmissions();
-      unsubWebContent();
       unsubEcoCategories();
       unsubEcoRewards();
       unsubEcoDeposits();
       unsubEcoRedemptions();
       unsubEcoConfig();
       unsubPermits();
-      clearTimeout(timer);
     };
-  }, []);
+  }, [activeRole]);
 
   // Database preservation: Students and classes are managed strictly by Admin without auto-mutation
 
@@ -2069,33 +2090,45 @@ export default function App({ initialMode }: AppProps = {}) {
   };
 
   const handleAddStudent = (s: Student) => {
-    try {
-      const next = [...students.filter((i) => i.id !== s.id && (!s.nisn || i.nisn !== s.nisn)), s];
-      setStudents(next);
+    const normalizedStudent: Student = {
+      ...s,
+      gender: s.gender === 'Perempuan' ? 'Perempuan' : 'Laki-laki',
+      classId: s.classId || classes[0]?.id || 'Kelas VII-A'
+    };
+    setStudents((prev) => {
+      const next = [...prev.filter((i) => i.id !== normalizedStudent.id && (!normalizedStudent.nisn || i.nisn !== normalizedStudent.nisn)), normalizedStudent];
       safeLocalStorageSet('siakad_students', JSON.stringify(next));
-      saveDocument('students', s.id, s)
-        .catch((err) => console.error("Error adding student:", err));
-    } catch (err) {
-      console.error("Error adding student:", err);
-    }
+      return next;
+    });
+    return saveDocument('students', normalizedStudent.id, normalizedStudent)
+      .catch((err) => {
+        console.error("Error adding student:", err);
+        throw err;
+      });
   };
 
   const handleUpdateStudent = (s: Student) => {
-    try {
-      const existing = students.find((i) => i.id === s.id || (i.nisn && i.nisn === s.nisn));
-      if (existing && existing.id !== s.id) {
+    const normalizedStudent: Student = {
+      ...s,
+      gender: s.gender === 'Perempuan' ? 'Perempuan' : 'Laki-laki',
+      classId: s.classId || classes[0]?.id || 'Kelas VII-A'
+    };
+    setStudents((prev) => {
+      const existing = prev.find((i) => i.id === normalizedStudent.id || (i.nisn && normalizedStudent.nisn && i.nisn === normalizedStudent.nisn));
+      if (existing && existing.id !== normalizedStudent.id) {
         deleteDocument('students', existing.id).catch(() => {});
       }
       const next = existing
-        ? students.map((i) => (i.id === s.id || (i.nisn && i.nisn === s.nisn)) ? { ...i, ...s } : i)
-        : [...students, s];
-      setStudents(next);
+        ? prev.map((i) => (i.id === normalizedStudent.id || (i.nisn && normalizedStudent.nisn && i.nisn === normalizedStudent.nisn)) ? { ...i, ...normalizedStudent } : i)
+        : [...prev, normalizedStudent];
       safeLocalStorageSet('siakad_students', JSON.stringify(next));
-      saveDocument('students', s.id, s)
-        .catch((err) => console.error("Error updating student:", err));
-    } catch (err) {
-      console.error("Error updating student:", err);
-    }
+      return next;
+    });
+    return saveDocument('students', normalizedStudent.id, normalizedStudent)
+      .catch((err) => {
+        console.error("Error updating student:", err);
+        throw err;
+      });
   };
 
   const handleDeleteStudent = async (id: string) => {
@@ -2106,35 +2139,28 @@ export default function App({ initialMode }: AppProps = {}) {
       const targetParentPhone = targetStudent?.parentPhone ? targetStudent.parentPhone.trim() : '';
 
       // 1. Immediately update state and localStorage for students
-      const next = students.filter((i) => i.id !== id && (!targetNisn || i.nisn !== targetNisn));
-      setStudents(next);
-      safeLocalStorageSet('siakad_students', JSON.stringify(next));
+      setStudents((prev) => {
+        const next = prev.filter((i) => i.id !== id && (!targetNisn || i.nisn !== targetNisn));
+        safeLocalStorageSet('siakad_students', JSON.stringify(next));
+        return next;
+      });
 
       // 2. Track deleted ID in cache
       trackDeletedId('students', id);
 
-      // 3. Delete document from Firestore 'students' collection by document ID
+      // 3. Delete document from database 'students' collection by document ID
       deleteDocument('students', id).catch((err) => console.error("Error deleting student by id:", err));
 
-      // 4. Query Firestore 'students' by NISN to purge any duplicate or alternate-ID documents
+      // 4. Query database 'students' by NISN to purge any duplicate or alternate-ID documents
       if (targetNisn) {
         try {
-          const qStudents = query(collection(db, 'students'), where('nisn', '==', targetNisn));
-          const snapStudents = await getDocs(qStudents);
-          if (!snapStudents.empty) {
-            const batch = writeBatch(db);
-            snapStudents.docs.forEach((docSnap) => {
-              trackDeletedId('students', docSnap.id);
-              batch.delete(docSnap.ref);
-            });
-            await batch.commit();
-          }
+          await deleteDocumentsByField('students', 'nisn', targetNisn);
         } catch (e) {
-          console.warn("Notice deleting student by NISN from Firestore:", e);
+          console.warn("Notice deleting student by NISN:", e);
         }
       }
 
-      // 5. Clean up any lingering pending registrations (both in state and in Firestore)
+      // 5. Clean up any lingering pending registrations (both in state and in database)
       if (targetNisn || targetPhone || targetParentPhone) {
         setPendingRegistrations((prev) => {
           const filtered = prev.filter((p) => {
@@ -2147,49 +2173,15 @@ export default function App({ initialMode }: AppProps = {}) {
         });
 
         try {
-          const batch = writeBatch(db);
-          let hasPending = false;
-
           if (targetNisn) {
-            const q1 = query(collection(db, 'pending_registrations'), where('nipOrNisnOrNik', '==', targetNisn));
-            const snap1 = await getDocs(q1);
-            snap1.docs.forEach((d) => {
-              trackDeletedId('pending_registrations', d.id);
-              batch.delete(d.ref);
-              hasPending = true;
-            });
-
-            const q2 = query(collection(db, 'pending_registrations'), where('studentNisnOrName', '==', targetNisn));
-            const snap2 = await getDocs(q2);
-            snap2.docs.forEach((d) => {
-              trackDeletedId('pending_registrations', d.id);
-              batch.delete(d.ref);
-              hasPending = true;
-            });
+            await deleteDocumentsByField('pending_registrations', 'nipOrNisnOrNik', targetNisn);
+            await deleteDocumentsByField('pending_registrations', 'studentNisnOrName', targetNisn);
           }
-
           if (targetPhone) {
-            const q3 = query(collection(db, 'pending_registrations'), where('phone', '==', targetPhone));
-            const snap3 = await getDocs(q3);
-            snap3.docs.forEach((d) => {
-              trackDeletedId('pending_registrations', d.id);
-              batch.delete(d.ref);
-              hasPending = true;
-            });
+            await deleteDocumentsByField('pending_registrations', 'phone', targetPhone);
           }
-
           if (targetParentPhone && targetParentPhone !== targetPhone) {
-            const q4 = query(collection(db, 'pending_registrations'), where('phone', '==', targetParentPhone));
-            const snap4 = await getDocs(q4);
-            snap4.docs.forEach((d) => {
-              trackDeletedId('pending_registrations', d.id);
-              batch.delete(d.ref);
-              hasPending = true;
-            });
-          }
-
-          if (hasPending) {
-            await batch.commit();
+            await deleteDocumentsByField('pending_registrations', 'phone', targetParentPhone);
           }
         } catch (e) {
           console.warn("Notice cleaning pending registrations for deleted student:", e);
@@ -2201,33 +2193,35 @@ export default function App({ initialMode }: AppProps = {}) {
   };
 
   const handleAddTeacher = (t: Teacher) => {
-    try {
-      const next = [...teachers.filter((i) => i.id !== t.id && (!t.nip || i.nip !== t.nip)), t];
-      setTeachers(next);
+    setTeachers((prev) => {
+      const next = [...prev.filter((i) => i.id !== t.id && (!t.nip || i.nip !== t.nip)), t];
       safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
-      saveDocument('teachers', t.id, t)
-        .catch((err) => console.error("Error adding teacher:", err));
-    } catch (err) {
-      console.error("Error adding teacher:", err);
-    }
+      return next;
+    });
+    return saveDocument('teachers', t.id, t)
+      .catch((err) => {
+        console.error("Error adding teacher:", err);
+        throw err;
+      });
   };
 
   const handleUpdateTeacher = (t: Teacher) => {
-    try {
-      const existing = teachers.find((i) => i.id === t.id || (i.nip && i.nip === t.nip));
+    setTeachers((prev) => {
+      const existing = prev.find((i) => i.id === t.id || (i.nip && t.nip && i.nip === t.nip));
       if (existing && existing.id !== t.id) {
         deleteDocument('teachers', existing.id).catch(() => {});
       }
       const next = existing
-        ? teachers.map((i) => (i.id === t.id || (i.nip && i.nip === t.nip)) ? { ...i, ...t } : i)
-        : [...teachers, t];
-      setTeachers(next);
+        ? prev.map((i) => (i.id === t.id || (i.nip && t.nip && i.nip === t.nip)) ? { ...i, ...t } : i)
+        : [...prev, t];
       safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
-      saveDocument('teachers', t.id, t)
-        .catch((err) => console.error("Error updating teacher:", err));
-    } catch (err) {
-      console.error("Error updating teacher:", err);
-    }
+      return next;
+    });
+    return saveDocument('teachers', t.id, t)
+      .catch((err) => {
+        console.error("Error updating teacher:", err);
+        throw err;
+      });
   };
 
   const handleSaveProfile = (updatedUser: any) => {
@@ -2374,20 +2368,25 @@ export default function App({ initialMode }: AppProps = {}) {
     deleteDocument('bos_bop_reports', id).catch(err => console.error(err));
   };
 
+  const genUniqueId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
   const handleRegisterUser = async (regData: Omit<PendingRegistration, 'id' | 'createdAt'>): Promise<void> => {
     // Prevent unauthenticated Privilege Escalation via Termux/curl payloads
     if (regData.role === ('admin' as any)) {
       throw new Error('Pendaftaran mandiri sebagai Administrator ditolak oleh sistem keamanan (Zero-Trust Security).');
     }
 
-    // Sanitize user inputs
-    const sanitizedRegData = {
+    // Sanitize & clamp user inputs to match firestore.rules / firebase-blueprint.json limits
+    const sanitizedRegData: Omit<PendingRegistration, 'id' | 'createdAt'> = {
       ...regData,
-      name: sanitizeSecurityInput(regData.name),
-      phone: sanitizeSecurityInput(regData.phone || ''),
-      email: sanitizeSecurityInput(regData.email || ''),
-      nipOrNisnOrNik: regData.nipOrNisnOrNik ? sanitizeSecurityInput(regData.nipOrNisnOrNik) : '',
-      studentNisnOrName: regData.studentNisnOrName ? sanitizeSecurityInput(regData.studentNisnOrName) : ''
+      name: sanitizeSecurityInput(regData.name || '').slice(0, 150),
+      phone: regData.phone ? sanitizeSecurityInput(regData.phone).slice(0, 30) : undefined,
+      email: regData.email ? sanitizeSecurityInput(regData.email).slice(0, 100) : undefined,
+      nipOrNisnOrNik: regData.nipOrNisnOrNik ? sanitizeSecurityInput(regData.nipOrNisnOrNik).slice(0, 50) : undefined,
+      studentNisnOrName: regData.studentNisnOrName ? sanitizeSecurityInput(regData.studentNisnOrName).slice(0, 150) : undefined,
+      address: regData.address ? sanitizeSecurityInput(regData.address).slice(0, 300) : undefined,
+      classId: regData.classId ? sanitizeSecurityInput(regData.classId).slice(0, 128) : undefined,
+      password: regData.password ? regData.password.slice(0, 150) : undefined,
     };
 
     // Check duplicate Phone Number across active students, teachers, and unverified pending registrations
@@ -2433,19 +2432,19 @@ export default function App({ initialMode }: AppProps = {}) {
 
     const newReg: PendingRegistration = {
       ...sanitizedRegData,
-      id: 'reg-' + Date.now(),
+      id: genUniqueId('reg'),
       createdAt: new Date().toLocaleDateString('id-ID'),
       status: 'menunggu'
     };
 
-    setPendingRegistrations((prev) => {
-      const next = [...prev.filter((i) => i.id !== newReg.id), newReg];
-      safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(next));
-      return next;
-    });
-
     try {
+      // Save to Firestore FIRST before confirming success or keeping in pendingRegistrations
       await saveDocument('pending_registrations', newReg.id, newReg);
+      setPendingRegistrations((prev) => {
+        const next = [newReg, ...prev.filter((i) => i.id !== newReg.id)];
+        safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(next));
+        return next;
+      });
       window.dispatchEvent(new CustomEvent('siakad_registration_created', { detail: newReg }));
     } catch (err) {
       console.error("Error saving pending registration:", err);
@@ -2456,247 +2455,324 @@ export default function App({ initialMode }: AppProps = {}) {
   const handleRefreshRegistrations = async (): Promise<number> => {
     try {
       clearDeletedIds('pending_registrations');
-      const snap = await getDocs(collection(db, 'pending_registrations'));
-      const items: PendingRegistration[] = [];
-      snap.forEach((docSnap) => {
-        const data = docSnap.data() as PendingRegistration;
-        if (data && data.role && (data.name || data.nipOrNisnOrNik || data.phone)) {
-          items.push({ ...data, id: docSnap.id });
-        }
-      });
-      // Sort newest first
+      const allDocs = await getCollectionDocs<PendingRegistration>('pending_registrations');
+      const items = allDocs.filter((data) => data && data.role && (data.name || data.nipOrNisnOrNik || data.phone));
       items.sort((a, b) => (b.id || '').localeCompare(a.id || ''));
       setPendingRegistrations(items);
       safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(items));
       return items.length;
     } catch (e) {
       console.warn("Error refreshing pending registrations:", e);
-      return pendingRegistrations.length;
+      throw e;
     }
   };
 
-  const handleApproveRegistration = (id: string) => {
+  const handleApproveRegistration = async (id: string): Promise<void> => {
     const reg = pendingRegistrations.find((r) => r.id === id);
-
-    if (reg) {
-      if (reg.role === 'guru') {
-        const newTeacher: Teacher = {
-          id: 'teacher-' + Date.now(),
-          name: reg.name || 'Guru Baru',
-          nip: reg.nipOrNisnOrNik || '',
-          email: reg.email || '',
-          role: 'guru',
-          roles: ['guru'],
-          password: reg.password || 'guru123'
-        };
-        handleAddTeacher(newTeacher);
-      } else if (reg.role === 'pelatih') {
-        const newTeacher: Teacher = {
-          id: 'teacher-' + Date.now(),
-          name: reg.name || 'Pelatih Baru',
-          nip: reg.nipOrNisnOrNik || '',
-          email: reg.email || '',
-          role: 'pelatih',
-          roles: ['pelatih'],
-          password: reg.password || 'pelatih123',
-          ekskulId: reg.studentNisnOrName || ''
-        };
-        handleAddTeacher(newTeacher);
-      } else if (reg.role === 'siswa') {
-        const { classId: resolvedClassId, createdClass } = normalizeClassId(reg.classId || '', classes);
-        if (createdClass) {
-          handleAddClass(createdClass);
-        }
-        const newStudent: Student = {
-          id: 'student-' + Date.now(),
-          name: reg.name || 'Siswa Baru',
-          nisn: reg.nipOrNisnOrNik || '',
-          classId: resolvedClassId,
-          gender: reg.gender || 'Laki-laki',
-          address: reg.address || '',
-          phone: reg.phone || '',
-          parentName: '',
-          parentNik: '',
-          parentPhone: '',
-          parentEmail: '',
-          avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(reg.name || 'siswa')}`,
-          password: reg.password || 'siswa123'
-        };
-        handleAddStudent(newStudent);
-      } else if (reg.role === 'orang_tua') {
-        const matchKey = (reg.studentNisnOrName || '').trim().toLowerCase();
-        const matchedStudent = students.find((s) => 
-          s.nisn === reg.studentNisnOrName || 
-          s.name.toLowerCase() === matchKey || 
-          s.id === reg.studentNisnOrName
-        );
-
-        if (matchedStudent) {
-          const updatedStudent: Student = {
-            ...matchedStudent,
-            parentName: reg.name,
-            parentNik: reg.nipOrNisnOrNik,
-            parentPhone: reg.phone || '',
-            parentEmail: reg.email || '',
-            parentPassword: reg.password || 'ortu123'
-          };
-          handleUpdateStudent(updatedStudent);
-        }
-      }
+    if (!reg) {
+      throw new Error('Data pendaftaran tidak ditemukan atau sudah diproses.');
     }
 
+    if (reg.role === 'guru') {
+      const newTeacher: Teacher = {
+        id: genUniqueId('teacher'),
+        name: (reg.name || 'Guru Baru').trim().slice(0, 150),
+        nip: (reg.nipOrNisnOrNik || '').trim().slice(0, 50),
+        email: (reg.email || '').trim().slice(0, 100),
+        role: 'guru',
+        roles: ['guru'],
+        password: (reg.password || 'guru123').slice(0, 150)
+      };
+      await saveDocument('teachers', newTeacher.id, newTeacher);
+      setTeachers((prev) => {
+        const next = [...prev.filter((i) => i.id !== newTeacher.id && (!newTeacher.nip || i.nip !== newTeacher.nip)), newTeacher];
+        safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
+        return next;
+      });
+    } else if (reg.role === 'pelatih') {
+      const newTeacher: Teacher = {
+        id: genUniqueId('teacher'),
+        name: (reg.name || 'Pelatih Baru').trim().slice(0, 150),
+        nip: (reg.nipOrNisnOrNik || reg.phone || '').trim().slice(0, 50),
+        email: (reg.email || '').trim().slice(0, 100),
+        role: 'pelatih',
+        roles: ['pelatih'],
+        password: (reg.password || 'pelatih123').slice(0, 150),
+        ekskulId: (reg.studentNisnOrName || '').trim().slice(0, 150)
+      };
+      await saveDocument('teachers', newTeacher.id, newTeacher);
+      setTeachers((prev) => {
+        const next = [...prev.filter((i) => i.id !== newTeacher.id && (!newTeacher.nip || i.nip !== newTeacher.nip)), newTeacher];
+        safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
+        return next;
+      });
+    } else if (reg.role === 'siswa') {
+      const { classId: resolvedClassId, createdClass } = normalizeClassId(reg.classId || '', classes);
+      if (createdClass && !classes.some((c) => c.id === createdClass.id)) {
+        await saveDocument('classes', createdClass.id, createdClass);
+        setClasses((prev) => {
+          const next = [...prev.filter((i) => i.id !== createdClass.id), createdClass];
+          safeLocalStorageSet('siakad_classes', JSON.stringify(next));
+          return next;
+        });
+      }
+      const newStudent: Student = {
+        id: genUniqueId('student'),
+        name: (reg.name || 'Siswa Baru').trim().slice(0, 150),
+        nisn: (reg.nipOrNisnOrNik || '').trim().slice(0, 30),
+        classId: (resolvedClassId || classes[0]?.id || 'Kelas VII-A').slice(0, 128),
+        gender: reg.gender === 'Perempuan' ? 'Perempuan' : 'Laki-laki',
+        address: (reg.address || '').trim().slice(0, 300),
+        phone: (reg.phone || '').trim().slice(0, 30),
+        parentName: '',
+        parentNik: '',
+        parentPhone: '',
+        parentEmail: '',
+        avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(reg.name || 'siswa')}`,
+        password: (reg.password || 'siswa123').slice(0, 150)
+      };
+      await saveDocument('students', newStudent.id, newStudent);
+      setStudents((prev) => {
+        const next = [...prev.filter((i) => i.id !== newStudent.id && (!newStudent.nisn || i.nisn !== newStudent.nisn)), newStudent];
+        safeLocalStorageSet('siakad_students', JSON.stringify(next));
+        return next;
+      });
+    } else if (reg.role === 'orang_tua') {
+      const rawRef = (reg.studentNisnOrName || '').trim();
+      const matchKey = rawRef.toLowerCase();
+      const matchedStudent = students.find((s) =>
+        (s.nisn && s.nisn.trim() === rawRef) ||
+        s.name.toLowerCase().trim() === matchKey ||
+        s.id === rawRef
+      );
+
+      if (!matchedStudent) {
+        throw new Error(
+          `Akun siswa dengan NISN/Nama "${rawRef || '-'}" belum aktif di Data Siswa. Silakan setujui pendaftaran Siswa tersebut terlebih dahulu, atau gunakan tombol "Setujui Semua Pendaftar" agar diproses berurutan.`
+        );
+      }
+
+      const updatedStudent: Student = {
+        ...matchedStudent,
+        classId: (matchedStudent.classId || classes[0]?.id || 'Kelas VII-A').slice(0, 128),
+        gender: matchedStudent.gender === 'Perempuan' ? 'Perempuan' : 'Laki-laki',
+        parentName: (reg.name || '').trim().slice(0, 150),
+        parentNik: (reg.nipOrNisnOrNik || '').trim().slice(0, 50),
+        parentPhone: (reg.phone || '').trim().slice(0, 30),
+        parentEmail: (reg.email || '').trim().slice(0, 100),
+        parentPassword: (reg.password || 'ortu123').slice(0, 150)
+      };
+      await saveDocument('students', updatedStudent.id, updatedStudent);
+      setStudents((prev) => {
+        const next = prev.map((i) => (i.id === updatedStudent.id ? { ...i, ...updatedStudent } : i));
+        safeLocalStorageSet('siakad_students', JSON.stringify(next));
+        return next;
+      });
+    }
+
+    // Only delete from pending_registrations AFTER target collection write succeeds
+    trackDeletedId('pending_registrations', id);
+    await deleteDocument('pending_registrations', id);
     setPendingRegistrations((prev) => {
       const next = prev.filter((r) => r.id !== id);
       safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(next));
       return next;
     });
-
-    if (id) {
-      trackDeletedId('pending_registrations', id);
-      deleteDocument('pending_registrations', id)
-        .catch((err) => console.error("Error deleting pending registration:", err));
-    }
   };
 
-  const handleRejectRegistration = (id: string) => {
+  const handleRejectRegistration = async (id: string): Promise<void> => {
+    if (!id) return;
+    trackDeletedId('pending_registrations', id);
+    await deleteDocument('pending_registrations', id);
     setPendingRegistrations((prev) => {
       const next = prev.filter((r) => r.id !== id);
       safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(next));
       return next;
     });
-
-    if (id) {
-      trackDeletedId('pending_registrations', id);
-      deleteDocument('pending_registrations', id)
-        .catch((err) => console.error("Error deleting pending registration:", err));
-    }
   };
 
   const handleClearAllPendingRegistrations = async () => {
-    const ids = pendingRegistrations.map((r) => r.id).filter(Boolean);
-    ids.forEach((id) => trackDeletedId('pending_registrations', id));
+    const serverDocs = await getCollectionDocs<PendingRegistration>('pending_registrations');
+    const serverIds = serverDocs.map((d) => d.id).filter(Boolean);
+    const localIds = pendingRegistrations.map((r) => r.id).filter(Boolean);
+    const allIds = Array.from(new Set([...serverIds, ...localIds]));
 
+    if (allIds.length > 0) {
+      allIds.forEach((id) => trackDeletedId('pending_registrations', id));
+      await deleteDocumentsBatch('pending_registrations', allIds);
+    }
     setPendingRegistrations([]);
     safeLocalStorageSet('siakad_pending_registrations', '[]');
     safeLocalStorageSet('siakad_col_initialized_pending_registrations', 'true');
-
-    try {
-      const snap = await getDocs(collection(db, 'pending_registrations'));
-      if (!snap.empty) {
-        let batch = writeBatch(db);
-        let count = 0;
-        for (const docSnap of snap.docs) {
-          trackDeletedId('pending_registrations', docSnap.id);
-          const data = docSnap.data();
-          if (data && (data as any).id) trackDeletedId('pending_registrations', (data as any).id);
-          batch.delete(docSnap.ref);
-          count++;
-          if (count >= 400) {
-            await batch.commit();
-            batch = writeBatch(db);
-            count = 0;
-          }
-        }
-        if (count > 0) {
-          await batch.commit();
-        }
-      }
-    } catch (err) {
-      console.error("Error purging all pending registrations from Firestore:", err);
-    }
   };
 
-  const handleApproveAllRegistrations = () => {
-    if (pendingRegistrations.length === 0) return;
+  const handleApproveAllRegistrations = async (): Promise<{ approvedCount: number; skippedParents: number }> => {
+    if (pendingRegistrations.length === 0) {
+      return { approvedCount: 0, skippedParents: 0 };
+    }
 
+    const queue = [...pendingRegistrations];
+    const classesToAdd: SchoolClass[] = [];
     const teachersToAdd: Teacher[] = [];
     const studentsToAdd: Student[] = [];
-    const parentsToUpdate: Student[] = [];
+    const parentsToUpdateMap = new Map<string, Student>();
+    const approvedRegIds: string[] = [];
+    const batchStamp = Date.now();
+    let skippedParents = 0;
 
-    pendingRegistrations.forEach((reg, index) => {
-      const suffix = `${Date.now()}-${index}`;
+    // Step 1: Process non-parent registrations (guru, pelatih, siswa) first
+    queue.forEach((reg, index) => {
+      if (reg.role === 'orang_tua') return;
+      const suffix = `${batchStamp}-${index}-${Math.random().toString(36).slice(2, 5)}`;
+
       if (reg.role === 'guru') {
         teachersToAdd.push({
           id: 'teacher-' + suffix,
-          name: reg.name || 'Guru Baru',
-          nip: reg.nipOrNisnOrNik || '',
-          email: reg.email || '',
+          name: (reg.name || 'Guru Baru').trim().slice(0, 150),
+          nip: (reg.nipOrNisnOrNik || '').trim().slice(0, 50),
+          email: (reg.email || '').trim().slice(0, 100),
           role: 'guru',
           roles: ['guru'],
-          password: reg.password || 'guru123'
+          password: (reg.password || 'guru123').slice(0, 150)
         });
+        approvedRegIds.push(reg.id);
       } else if (reg.role === 'pelatih') {
         teachersToAdd.push({
           id: 'teacher-' + suffix,
-          name: reg.name || 'Pelatih Baru',
-          nip: reg.nipOrNisnOrNik || '',
-          email: reg.email || '',
+          name: (reg.name || 'Pelatih Baru').trim().slice(0, 150),
+          nip: (reg.nipOrNisnOrNik || reg.phone || '').trim().slice(0, 50),
+          email: (reg.email || '').trim().slice(0, 100),
           role: 'pelatih',
           roles: ['pelatih'],
-          password: reg.password || 'pelatih123',
-          ekskulId: reg.studentNisnOrName || ''
+          password: (reg.password || 'pelatih123').slice(0, 150),
+          ekskulId: (reg.studentNisnOrName || '').trim().slice(0, 150)
         });
+        approvedRegIds.push(reg.id);
       } else if (reg.role === 'siswa') {
-        const { classId: resolvedClassId, createdClass } = normalizeClassId(reg.classId || '', classes);
-        if (createdClass && !classes.some(c => c.id === createdClass.id)) {
-          handleAddClass(createdClass);
+        const knownClasses = [...classes, ...classesToAdd];
+        const { classId: resolvedClassId, createdClass } = normalizeClassId(reg.classId || '', knownClasses);
+        if (createdClass && !knownClasses.some((c) => c.id === createdClass.id)) {
+          classesToAdd.push(createdClass);
         }
         studentsToAdd.push({
           id: 'student-' + suffix,
-          name: reg.name || 'Siswa Baru',
-          nisn: reg.nipOrNisnOrNik || '',
-          classId: resolvedClassId,
-          gender: reg.gender || 'Laki-laki',
-          address: reg.address || '',
-          phone: reg.phone || '',
+          name: (reg.name || 'Siswa Baru').trim().slice(0, 150),
+          nisn: (reg.nipOrNisnOrNik || '').trim().slice(0, 30),
+          classId: (resolvedClassId || classes[0]?.id || 'Kelas VII-A').slice(0, 128),
+          gender: reg.gender === 'Perempuan' ? 'Perempuan' : 'Laki-laki',
+          address: (reg.address || '').trim().slice(0, 300),
+          phone: (reg.phone || '').trim().slice(0, 30),
           parentName: '',
           parentNik: '',
           parentPhone: '',
           parentEmail: '',
           avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(reg.name || 'siswa')}`,
-          password: reg.password || 'siswa123'
+          password: (reg.password || 'siswa123').slice(0, 150)
         });
-      } else if (reg.role === 'orang_tua') {
-        const matchKey = (reg.studentNisnOrName || '').trim().toLowerCase();
-        const matchedStudent = students.find((s) => 
-          s.nisn === reg.studentNisnOrName || 
-          s.name.toLowerCase() === matchKey || 
-          s.id === reg.studentNisnOrName
-        );
-        if (matchedStudent) {
-          parentsToUpdate.push({
-            ...matchedStudent,
-            parentName: reg.name,
-            parentNik: reg.nipOrNisnOrNik,
-            parentPhone: reg.phone || '',
-            parentEmail: reg.email || '',
-            parentPassword: reg.password || 'ortu123'
-          });
-        }
+        approvedRegIds.push(reg.id);
       }
     });
 
+    // Step 2: Process orang_tua registrations against BOTH existing students AND newly approved students in this batch
+    queue.forEach((reg) => {
+      if (reg.role !== 'orang_tua') return;
+      const rawRef = (reg.studentNisnOrName || '').trim();
+      const matchKey = rawRef.toLowerCase();
+
+      const matchInNew = studentsToAdd.find((s) =>
+        (s.nisn && s.nisn.trim() === rawRef) ||
+        s.name.toLowerCase().trim() === matchKey ||
+        s.id === rawRef
+      );
+
+      if (matchInNew) {
+        matchInNew.parentName = (reg.name || '').trim().slice(0, 150);
+        matchInNew.parentNik = (reg.nipOrNisnOrNik || '').trim().slice(0, 50);
+        matchInNew.parentPhone = (reg.phone || '').trim().slice(0, 30);
+        matchInNew.parentEmail = (reg.email || '').trim().slice(0, 100);
+        matchInNew.parentPassword = (reg.password || 'ortu123').slice(0, 150);
+        approvedRegIds.push(reg.id);
+        return;
+      }
+
+      const matchExisting = students.find((s) =>
+        (s.nisn && s.nisn.trim() === rawRef) ||
+        s.name.toLowerCase().trim() === matchKey ||
+        s.id === rawRef
+      );
+
+      if (matchExisting) {
+        parentsToUpdateMap.set(matchExisting.id, {
+          ...matchExisting,
+          classId: (matchExisting.classId || classes[0]?.id || 'Kelas VII-A').slice(0, 128),
+          gender: matchExisting.gender === 'Perempuan' ? 'Perempuan' : 'Laki-laki',
+          parentName: (reg.name || '').trim().slice(0, 150),
+          parentNik: (reg.nipOrNisnOrNik || '').trim().slice(0, 50),
+          parentPhone: (reg.phone || '').trim().slice(0, 30),
+          parentEmail: (reg.email || '').trim().slice(0, 100),
+          parentPassword: (reg.password || 'ortu123').slice(0, 150)
+        });
+        approvedRegIds.push(reg.id);
+      } else {
+        // Keep unmatched orang_tua in pending queue rather than deleting them silently!
+        skippedParents += 1;
+      }
+    });
+
+    // Step 3: Persist to Firestore FIRST; if any write fails, throw so pending_registrations is NOT deleted
+    if (classesToAdd.length > 0) {
+      await saveDocumentsBatch('classes', classesToAdd);
+    }
     if (teachersToAdd.length > 0) {
-      handleAddTeachersBatch(teachersToAdd);
+      await saveDocumentsBatch('teachers', teachersToAdd);
+    }
+    const mergedStudentsToSave = [...studentsToAdd, ...Array.from(parentsToUpdateMap.values())];
+    if (mergedStudentsToSave.length > 0) {
+      await saveDocumentsBatch('students', mergedStudentsToSave);
     }
 
-    if (studentsToAdd.length > 0) {
-      handleAddStudentsBatch(studentsToAdd);
+    // Step 4: Update local React states atomically
+    if (classesToAdd.length > 0) {
+      setClasses((prev) => {
+        const addedIds = new Set(classesToAdd.map((c) => c.id));
+        const next = [...prev.filter((c) => !addedIds.has(c.id)), ...classesToAdd];
+        safeLocalStorageSet('siakad_classes', JSON.stringify(next));
+        return next;
+      });
+    }
+    if (teachersToAdd.length > 0) {
+      setTeachers((prev) => {
+        const addedIds = new Set(teachersToAdd.map((t) => t.id));
+        const next = [...prev.filter((t) => !addedIds.has(t.id)), ...teachersToAdd];
+        safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
+        return next;
+      });
+    }
+    if (mergedStudentsToSave.length > 0) {
+      setStudents((prev) => {
+        const savedMap = new Map(mergedStudentsToSave.map((s) => [s.id, s]));
+        const updatedPrev = prev.map((s) => (savedMap.has(s.id) ? { ...s, ...savedMap.get(s.id)! } : s));
+        const existingIdSet = new Set(prev.map((s) => s.id));
+        const newlyAdded = mergedStudentsToSave.filter((s) => !existingIdSet.has(s.id));
+        const next = [...updatedPrev, ...newlyAdded];
+        safeLocalStorageSet('siakad_students', JSON.stringify(next));
+        return next;
+      });
     }
 
-    if (parentsToUpdate.length > 0) {
-      parentsToUpdate.forEach((s) => handleUpdateStudent(s));
+    // Step 5: Delete ONLY successfully processed pending_registrations
+    if (approvedRegIds.length > 0) {
+      const approvedSet = new Set(approvedRegIds);
+      approvedRegIds.forEach((id) => trackDeletedId('pending_registrations', id));
+      await deleteDocumentsBatch('pending_registrations', approvedRegIds);
+      setPendingRegistrations((prev) => {
+        const next = prev.filter((r) => !approvedSet.has(r.id));
+        safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(next));
+        return next;
+      });
     }
 
-    const idsToDelete = pendingRegistrations.map((r) => r.id).filter(Boolean);
-    idsToDelete.forEach((id) => trackDeletedId('pending_registrations', id));
-    setPendingRegistrations([]);
-    safeLocalStorageSet('siakad_pending_registrations', '[]');
-
-    if (idsToDelete.length > 0) {
-      deleteDocumentsBatch('pending_registrations', idsToDelete)
-        .catch((err) => console.error("Error batch-deleting pending registrations:", err));
-    }
+    return { approvedCount: approvedRegIds.length, skippedParents };
   };
 
   const handleDeleteTeacher = (id: string) => {
@@ -4108,10 +4184,24 @@ export default function App({ initialMode }: AppProps = {}) {
                       <AlertCircle className="w-5 h-5 animate-bounce" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-xs">Realtime Sync Error</h4>
+                      <h4 className="font-bold text-xs">
+                        {isQuotaExceeded ? 'Kuota Harian Database Firebase Habis (Quota Exceeded)' : 'Realtime Sync Error'}
+                      </h4>
                       <p className="text-[10px] text-rose-600 mt-0.5 leading-snug">
-                        Koneksi database Firebase terganggu atau tidak ter-update dalam 5 detik. Mengaktifkan mode cache offline.
+                        {isQuotaExceeded
+                          ? `${quotaErrorDetail} (Sistem ini menggunakan Firebase Firestore, bukan Supabase).`
+                          : 'Koneksi database Firebase terganggu atau tidak ter-update. Mengaktifkan mode cache offline.'}
                       </p>
+                      {isQuotaExceeded && (
+                        <a
+                          href={FIRESTORE_UPGRADE_URL}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block mt-1 text-[10px] font-bold text-indigo-700 underline"
+                        >
+                          Buka Konsol Firebase (Upgrade ke Blaze / Cek Kuota) &rarr;
+                        </a>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -4905,7 +4995,7 @@ export default function App({ initialMode }: AppProps = {}) {
                           ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 animate-pulse'
                           : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
                       }`}
-                      title="Klik untuk melihat status koneksi database Firebase"
+                      title={`Klik untuk melihat status koneksi database ${getActiveDbBackend() === 'supabase' ? 'Supabase Pro' : 'Firebase'}`}
                     >
                       <span className="relative flex h-2 w-2">
                         <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
@@ -4942,7 +5032,7 @@ export default function App({ initialMode }: AppProps = {}) {
                             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                               <h3 className="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                                 <Activity className="w-4 h-4 text-indigo-500 shrink-0 animate-pulse" />
-                                <span>Firebase Monitor</span>
+                                <span>{getActiveDbBackend() === 'supabase' ? 'Supabase Pro Monitor' : 'Firebase Monitor'}</span>
                               </h3>
                               <span className="text-[10px] font-bold text-slate-400 uppercase">Realtime Sync</span>
                             </div>
@@ -5118,9 +5208,12 @@ export default function App({ initialMode }: AppProps = {}) {
                         onRejectRegistration={handleRejectRegistration}
                         onApproveAllRegistrations={handleApproveAllRegistrations}
                         onClearAllPendingRegistrations={handleClearAllPendingRegistrations}
+                        onRefreshRegistrations={handleRefreshRegistrations}
                         dbStatus={dbStatus}
                         dbLatency={dbLatency}
                         lastSyncTime={lastSyncTime}
+                        isQuotaExceeded={isQuotaExceeded}
+                        quotaErrorDetail={quotaErrorDetail}
                         onReconnectDb={checkFirebaseConnection}
                         cbtBypassPin={cbtBypassPin}
                         onUpdateCbtBypassPin={handleUpdateCbtBypassPin}
@@ -5434,6 +5527,8 @@ export default function App({ initialMode }: AppProps = {}) {
                             dbStatus={dbStatus}
                             dbLatency={dbLatency}
                             lastSyncTime={lastSyncTime}
+                            isQuotaExceeded={isQuotaExceeded}
+                            quotaErrorDetail={quotaErrorDetail}
                             onReconnectDb={checkFirebaseConnection}
                             cbtBypassPin={cbtBypassPin}
                             onUpdateCbtBypassPin={handleUpdateCbtBypassPin}

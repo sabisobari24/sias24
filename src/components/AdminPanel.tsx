@@ -19,7 +19,17 @@ import ExamCardGeneratorModal from './common/ExamCardGeneratorModal';
 import AdminPelatihPanel from './admin/AdminPelatihPanel';
 import AdminOrangTuaPanel from './admin/AdminOrangTuaPanel';
 import { printBatchStudentCards } from '../utils/qrHelper';
-import { syncCollection, saveDocument } from '../lib/firebase';
+import {
+  syncCollection,
+  saveDocument,
+  formatFirestoreErrorMessage,
+  FIRESTORE_UPGRADE_URL,
+  getActiveDbBackend,
+  isSupabaseConfigured,
+  migrateFirestoreToSupabase,
+  exportFirestoreSqlForSupabase,
+  MigrationProgress
+} from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import { compressImageFile, compressAvatarImage, convertGoogleDriveLink } from '../utils/imageHelper';
 import MediaUploadSelector from './MediaUploadSelector';
@@ -72,15 +82,17 @@ interface AdminPanelProps {
   onAddStudentAchievement?: (ach: Omit<StudentAchievement, 'id'>) => void;
   onDeleteStudentAchievement?: (id: string) => void;
   pendingRegistrations?: PendingRegistration[];
-  onApproveRegistration?: (id: string) => void;
-  onRejectRegistration?: (id: string) => void;
-  onApproveAllRegistrations?: () => void;
-  onClearAllPendingRegistrations?: () => void;
+  onApproveRegistration?: (id: string) => Promise<void> | void;
+  onRejectRegistration?: (id: string) => Promise<void> | void;
+  onApproveAllRegistrations?: () => Promise<{ approvedCount: number; skippedParents: number } | void> | void;
+  onClearAllPendingRegistrations?: () => Promise<void> | void;
   onRefreshRegistrations?: () => Promise<number | void>;
   dbStatus?: 'online' | 'offline' | 'high_latency';
   dbLatency?: number;
   lastSyncTime?: number;
   onReconnectDb?: () => void;
+  isQuotaExceeded?: boolean;
+  quotaErrorDetail?: string;
   cbtBypassPin?: string;
   onUpdateCbtBypassPin?: (pin: string) => void;
   webHomeContent?: any;
@@ -161,6 +173,8 @@ export default function AdminPanel({
   dbLatency = 0,
   lastSyncTime,
   onReconnectDb,
+  isQuotaExceeded = false,
+  quotaErrorDetail = '',
   cbtBypassPin: propsCbtBypassPin,
   onUpdateCbtBypassPin,
   webHomeContent,
@@ -211,6 +225,63 @@ export default function AdminPanel({
   const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
   const [isBatchPrintingCards, setIsBatchPrintingCards] = useState(false);
   const [isRefreshingReg, setIsRefreshingReg] = useState(false);
+  const [processingRegId, setProcessingRegId] = useState<string | null>(null);
+  const [isApprovingAll, setIsApprovingAll] = useState(false);
+
+  // Supabase Pro Migration States
+  const activeDbBackend = getActiveDbBackend();
+  const supabaseEnvReady = isSupabaseConfigured();
+  const [isMigratingToSupabase, setIsMigratingToSupabase] = useState(false);
+  const [migrationProgress, setMigrationProgress] = useState<MigrationProgress | null>(null);
+  const [migrationSummaryMsg, setMigrationSummaryMsg] = useState('');
+  const [isExportingSqlDump, setIsExportingSqlDump] = useState(false);
+
+  const handleMigrateFirestoreToSupabaseClick = async () => {
+    if (isMigratingToSupabase) return;
+    if (!supabaseEnvReady) {
+      showErrorToast('Variabel environment VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY belum terpasang.');
+      return;
+    }
+    setIsMigratingToSupabase(true);
+    setMigrationSummaryMsg('');
+    setMigrationProgress({ collection: 'Memeriksa tabel Supabase...', doneCollections: 0, totalCollections: 37, migratedDocs: 0, currentCount: 0 });
+    try {
+      const summary = await migrateFirestoreToSupabase((prog) => {
+        setMigrationProgress(prog);
+      });
+      const msg = `Migrasi selesai! ${summary.totalDocuments} dokumen dari ${summary.details.length} koleksi aktif berhasil disalin ke Supabase Pro.`;
+      setMigrationSummaryMsg(msg);
+      setSuccessMsg(msg);
+      setTimeout(() => setSuccessMsg(''), 6000);
+    } catch (err) {
+      showErrorToast(formatFirestoreErrorMessage(err));
+    } finally {
+      setIsMigratingToSupabase(false);
+    }
+  };
+
+  const handleDownloadSqlDumpClick = async () => {
+    if (isExportingSqlDump) return;
+    setIsExportingSqlDump(true);
+    try {
+      const sqlContent = await exportFirestoreSqlForSupabase();
+      const blob = new Blob([sqlContent], { type: 'application/sql;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sias_backup_supabase_${new Date().toISOString().split('T')[0]}.sql`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSuccessMsg('Skrip SQL backup data Firestore siap diunduh untuk diimpor ke Supabase SQL Editor.');
+      setTimeout(() => setSuccessMsg(''), 5000);
+    } catch (err) {
+      showErrorToast(formatFirestoreErrorMessage(err));
+    } finally {
+      setIsExportingSqlDump(false);
+    }
+  };
 
   const handleRefreshRegistrationsClick = async () => {
     if (isRefreshingReg) return;
@@ -223,6 +294,7 @@ export default function AdminPanel({
       }
     } catch (e) {
       console.warn("Gagal menyegarkan antrean pendaftaran:", e);
+      showErrorToast(formatFirestoreErrorMessage(e));
     } finally {
       setIsRefreshingReg(false);
     }
@@ -326,7 +398,7 @@ export default function AdminPanel({
     title: string;
     message: string;
     confirmText?: string;
-    onConfirm: () => void;
+    onConfirm: () => void | Promise<void>;
   }>({
     isOpen: false,
     title: '',
@@ -334,7 +406,7 @@ export default function AdminPanel({
     onConfirm: () => {},
   });
 
-  const triggerConfirm = (title: string, message: string, onConfirm: () => void, confirmText = 'Ya, Hapus') => {
+  const triggerConfirm = (title: string, message: string, onConfirm: () => void | Promise<void>, confirmText = 'Ya, Hapus') => {
     setConfirmModal({
       isOpen: true,
       title,
@@ -3465,8 +3537,13 @@ export default function AdminPanel({
                   {dbStatus === 'online' ? <Wifi className="w-6 h-6" /> : dbStatus === 'high_latency' ? <RefreshCw className="w-6 h-6 animate-spin-slow" /> : <WifiOff className="w-6 h-6" />}
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                  <h4 className="font-bold text-sm text-slate-900 flex flex-wrap items-center gap-2">
                     <span>Status Sinkronisasi &amp; Database Real-time</span>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                      activeDbBackend === 'supabase' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                    }`}>
+                      {activeDbBackend === 'supabase' ? 'Supabase Pro (PostgreSQL)' : 'Firebase Firestore'}
+                    </span>
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                       dbStatus === 'online' ? 'bg-emerald-100 text-emerald-800' : dbStatus === 'high_latency' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
                     }`}>
@@ -3477,7 +3554,9 @@ export default function AdminPanel({
                     </span>
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Seluruh entitas data kelas, siswa, pendidik, dan pengaturan tersinkronisasi otomatis secara dua arah ke database.
+                    {activeDbBackend === 'supabase'
+                      ? 'Seluruh entitas data kelas, siswa, pendidik, registrasi, CBT, dan ECo-Tiket tersimpan langsung di Supabase PostgreSQL secara real-time.'
+                      : 'Seluruh entitas data saat ini tersimpan di Firebase Firestore. Aktifkan konfigurasi Supabase Pro untuk memindahkan seluruh database ke PostgreSQL.'}
                   </p>
                 </div>
               </div>
@@ -3510,6 +3589,115 @@ export default function AdminPanel({
                 )}
               </div>
             </div>
+
+            {/* Pusat Migrasi Database ke Supabase Pro */}
+            <div className="md:col-span-2 bg-gradient-to-r from-emerald-50/70 via-white to-teal-50/70 rounded-2xl p-5 border border-emerald-200 shadow-xs space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                      <Database className="w-4 h-4 text-emerald-600" />
+                      <span>Migrasi &amp; Sinkronisasi Penuh ke Supabase Pro</span>
+                    </h4>
+                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase ${
+                      supabaseEnvReady ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                    }`}>
+                      {supabaseEnvReady ? 'Kredensial Env Supabase Terdeteksi' : 'Menunggu Variabel Env Supabase'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {supabaseEnvReady
+                      ? 'Salin seluruh data aktif dari Firebase Firestore (Kelas, Guru, Siswa, Antrean Pendaftaran, CBT, ECo-Tiket, Konten Web) ke tabel public.sias_documents Supabase Pro Anda dalam 1 klik.'
+                      : 'Tambahkan VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY pada pengaturan Environment Variables, lalu jalankan skrip setup SQL di Supabase Dashboard untuk mengaktifkan backend Supabase Pro.'}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleDownloadSqlDumpClick}
+                    disabled={isExportingSqlDump || isMigratingToSupabase}
+                    className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-600" />
+                    <span>{isExportingSqlDump ? 'Menyiapkan SQL...' : 'Unduh Backup Data (.sql)'}</span>
+                  </button>
+
+                  {supabaseEnvReady && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerConfirm(
+                          'Salin Semua Data Firestore ke Supabase Pro',
+                          'Proses ini akan menyalin seluruh koleksi aktif dari Firebase Firestore ke tabel public.sias_documents di proyek Supabase Pro Anda tanpa menghapus data yang sudah ada. Lanjutkan?',
+                          handleMigrateFirestoreToSupabaseClick,
+                          'Ya, Mulai Salin Data'
+                        );
+                      }}
+                      disabled={isMigratingToSupabase}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                    >
+                      <Upload className={`w-3.5 h-3.5 ${isMigratingToSupabase ? 'animate-bounce' : ''}`} />
+                      <span>{isMigratingToSupabase ? 'Menyalin Data...' : 'Salin Data Firestore -> Supabase'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {migrationProgress && isMigratingToSupabase && (
+                <div className="bg-white border border-emerald-200 rounded-xl p-3 space-y-2">
+                  <div className="flex justify-between text-[11px] font-bold text-slate-700">
+                    <span>Memindahkan koleksi: <span className="font-mono text-emerald-700">{migrationProgress.collection}</span></span>
+                    <span>{migrationProgress.doneCollections}/{migrationProgress.totalCollections} koleksi ({migrationProgress.migratedDocs} dokumen)</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 transition-all duration-300"
+                      style={{ width: `${Math.min(100, Math.round((migrationProgress.doneCollections / Math.max(1, migrationProgress.totalCollections)) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {migrationSummaryMsg && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs font-semibold text-emerald-900 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{migrationSummaryMsg}</span>
+                </div>
+              )}
+            </div>
+
+            {(isQuotaExceeded || dbStatus === 'offline') && (
+              <div className="md:col-span-2 bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="space-y-1 text-xs text-rose-900">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>
+                      {activeDbBackend === 'supabase'
+                        ? 'Koneksi Supabase PostgreSQL Sedang Terputus'
+                        : isQuotaExceeded
+                        ? 'Kuota Harian Firebase Firestore Tercapai (Spark Plan)'
+                        : 'Koneksi Database Firebase Firestore Sedang Offline'}
+                    </span>
+                  </p>
+                  <p className="text-rose-700 leading-relaxed">
+                    {quotaErrorDetail || (activeDbBackend === 'supabase'
+                      ? 'Pastikan skrip SQL setup Supabase sudah dijalankan dan koneksi internet stabil.'
+                      : 'Saat ini aplikasi masih berjalan di Firebase Firestore. Aktifkan konfigurasi Supabase Pro atau tingkatkan ke Firebase Blaze.')}
+                  </p>
+                </div>
+                {activeDbBackend === 'firebase' && (
+                  <a
+                    href={FIRESTORE_UPGRADE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shrink-0 shadow-xs transition-all"
+                  >
+                    Cek Kuota / Upgrade Firebase Blaze
+                  </a>
+                )}
+              </div>
+            )}
 
             <div className="bg-white rounded-xl p-5 border space-y-4">
               <div className="flex justify-between items-center">
@@ -4938,6 +5126,49 @@ export default function AdminPanel({
               </div>
             </div>
 
+            {(isQuotaExceeded || dbStatus === 'offline') && (
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                <div className="space-y-1 text-xs text-rose-900">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>
+                      {activeDbBackend === 'supabase'
+                        ? 'Koneksi Database Supabase Sedang Terputus'
+                        : isQuotaExceeded
+                        ? 'Peringatan Kuota Firebase Firestore Penuh — Validasi Dapat Terhambat'
+                        : 'Status Database Firebase Firestore Sedang Offline'}
+                    </span>
+                  </p>
+                  <p className="text-rose-700 leading-relaxed">
+                    {quotaErrorDetail || (activeDbBackend === 'supabase'
+                      ? 'Periksa koneksi internet Anda atau pastikan tabel public.sias_documents sudah dijalankan di SQL Editor Supabase.'
+                      : 'Saat ini masih terhubung ke Firebase Firestore. Aktifkan konfigurasi Supabase Pro di menu Kelas & Database atau cek kuota Firebase.')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {onReconnectDb && (
+                    <button
+                      type="button"
+                      onClick={onReconnectDb}
+                      className="px-3 py-2 bg-white hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                    >
+                      Cek Ulang Koneksi
+                    </button>
+                  )}
+                  {activeDbBackend === 'firebase' && (
+                    <a
+                      href={FIRESTORE_UPGRADE_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs"
+                    >
+                      Console Firebase Blaze
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="bg-white border border-slate-100 shadow-xs rounded-2xl p-6">
               {pendingRegistrations.length === 0 ? (
                 <div className="py-12 text-center space-y-3.5 max-w-md mx-auto">
@@ -4975,8 +5206,8 @@ export default function AdminPanel({
                         <button
                           type="button"
                           onClick={handleRefreshRegistrationsClick}
-                          disabled={isRefreshingReg}
-                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs justify-center"
+                          disabled={isRefreshingReg || isApprovingAll}
+                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs justify-center disabled:opacity-50"
                           title="Segarkan antrean pendaftaran"
                         >
                           <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isRefreshingReg ? 'animate-spin' : ''}`} />
@@ -4986,19 +5217,24 @@ export default function AdminPanel({
                       {onClearAllPendingRegistrations && (
                         <button
                           type="button"
+                          disabled={isApprovingAll || processingRegId !== null}
                           onClick={() => {
                             triggerConfirm(
                               'Bersihkan Semua Data Pendaftaran / Data Rusak',
                               'Apakah Anda yakin ingin mengosongkan dan membersihkan seluruh antrean pendaftaran? Semua data pendaftaran lama atau rusak akan dihapus permanen dari database.',
-                              () => {
-                                onClearAllPendingRegistrations();
-                                setSuccessMsg('Seluruh antrean pendaftaran berhasil dibersihkan.');
-                                setTimeout(() => setSuccessMsg(''), 4000);
+                              async () => {
+                                try {
+                                  await onClearAllPendingRegistrations();
+                                  setSuccessMsg('Seluruh antrean pendaftaran berhasil dibersihkan.');
+                                  setTimeout(() => setSuccessMsg(''), 4000);
+                                } catch (err) {
+                                  showErrorToast(formatFirestoreErrorMessage(err));
+                                }
                               },
                               'Ya, Bersihkan Semua'
                             );
                           }}
-                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs justify-center flex-1 sm:flex-initial"
+                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs justify-center flex-1 sm:flex-initial disabled:opacity-50"
                         >
                           <Trash2 className="w-3.5 h-3.5 text-rose-600" />
                           <span>Bersihkan Data Rusak / Kosongkan</span>
@@ -5006,21 +5242,45 @@ export default function AdminPanel({
                       )}
                       <button
                         type="button"
+                        disabled={isApprovingAll || processingRegId !== null}
                         onClick={() => {
                           triggerConfirm(
                             'Konfirmasi Semua Pendaftar',
                             `Apakah Anda yakin ingin menyetujui dan mengaktifkan semua (${pendingRegistrations.length}) pendaftar akun yang menunggu sekaligus?`,
-                            () => {
-                              if (onApproveAllRegistrations) onApproveAllRegistrations();
-                              setSuccessMsg(`Berhasil menyetujui dan mengaktifkan semua pendaftar akun baru.`);
-                              setTimeout(() => setSuccessMsg(''), 4000);
-                            }
+                            async () => {
+                              if (!onApproveAllRegistrations || isApprovingAll) return;
+                              setIsApprovingAll(true);
+                              try {
+                                const result = await onApproveAllRegistrations();
+                                if (result && typeof result === 'object') {
+                                  if (result.skippedParents > 0) {
+                                    setSuccessMsg(
+                                      `Berhasil menyetujui ${result.approvedCount} akun. ${result.skippedParents} akun Orang Tua tetap di antrean karena NISN siswa anaknya belum aktif.`
+                                    );
+                                  } else {
+                                    setSuccessMsg(`Berhasil menyetujui dan mengaktifkan ${result.approvedCount} akun pendaftar baru ke database!`);
+                                  }
+                                } else {
+                                  setSuccessMsg('Berhasil menyetujui dan mengaktifkan pendaftar akun baru ke database.');
+                                }
+                                setTimeout(() => setSuccessMsg(''), 6000);
+                              } catch (err) {
+                                showErrorToast(formatFirestoreErrorMessage(err));
+                              } finally {
+                                setIsApprovingAll(false);
+                              }
+                            },
+                            'Ya, Setujui Semua'
                           );
                         }}
-                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm shadow-emerald-100 justify-center flex-1 sm:flex-initial"
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm shadow-emerald-100 justify-center flex-1 sm:flex-initial disabled:opacity-50"
                       >
-                        <Check className="w-3.5 h-3.5 text-emerald-100" />
-                        <span>Setujui Semua Pendaftar ({pendingRegistrations.length})</span>
+                        {isApprovingAll ? (
+                          <RefreshCw className="w-3.5 h-3.5 text-emerald-100 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5 text-emerald-100" />
+                        )}
+                        <span>{isApprovingAll ? 'Memproses...' : `Setujui Semua Pendaftar (${pendingRegistrations.length})`}</span>
                       </button>
                     </div>
                   </div>
@@ -5131,18 +5391,27 @@ export default function AdminPanel({
                         <div className="flex gap-2 border-t border-slate-100 pt-3 mt-2">
                           <button
                             type="button"
+                            disabled={processingRegId === reg.id || isApprovingAll}
                             onClick={() => {
                               triggerConfirm(
                                 'Tolak Pendaftaran',
                                 `Apakah Anda yakin ingin menolak pendaftaran akun atas nama ${reg.name}? Data pengajuan ini akan dihapus permanen.`,
-                                () => {
-                                  if (onRejectRegistration) onRejectRegistration(reg.id);
-                                  setSuccessMsg(`Pendaftaran akun ${reg.name} berhasil ditolak.`);
-                                  setTimeout(() => setSuccessMsg(''), 4000);
+                                async () => {
+                                  if (!onRejectRegistration) return;
+                                  setProcessingRegId(reg.id);
+                                  try {
+                                    await onRejectRegistration(reg.id);
+                                    setSuccessMsg(`Pendaftaran akun ${reg.name} berhasil ditolak.`);
+                                    setTimeout(() => setSuccessMsg(''), 4000);
+                                  } catch (err) {
+                                    showErrorToast(formatFirestoreErrorMessage(err));
+                                  } finally {
+                                    setProcessingRegId(null);
+                                  }
                                 }
                               );
                             }}
-                            className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                            className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
                           >
                             <Trash2 className="w-3.5 h-3.5 shrink-0" />
                             <span>Tolak</span>
@@ -5150,15 +5419,28 @@ export default function AdminPanel({
 
                           <button
                             type="button"
-                            onClick={() => {
-                              if (onApproveRegistration) onApproveRegistration(reg.id);
-                              setSuccessMsg(`Pendaftaran akun ${reg.name} berhasil divalidasi dan diaktifkan.`);
-                              setTimeout(() => setSuccessMsg(''), 4000);
+                            disabled={processingRegId === reg.id || isApprovingAll}
+                            onClick={async () => {
+                              if (!onApproveRegistration || processingRegId === reg.id || isApprovingAll) return;
+                              setProcessingRegId(reg.id);
+                              try {
+                                await onApproveRegistration(reg.id);
+                                setSuccessMsg(`Pendaftaran akun ${reg.name} berhasil divalidasi dan tersimpan ke database!`);
+                                setTimeout(() => setSuccessMsg(''), 4000);
+                              } catch (err) {
+                                showErrorToast(formatFirestoreErrorMessage(err));
+                              } finally {
+                                setProcessingRegId(null);
+                              }
                             }}
-                            className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-100"
+                            className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-100 disabled:opacity-50"
                           >
-                            <Check className="w-4 h-4 shrink-0 text-indigo-200" />
-                            <span>Setujui &amp; Aktifkan</span>
+                            {processingRegId === reg.id ? (
+                              <RefreshCw className="w-4 h-4 shrink-0 text-indigo-200 animate-spin" />
+                            ) : (
+                              <Check className="w-4 h-4 shrink-0 text-indigo-200" />
+                            )}
+                            <span>{processingRegId === reg.id ? 'Menyimpan...' : 'Setujui & Aktifkan'}</span>
                           </button>
                         </div>
                       </div>

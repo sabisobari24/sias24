@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Lock, Mail, Phone, MapPin, Shield, Check, AlertCircle, School, Heart, Sparkles } from 'lucide-react';
 import { PendingRegistration, SchoolClass, Student, Teacher, WebSectionContent } from '../types';
-import { syncCollection } from '../lib/firebase';
+import { syncCollection, formatFirestoreErrorMessage, isQuotaExceededError, isPermissionDeniedError } from '../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../data/initialWebContent';
 
 interface RegisterModalProps {
@@ -39,8 +39,9 @@ export default function RegisterModal({
 
   const [kesiswaanContent, setKesiswaanContent] = useState<WebSectionContent | null>(null);
 
-  // Fetch Kesiswaan section from Web Content
+  // Fetch Kesiswaan section from Web Content only when modal is open
   useEffect(() => {
+    if (!isOpen) return;
     const unsubscribe = syncCollection<WebSectionContent>('web_content', (data) => {
       const found = data.find((c) => c.id === 'kesiswaan');
       if (found) {
@@ -51,7 +52,7 @@ export default function RegisterModal({
       }
     }, INITIAL_WEB_CONTENT);
     return () => unsubscribe();
-  }, []);
+  }, [isOpen]);
 
   // When role changes to 'pelatih', set default studentNisnOrName if empty or not matching any ekskul
   useEffect(() => {
@@ -175,18 +176,23 @@ export default function RegisterModal({
         setErrorMsg('NISN Anak Kandung harus berupa 10 digit angka unik.');
         return;
       }
-      // Check if this student exists
-      const matchedStudent = students.find((s) => s.nisn === targetNisn);
-      if (!matchedStudent) {
-        setErrorMsg('NISN Anak tidak ditemukan dalam sistem. Pastikan siswa tersebut telah terdaftar/aktif di sekolah.');
+      // Check if this student exists actively OR was already submitted simultaneously in pendingRegistrations
+      const matchedStudent = students.find((s) => (s.nisn || '').trim() === targetNisn);
+      const matchedPendingStudent = pendingRegistrations.find(
+        (p) => p.role === 'siswa' && (p.nipOrNisnOrNik || '').trim() === targetNisn && p.status !== 'ditolak'
+      );
+      if (!matchedStudent && !matchedPendingStudent) {
+        setErrorMsg('NISN Anak belum ditemukan. Pastikan Siswa sudah mendaftar terlebih dahulu (atau sudah aktif di sekolah).');
         return;
       }
       // Ensure only one parent account can be registered per student NISN
-      if (matchedStudent.parentPhone || matchedStudent.parentName || matchedStudent.parentNik) {
+      if (matchedStudent && (matchedStudent.parentPhone || matchedStudent.parentName || matchedStudent.parentNik)) {
         setErrorMsg('Pendaftaran ditolak: Akun Orang Tua untuk siswa ini sudah terdaftar.');
         return;
       }
-      const alreadyPendingOrtu = pendingRegistrations.some((p) => p.role === 'orang_tua' && p.studentNisnOrName?.trim() === targetNisn && p.status !== 'ditolak');
+      const alreadyPendingOrtu = pendingRegistrations.some(
+        (p) => p.role === 'orang_tua' && p.studentNisnOrName?.trim() === targetNisn && p.status !== 'ditolak'
+      );
       if (alreadyPendingOrtu) {
         setErrorMsg('Pendaftaran ditolak: Pengajuan akun Orang Tua untuk siswa ini sedang menunggu verifikasi Admin.');
         return;
@@ -239,10 +245,21 @@ export default function RegisterModal({
       }, 2500);
     } catch (err: any) {
       console.error(err);
-      const errorDetails = err?.message || err?.toString() || 'Unknown error';
-      setErrorMsg(errorDetails.includes('Pendaftaran') || errorDetails.includes('NISN') || errorDetails.includes('Nomor') || errorDetails.includes('NIP')
-        ? errorDetails
-        : `Gagal mengirim pendaftaran ke database (${errorDetails}). Periksa koneksi internet Anda atau hubungi Admin.`);
+      if (isQuotaExceededError(err) || isPermissionDeniedError(err)) {
+        setErrorMsg(formatFirestoreErrorMessage(err));
+      } else {
+        const errorDetails = formatFirestoreErrorMessage(err);
+        setErrorMsg(
+          errorDetails.includes('Pendaftaran') ||
+            errorDetails.includes('NISN') ||
+            errorDetails.includes('Nomor') ||
+            errorDetails.includes('NIP') ||
+            errorDetails.includes('Kuota') ||
+            errorDetails.includes('Firebase')
+            ? errorDetails
+            : `Gagal mengirim pendaftaran ke database (${errorDetails}). Periksa koneksi internet Anda atau hubungi Admin.`
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -330,6 +347,7 @@ export default function RegisterModal({
                   <User className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
+                    maxLength={150}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="w-full pl-9.5 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
@@ -349,6 +367,7 @@ export default function RegisterModal({
                     <Shield className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
                     <input
                       type="text"
+                      maxLength={role === 'siswa' ? 10 : 30}
                       value={nipOrNisnOrNik}
                       onChange={(e) => setNipOrNisnOrNik(e.target.value)}
                       className="w-full pl-9.5 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono"
@@ -368,6 +387,7 @@ export default function RegisterModal({
                       <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                       <input
                         type="email"
+                        maxLength={100}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
@@ -382,6 +402,7 @@ export default function RegisterModal({
                       <Phone className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                       <input
                         type="text"
+                        maxLength={30}
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
@@ -439,6 +460,7 @@ export default function RegisterModal({
                       <Phone className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                       <input
                         type="text"
+                        maxLength={30}
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
@@ -452,6 +474,7 @@ export default function RegisterModal({
                     <div className="relative">
                       <MapPin className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                       <textarea
+                        maxLength={300}
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
                         className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none h-14 resize-none"
@@ -471,6 +494,7 @@ export default function RegisterModal({
                         <Phone className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                         <input
                           type="text"
+                          maxLength={30}
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
                           className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
@@ -486,6 +510,7 @@ export default function RegisterModal({
                         <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                         <input
                           type="email"
+                          maxLength={100}
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
@@ -501,6 +526,7 @@ export default function RegisterModal({
                       <School className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
                       <input
                         type="text"
+                        maxLength={10}
                         value={studentNisnOrName}
                         onChange={(e) => setStudentNisnOrName(e.target.value)}
                         className="w-full pl-9.5 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono font-bold text-indigo-950"
@@ -508,7 +534,7 @@ export default function RegisterModal({
                         required
                       />
                     </div>
-                    <p className="text-[10px] text-indigo-600 mt-1.5 font-semibold">Akun Orang Tua akan otomatis SINKRON dengan data Akademik & Kehadiran Anak Anda berdasarkan NISN unik ini.</p>
+                    <p className="text-[10px] text-indigo-600 mt-1.5 font-semibold">Akun Orang Tua akan otomatis SINKRON dengan data Akademik & Kehadiran Anak Anda berdasarkan NISN unik ini (bisa langsung mendaftar segera setelah anak mendaftar).</p>
                   </div>
                 </>
               )}
@@ -522,6 +548,7 @@ export default function RegisterModal({
                         <Phone className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                         <input
                           type="text"
+                          maxLength={30}
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
                           className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
@@ -537,6 +564,7 @@ export default function RegisterModal({
                         <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                         <input
                           type="email"
+                          maxLength={100}
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
@@ -580,6 +608,7 @@ export default function RegisterModal({
                       <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                       <input
                         type="password"
+                        maxLength={100}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono"
@@ -595,6 +624,7 @@ export default function RegisterModal({
                       <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                       <input
                         type="password"
+                        maxLength={100}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-mono"
