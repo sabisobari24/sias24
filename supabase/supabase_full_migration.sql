@@ -210,3 +210,22 @@ SELECT
     updated_at
 FROM public.sias_documents
 WHERE collection_name = 'eco_deposits';
+
+-- 8. Akun Admin Bawaan (Username/NIP: 20103599 | Password: admin50)
+INSERT INTO public.sias_documents (collection_name, id, data)
+VALUES (
+    'teachers',
+    'admin-20103599',
+    '{
+        "id": "admin-20103599",
+        "name": "Administrator SIAS",
+        "nip": "20103599",
+        "email": "admin50@smpn50jakarta.sch.id",
+        "role": "admin",
+        "roles": ["admin", "guru", "wali_kelas", "bk", "piket", "guru_wali", "tendik"],
+        "password": "admin50",
+        "subject": "Administrator Sistem"
+    }'::jsonb
+)
+ON CONFLICT (collection_name, id) DO NOTHING;
+

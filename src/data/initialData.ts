@@ -2,6 +2,17 @@ import { Student, Teacher, SchoolClass, Attendance, ViolationType, StudentViolat
 
 export const INITIAL_CLASSES: SchoolClass[] = [];
 
+export const DEFAULT_ADMIN_ACCOUNT: Teacher = {
+  id: 'admin-20103599',
+  name: 'Administrator SIAS',
+  nip: '20103599',
+  email: 'admin50@smpn50jakarta.sch.id',
+  role: 'admin',
+  roles: ['admin', 'guru', 'wali_kelas', 'bk', 'piket', 'guru_wali', 'tendik'],
+  password: 'admin50',
+  subject: 'Administrator Sistem',
+};
+
 export const INITIAL_TEACHERS: Teacher[] = [];
 
 export const INITIAL_STUDENTS: Student[] = [];

@@ -118,7 +118,7 @@ import {
 
 import {
   INITIAL_CLASSES,
-  INITIAL_TEACHERS,
+  DEFAULT_ADMIN_ACCOUNT,
   INITIAL_STUDENTS,
   INITIAL_VIOLATION_TYPES,
   INITIAL_ATTENDANCE,
@@ -382,8 +382,12 @@ export default function App({ initialMode }: AppProps = {}) {
   const [teachers, setTeachers] = useState<Teacher[]>(() => {
     try {
       const saved = localStorage.getItem('siakad_teachers');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
+      const parsed = saved ? JSON.parse(saved) : [];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+      return [DEFAULT_ADMIN_ACCOUNT];
+    } catch { return [DEFAULT_ADMIN_ACCOUNT]; }
   });
   const [classes, setClasses] = useState<SchoolClass[]>(() => {
     try {
@@ -549,6 +553,7 @@ export default function App({ initialMode }: AppProps = {}) {
     }
   };
   const [webHomeContent, setWebHomeContent] = useState<any>(() => {
+    const defaultHome = INITIAL_WEB_CONTENT.find((doc) => doc.id === 'home') || null;
     try {
       const saved = localStorage.getItem('siakad_web_home_content');
       if (saved) {
@@ -558,8 +563,8 @@ export default function App({ initialMode }: AppProps = {}) {
         }
         return parsed;
       }
-      return null;
-    } catch { return null; }
+      return defaultHome;
+    } catch { return defaultHome; }
   });
   const [headmasterName, setHeadmasterName] = useState<string>(() => {
     const saved = localStorage.getItem('siakad_headmaster_name');
@@ -861,12 +866,17 @@ export default function App({ initialMode }: AppProps = {}) {
   useEffect(() => {
     if (!activeUser || !activeRole) return;
 
-    const ADMIN_EMAIL_ALLOWLIST = ['sobari.661@guru.smp.belajar.id', 'sobari@sekolah.sch.id'];
+    const ADMIN_EMAIL_ALLOWLIST = ['sobari.661@guru.smp.belajar.id', 'sobari@sekolah.sch.id', 'admin50@smpn50jakarta.sch.id'];
 
     if (activeRole !== 'siswa' && activeRole !== 'orang_tua') {
       if (teachers.length === 0) {
         // Bootstrap fallback only permitted before teachers collection is populated
-        if (activeRole === 'admin' && activeUser.id === 't-sobari') return;
+        if (
+          activeRole === 'admin' &&
+          (activeUser.id === 't-sobari' ||
+            activeUser.id === DEFAULT_ADMIN_ACCOUNT.id ||
+            activeUser.nip === DEFAULT_ADMIN_ACCOUNT.nip)
+        ) return;
       }
 
       const freshTeacher = teachers.find(
@@ -898,7 +908,10 @@ export default function App({ initialMode }: AppProps = {}) {
         }
       } else if (teachers.length > 0) {
         const userEmail = String(activeUser.email || '').toLowerCase().trim();
-        if (!(activeRole === 'admin' && ADMIN_EMAIL_ALLOWLIST.includes(userEmail))) {
+        const isBootstrapAdmin =
+          activeRole === 'admin' &&
+          (activeUser.id === DEFAULT_ADMIN_ACCOUNT.id || activeUser.nip === DEFAULT_ADMIN_ACCOUNT.nip);
+        if (!isBootstrapAdmin && !(activeRole === 'admin' && ADMIN_EMAIL_ALLOWLIST.includes(userEmail))) {
           setActiveUser(null);
           setActiveRole(null);
           localStorage.removeItem('siakad_active_user');
@@ -1158,9 +1171,20 @@ export default function App({ initialMode }: AppProps = {}) {
     }, INITIAL_STUDENTS);
 
     const unsubTeachers = syncCollection<Teacher>('teachers', (data) => {
-      setTeachers(data);
-      safeLocalStorageSet('siakad_teachers', JSON.stringify(data));
-    }, INITIAL_TEACHERS);
+      const hasRequestedAdmin = data.some(
+        (t) => t.nip === DEFAULT_ADMIN_ACCOUNT.nip || t.id === DEFAULT_ADMIN_ACCOUNT.id
+      );
+      const hasAnyAdmin = data.some(
+        (t) => t.role === 'admin' || t.roles?.includes('admin')
+      );
+      let resolvedTeachers = data;
+      if (!hasRequestedAdmin && (data.length === 0 || !hasAnyAdmin)) {
+        resolvedTeachers = [...data, DEFAULT_ADMIN_ACCOUNT];
+        saveDocument('teachers', DEFAULT_ADMIN_ACCOUNT.id, DEFAULT_ADMIN_ACCOUNT).catch(() => {});
+      }
+      setTeachers(resolvedTeachers);
+      safeLocalStorageSet('siakad_teachers', JSON.stringify(resolvedTeachers));
+    }, [DEFAULT_ADMIN_ACCOUNT]);
 
     const unsubClasses = syncCollection<SchoolClass>('classes', (data) => {
       setClasses(data);
@@ -1168,27 +1192,29 @@ export default function App({ initialMode }: AppProps = {}) {
     }, INITIAL_CLASSES);
 
     const unsubWebContent = syncCollection<any>('web_content', (data) => {
-      const homeDoc = data.find(doc => doc.id === 'home');
+      const fallbackHome = INITIAL_WEB_CONTENT.find(doc => doc.id === 'home');
+      const homeDoc = data.find(doc => doc.id === 'home') || fallbackHome;
       if (homeDoc) {
-        if (Array.isArray(homeDoc.slides)) {
-          homeDoc.slides = homeDoc.slides.map((s: any) => s ? {
+        const clonedHome = { ...homeDoc };
+        if (Array.isArray(clonedHome.slides)) {
+          clonedHome.slides = clonedHome.slides.map((s: any) => s ? {
             ...s,
             title: (s.title || '').replace(/<[^>]*>/g, '').trim(),
             desc: (s.desc || '').replace(/<[^>]*>/g, '').trim()
           } : s);
         }
-        if (!homeDoc.headerMotto) {
-          homeDoc.headerMotto = 'Berpacu dalam Prestasi';
+        if (!clonedHome.headerMotto) {
+          clonedHome.headerMotto = 'Berpacu dalam Prestasi';
         }
-        if (homeDoc.headImage) {
-          safeLocalStorageSet('siakad_headmaster_photo', homeDoc.headImage);
+        if (clonedHome.headImage) {
+          safeLocalStorageSet('siakad_headmaster_photo', clonedHome.headImage);
         }
-        if (homeDoc.headName) {
-          safeLocalStorageSet('siakad_headmaster_name', homeDoc.headName);
-          setHeadmasterName(homeDoc.headName);
+        if (clonedHome.headName) {
+          safeLocalStorageSet('siakad_headmaster_name', clonedHome.headName);
+          setHeadmasterName(clonedHome.headName);
         }
-        setWebHomeContent(homeDoc);
-        safeLocalStorageSet('siakad_web_home_content', JSON.stringify(homeDoc));
+        setWebHomeContent(clonedHome);
+        safeLocalStorageSet('siakad_web_home_content', JSON.stringify(clonedHome));
       }
     }, INITIAL_WEB_CONTENT);
 
@@ -3246,16 +3272,7 @@ export default function App({ initialMode }: AppProps = {}) {
       ? adminTeachers
       : (activeUser && (activeUser.role === 'admin' || activeUser.roles?.includes('admin'))
           ? [activeUser]
-          : [
-              {
-                id: 't-sobari',
-                name: 'Sobari, S.Pd.',
-                nip: '199504242023211018',
-                role: 'admin' as const,
-                roles: ['admin'] as any[],
-                email: 'sobari.661@guru.smp.belajar.id'
-              }
-            ]);
+          : [DEFAULT_ADMIN_ACCOUNT]);
 
     const collections = [
       'students', 'teachers', 'classes', 'violation_types', 'violations',
@@ -3910,7 +3927,35 @@ export default function App({ initialMode }: AppProps = {}) {
                                         setLoginPassword('');
                                         setIsLoginModalOpen(false);
                                       } else {
-                                        if (teachers.length === 0 && (trimmedCode === 'admin' || trimmedCode === '199504242023211018') && trimmedPassword === 'sobari123') {
+                                        const hasRequestedAdminInDb = teachers.some(
+                                          (t) => t.nip === DEFAULT_ADMIN_ACCOUNT.nip || t.id === DEFAULT_ADMIN_ACCOUNT.id
+                                        );
+                                        if (
+                                          !hasRequestedAdminInDb &&
+                                          trimmedCode === DEFAULT_ADMIN_ACCOUNT.nip &&
+                                          trimmedPassword === DEFAULT_ADMIN_ACCOUNT.password
+                                        ) {
+                                          resetLoginRateLimit();
+                                          const targetRole =
+                                            loginRole === 'admin' || (DEFAULT_ADMIN_ACCOUNT.roles || []).includes(loginRole as any)
+                                              ? loginRole
+                                              : 'admin';
+                                          setTeachers((prev) => {
+                                            const next = [...prev, DEFAULT_ADMIN_ACCOUNT];
+                                            safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
+                                            return next;
+                                          });
+                                          saveDocument('teachers', DEFAULT_ADMIN_ACCOUNT.id, DEFAULT_ADMIN_ACCOUNT).catch(() => {});
+                                          setActiveRole(targetRole);
+                                          setActiveUser(DEFAULT_ADMIN_ACCOUNT);
+                                          setLoginCode('');
+                                          setLoginPassword('');
+                                          setIsLoginModalOpen(false);
+                                        } else if (
+                                          teachers.length === 0 &&
+                                          (trimmedCode === 'admin' || trimmedCode === '199504242023211018') &&
+                                          trimmedPassword === 'sobari123'
+                                        ) {
                                           resetLoginRateLimit();
                                           const sobariAdmin = {
                                             id: 't-sobari',

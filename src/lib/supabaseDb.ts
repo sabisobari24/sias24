@@ -357,26 +357,40 @@ export function supabaseSyncCollection<T extends { id: string }>(
       const serverItems = await fetchCollectionRows(collectionPath);
       const isInitLocally = safeLocalStorageGet(initKey) === 'true';
 
-      if (serverItems.length === 0 && !isInitLocally && initialData.length > 0) {
-        const { data: sysInit } = await supabase
+      if (serverItems.length === 0 && initialData.length > 0) {
+        const initDocId = `init_${collectionPath}`;
+        const { data: colInit } = await supabase
           .from(TABLE_NAME)
           .select('id')
           .eq('collection_name', 'settings')
-          .eq('id', 'system_init')
+          .eq('id', initDocId)
           .maybeSingle();
 
-        if (!sysInit) {
+        const shouldSeed =
+          !colInit &&
+          (!isInitLocally || collectionPath === 'web_content' || collectionPath === 'teachers');
+
+        if (shouldSeed) {
           const toSeed = initialData.filter((item) => item && item.id && !deletedIds.has(item.id));
           if (toSeed.length > 0) {
             await supabaseSaveDocumentsBatch(collectionPath, toSeed);
           }
-          await supabaseSaveDocument('settings', 'system_init', {
+          await supabaseSaveDocument('settings', initDocId, {
             initialized: true,
+            collection: collectionPath,
             initializedAt: new Date().toISOString(),
           });
           notifyCollectionSubscribers(collectionPath);
           return;
         }
+      }
+
+      if (serverItems.length === 0 && collectionPath === 'web_content' && initialData.length > 0) {
+        const map = new Map<string, any>();
+        initialData.forEach((item) => {
+          if (item && item.id) map.set(item.id, item);
+        });
+        collectionCache.set(collectionPath, map);
       }
 
       notifyCollectionSubscribers(collectionPath);
@@ -865,8 +879,9 @@ export async function migrateAllFirestoreToSupabase(
     }
   }
 
-  // Refresh all active Supabase collection subscriptions so UI updates immediately
-  for (const activeCol of Array.from(collectionListeners.keys())) {
+  // Refresh all active Supabase collection subscriptions & settings so UI updates immediately
+  const colsToRefresh = Array.from(new Set([...Array.from(collectionListeners.keys()), 'settings']));
+  for (const activeCol of colsToRefresh) {
     try {
       await fetchCollectionRows(activeCol);
       notifyCollectionSubscribers(activeCol);
