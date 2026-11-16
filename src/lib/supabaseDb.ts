@@ -126,7 +126,10 @@ export function formatSupabaseErrorMessage(err: any): string {
   const code = String(err?.code || '').toUpperCase();
   const msg = String(err?.message || err || 'Kesalahan koneksi Supabase');
 
-  if (code === '42P01' || msg.includes('sias_documents') && msg.includes('does not exist')) {
+  if (msg.toLowerCase().includes('forbidden use of secret api key in browser')) {
+    return 'Kunci API yang dimasukkan ke VITE_SUPABASE_ANON_KEY adalah Secret Key (sb_secret_... / service_role), yang dilarang dipakai di browser. Ganti dengan Publishable Key (sb_publishable_...) atau anon public key dari Supabase -> Project Settings -> API Keys, lalu redeploy/restart.';
+  }
+  if (code === '42P01' || (msg.includes('sias_documents') && msg.includes('does not exist'))) {
     return 'Tabel public.sias_documents belum dibuat di Supabase. Jalankan skrip SQL setup di Supabase Dashboard -> SQL Editor terlebih dahulu.';
   }
   if (code === '42501' || msg.toLowerCase().includes('row-level security') || msg.toLowerCase().includes('permission denied')) {
