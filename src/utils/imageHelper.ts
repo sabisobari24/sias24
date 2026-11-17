@@ -37,14 +37,40 @@ export function convertGoogleDriveLink(url: string): string {
 }
 
 /**
+ * Ensures Google Drive (lh3.googleusercontent.com/d/{id}) and stock photo URLs load at high resolution
+ * instead of low-resolution default thumbnails, preventing blurry hero banners.
+ */
+export function getHighResMediaUrl(url: string, width: number = 1920): string {
+  if (!url) return '';
+  const trimmed = convertGoogleDriveLink(url.trim());
+  if (trimmed.startsWith('data:')) return trimmed;
+
+  // Googleusercontent Drive links without explicit width/size suffix default to ~512-800px thumbnails
+  if (/^https:\/\/lh3\.googleusercontent\.com\/d\/[a-zA-Z0-9_\-]+$/i.test(trimmed)) {
+    return `${trimmed}=w${width}`;
+  }
+
+  // Upgrade existing lh3 =w... or =s... params if smaller than requested
+  const lh3Match = trimmed.match(/^(https:\/\/lh3\.googleusercontent\.com\/d\/[a-zA-Z0-9_\-]+)=([ws])(\d+)(.*)$/i);
+  if (lh3Match) {
+    const existingSize = parseInt(lh3Match[3], 10);
+    if (!Number.isNaN(existingSize) && existingSize < width) {
+      return `${lh3Match[1]}=w${width}${lh3Match[4] || ''}`;
+    }
+  }
+
+  return trimmed;
+}
+
+/**
  * High-performance edge sharpening & clarity enhancement filter for canvas images.
- * Eliminates softness and blur from phone camera and gallery uploads.
+ * Eliminates softness and blur from phone camera and gallery uploads without halo artifacts.
  */
 function applySharpenAndClarityFilter(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  sharpenStrength: number = 0.22
+  sharpenStrength: number = 0.14
 ): void {
   try {
     if (width <= 2 || height <= 2) return;
@@ -53,7 +79,7 @@ function applySharpenAndClarityFilter(
     const output = new Uint8ClampedArray(data.length);
     output.set(data);
 
-    const k = Math.max(0.1, Math.min(0.4, sharpenStrength));
+    const k = Math.max(0.05, Math.min(0.35, sharpenStrength));
     const centerWeight = 1 + 4 * k;
     const neighborWeight = -k;
 
@@ -105,20 +131,22 @@ function applySharpenAndClarityFilter(
 
 /**
  * Automatically enhances and optimizes banner and slide images uploaded from gallery/camera.
- * Delivers razor-sharp widescreen HD resolution (up to 1920x1080) with automatic clarity,
- * vibrancy, edge-sharpening, and anti-blur technology.
+ * Delivers razor-sharp widescreen HD resolution (up to 1600x900) with crisp detail preservation
+ * and balanced byte size (<= 220KB) so hero banners never appear pixelated or blurry.
  */
 export function enhanceAndCompressBannerImage(
   source: File | string,
-  maxWidth: number = 1280,
-  maxHeight: number = 720,
-  quality: number = 0.78
+  maxWidth: number = 1600,
+  maxHeight: number = 900,
+  quality: number = 0.88
 ): Promise<string> {
   return new Promise((resolve) => {
     if (!source) {
       resolve('');
       return;
     }
+
+    const TARGET_MAX_BYTES = 220 * 1024;
 
     const processImageElement = (img: HTMLImageElement) => {
       try {
@@ -130,14 +158,13 @@ export function enhanceAndCompressBannerImage(
           return;
         }
 
-        // Maintain aspect ratio while ensuring generous HD resolution for panoramic banners
+        // Maintain aspect ratio while preserving full HD clarity for panoramic banners
         if (width > maxWidth || height > maxHeight) {
           const ratio = Math.min(maxWidth / width, maxHeight / height);
           width = Math.round(width * ratio);
           height = Math.round(height * ratio);
         }
 
-        // If the uploaded photo is relatively small (e.g., <= 800px wide), ensure we don't downscale it further
         width = Math.max(1, width);
         height = Math.max(1, height);
 
@@ -155,9 +182,9 @@ export function enhanceAndCompressBannerImage(
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
-        // 2. Auto Dynamic Range & Vibrancy enhancement (CSS filter on context)
+        // 2. Subtle natural clarity & vibrancy boost
         try {
-          ctx.filter = 'contrast(105%) saturate(106%) brightness(101%)';
+          ctx.filter = 'contrast(103%) saturate(104%) brightness(101%)';
         } catch (_) {}
 
         // 3. Draw image onto canvas
@@ -168,35 +195,41 @@ export function enhanceAndCompressBannerImage(
           ctx.filter = 'none';
         } catch (_) {}
 
-        // 4. Automatic edge sharpening & unsharp masking to eliminate gallery blur
-        applySharpenAndClarityFilter(ctx, width, height, 0.22);
+        // 4. Gentle edge sharpening to avoid softness without JPEG haloing
+        applySharpenAndClarityFilter(ctx, width, height, 0.14);
 
-        // 5. Intelligent encoding: Try modern WebP first for superior clarity with small file size (target <= 65KB)
+        // 5. Intelligent encoding: Prefer crisp WebP first (<= 220KB), fallback to high-quality JPEG
         let outputUrl = '';
         try {
-          const webp = canvas.toDataURL('image/webp', quality);
-          if (webp.startsWith('data:image/webp') && webp.length <= 65 * 1024) {
+          let wq = quality;
+          let webp = canvas.toDataURL('image/webp', wq);
+          while (webp.startsWith('data:image/webp') && webp.length > TARGET_MAX_BYTES && wq > 0.72) {
+            wq -= 0.05;
+            webp = canvas.toDataURL('image/webp', wq);
+          }
+          if (webp.startsWith('data:image/webp') && webp.length <= TARGET_MAX_BYTES) {
             outputUrl = webp;
           }
         } catch (_) {}
 
-        // Fallback to progressive JPEG with dynamic quality/scale loop to guarantee <= 65KB
         if (!outputUrl) {
           let q = quality;
           outputUrl = canvas.toDataURL('image/jpeg', q);
-          while (outputUrl.length > 65 * 1024 && q > 0.45) {
-            q -= 0.08;
+          while (outputUrl.length > TARGET_MAX_BYTES && q > 0.70) {
+            q -= 0.05;
             outputUrl = canvas.toDataURL('image/jpeg', q);
           }
-          // If still over 65KB on highly detailed images, scale down dimensions slightly
-          if (outputUrl.length > 65 * 1024) {
+          // Only scale down slightly if still exceptionally large (> 280KB)
+          if (outputUrl.length > 280 * 1024) {
             const smallerCanvas = document.createElement('canvas');
-            smallerCanvas.width = Math.round(width * 0.8);
-            smallerCanvas.height = Math.round(height * 0.8);
+            smallerCanvas.width = Math.round(width * 0.85);
+            smallerCanvas.height = Math.round(height * 0.85);
             const sCtx = smallerCanvas.getContext('2d');
             if (sCtx) {
+              sCtx.imageSmoothingEnabled = true;
+              sCtx.imageSmoothingQuality = 'high';
               sCtx.drawImage(canvas, 0, 0, smallerCanvas.width, smallerCanvas.height);
-              outputUrl = smallerCanvas.toDataURL('image/jpeg', 0.65);
+              outputUrl = smallerCanvas.toDataURL('image/jpeg', 0.78);
             }
           }
         }

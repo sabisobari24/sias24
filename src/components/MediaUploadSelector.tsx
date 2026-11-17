@@ -131,9 +131,9 @@ export default function MediaUploadSelector({
         b64 = await compressAvatarImage(file, 420, 525, 0.78);
         setStatusMessage('Foto profil berhasil diunggah & dioptimalkan (Jernih & Ringan).');
       } else if (isBanner) {
-        // High-definition wide banner with auto-clarity, edge-sharpening, and anti-blur technology (optimized for Firestore)
-        b64 = await enhanceAndCompressBannerImage(file, 1280, 720, 0.78);
-        setStatusMessage('Foto banner berhasil diunggah (Kualitas HD).');
+        // High-definition wide banner with auto-clarity, edge-sharpening, and anti-blur technology
+        b64 = await enhanceAndCompressBannerImage(file, 1600, 900, 0.88);
+        setStatusMessage('Foto banner berhasil diunggah (Kualitas Full HD).');
       } else {
         b64 = await fileToBase64(file, 640, 640, 0.80);
         setStatusMessage('Foto berhasil diunggah dan dioptimalkan.');
@@ -159,7 +159,7 @@ export default function MediaUploadSelector({
       if (isAvatar) {
         compressAvatarImage(converted, 420, 525, 0.78).then(res => onChange(res));
       } else if (isBanner) {
-        enhanceAndCompressBannerImage(converted, 1280, 720, 0.75).then(res => onChange(res));
+        enhanceAndCompressBannerImage(converted, 1600, 900, 0.88).then(res => onChange(res));
       } else {
         compressBase64Image(converted, 640, 640, 0.80).then(res => onChange(res));
       }
@@ -304,7 +304,6 @@ export default function MediaUploadSelector({
                 src={value}
                 alt="Preview"
                 className="w-full h-full object-cover object-top"
-                style={{ imageRendering: '-webkit-optimize-contrast' }}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';

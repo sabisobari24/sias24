@@ -1091,9 +1091,12 @@ export default function CoachPanel({
   const { setDownloadActions, clearDownloadActions } = useDownload();
 
   useEffect(() => {
-    setDownloadActions(getCoachDownloadConfig());
-    return () => clearDownloadActions();
-  }, [activeTab, attendanceList.length, studentGrades.length, memberIds.length, journals.length, studentAchievements.length]);
+    setDownloadActions(getCoachDownloadConfig(), 'pelatih');
+  }, [activeTab, attendanceList.length, studentGrades.length, memberIds.length, journals.length, studentAchievements.length, setDownloadActions]);
+
+  useEffect(() => {
+    return () => clearDownloadActions('pelatih');
+  }, [clearDownloadActions]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">

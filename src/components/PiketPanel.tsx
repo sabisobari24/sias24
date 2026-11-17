@@ -706,9 +706,12 @@ export default function PiketPanel({
     const ordered = priorityIdx > 0
       ? [allActions[priorityIdx], ...allActions.filter((_, i) => i !== priorityIdx)]
       : allActions;
-    setDownloadActions(ordered.map(({ label, formats }) => ({ label, formats })));
-    return () => clearDownloadActions();
-  }, [activeTab, attendance, violations, absentTeachers, importantEvents, permits, ecoDeposits]);
+    setDownloadActions(ordered.map(({ label, formats }) => ({ label, formats })), 'piket');
+  }, [activeTab, attendance, violations, absentTeachers, importantEvents, permits, ecoDeposits, setDownloadActions]);
+
+  useEffect(() => {
+    return () => clearDownloadActions('piket');
+  }, [clearDownloadActions]);
 
   return (
     <div className="space-y-6">

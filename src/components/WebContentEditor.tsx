@@ -3238,12 +3238,21 @@ export default function WebContentEditor() {
                       label="Konten Paragraf Artikel & Berita"
                       value={articleForm.content ? articleForm.content.join('\n\n') : ''}
                       onChange={(val) => {
-                        const paragraphs = val.split('\n').map(p => p.trim()).filter(p => p.length > 0);
-                        setArticleForm({ ...articleForm, content: paragraphs });
+                        const trimmed = val.trim();
+                        if (!trimmed) {
+                          setArticleForm({ ...articleForm, content: [] });
+                          return;
+                        }
+                        if (/<[a-z][\s\S]*>/i.test(trimmed)) {
+                          setArticleForm({ ...articleForm, content: [trimmed] });
+                        } else {
+                          const paragraphs = trimmed.split('\n').map(p => p.trim()).filter(p => p.length > 0);
+                          setArticleForm({ ...articleForm, content: paragraphs });
+                        }
                       }}
                       rows={8}
-                      placeholder="Tuliskan isi paragraf artikel di sini... (Pisahkan dengan baris kosong untuk paragraf baru)"
-                      helpText="Gunakan toolbar di atas untuk memformat teks (Tebal, Miring, Garis Bawah, Coret, Rata Kiri/Tengah/Kanan/Justify, Warna Teks, dan Tautan)."
+                      placeholder="Tuliskan isi paragraf artikel di sini..."
+                      helpText="Gunakan toolbar di atas untuk langsung memformat teks secara visual (Tebal, Miring, Garis Bawah, Coret, Rata Paragraf, Daftar, Warna Teks, dan Tautan)."
                     />
 
                     <div className="flex gap-2 justify-end pt-2">

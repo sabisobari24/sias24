@@ -892,9 +892,12 @@ export default function SiswaPanel({
   }, [ecoDeposits, student.id, student.nisn, totalEarnedEcoPoints, ecoConfig?.ambassadorMinPoints]);
 
   useEffect(() => {
-    setDownloadActions(getSiswaDownloadConfig());
-    return () => clearDownloadActions();
-  }, [activeTab, student.id, myAchievements.length, studentAttendance.length, matchedGrades.length, studentViolations.length, myEcoDeposits.length]);
+    setDownloadActions(getSiswaDownloadConfig(), 'siswa');
+  }, [activeTab, student.id, myAchievements.length, studentAttendance.length, matchedGrades.length, studentViolations.length, myEcoDeposits.length, setDownloadActions]);
+
+  useEffect(() => {
+    return () => clearDownloadActions('siswa');
+  }, [clearDownloadActions]);
 
   return (
     <div className="space-y-6">

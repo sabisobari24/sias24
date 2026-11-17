@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig, EcoWasteCategory, EcoWasteDeposit, EcoReward, EcoRedemption, EcoConfig, StudentPermitLog, StudentPermitType } from '../types';
 import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown, Leaf, Recycle, Crown, Printer, DoorOpen } from 'lucide-react';
 import { downloadExcel, parseExcel } from '../utils/excelExport';
 import { printHTML, printTablePDF, printCertificate } from '../utils/printHelper';
 import { downloadDocx } from '../utils/docxExport';
-import { useDownload } from '../context/DownloadContext';
+import { useDownload, DownloadActionItem } from '../context/DownloadContext';
 import { getSchoolClassName, isSameClass } from '../utils/classUtils';
 import ConfirmModal from './ConfirmModal';
 import WebContentEditor from './WebContentEditor';
@@ -249,12 +249,17 @@ export default function AdminPanel({
       const summary = await migrateFirestoreToSupabase((prog) => {
         setMigrationProgress(prog);
       });
-      const msg = `Migrasi selesai! ${summary.totalDocuments} dokumen dari ${summary.details.length} koleksi aktif berhasil disalin ke Supabase Pro.`;
+      const hasQuotaSkips = Boolean(summary.quotaLimitedCollections && summary.quotaLimitedCollections.length > 0);
+      const msg = hasQuotaSkips
+        ? `${summary.totalDocuments} dokumen dari ${summary.details.length} koleksi berhasil disalin ke Supabase Pro (dari cache lokal). ${summary.quotaLimitedCollections!.length} koleksi lainnya menunggu kuota harian Firebase reset besok untuk disalin ulang.`
+        : `Migrasi selesai! ${summary.totalDocuments} dokumen dari ${summary.details.length} koleksi aktif berhasil disalin ke Supabase Pro.`;
       setMigrationSummaryMsg(msg);
       setSuccessMsg(msg);
-      setTimeout(() => setSuccessMsg(''), 6000);
+      setTimeout(() => setSuccessMsg(''), 7000);
     } catch (err) {
-      showErrorToast(formatFirestoreErrorMessage(err));
+      const formattedErr = formatFirestoreErrorMessage(err);
+      setErrorMsg(formattedErr);
+      setTimeout(() => setErrorMsg(''), 12000);
     } finally {
       setIsMigratingToSupabase(false);
     }
@@ -2124,12 +2129,51 @@ export default function AdminPanel({
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
+  const latestAdminDownloadConfigRef = useRef(getAdminDownloadConfig);
+  latestAdminDownloadConfigRef.current = getAdminDownloadConfig;
 
   useEffect(() => {
     setIsBannerDownloadOpen(false);
-    setDownloadActions(getAdminDownloadConfig());
-    return () => clearDownloadActions();
-  }, [activeTab]);
+    const currentConfig = latestAdminDownloadConfigRef.current();
+    const liveActions: DownloadActionItem[] = currentConfig.map((item) => {
+      const targetLabel = item.label;
+      if (item.formats) {
+        const liveFormats: NonNullable<DownloadActionItem['formats']> = {};
+        if (item.formats.docx) {
+          liveFormats.docx = (range) => {
+            const fresh = latestAdminDownloadConfigRef.current().find((a) => a.label === targetLabel);
+            fresh?.formats?.docx?.(range);
+          };
+        }
+        if (item.formats.pdf) {
+          liveFormats.pdf = (range) => {
+            const fresh = latestAdminDownloadConfigRef.current().find((a) => a.label === targetLabel);
+            fresh?.formats?.pdf?.(range);
+          };
+        }
+        if (item.formats.excel) {
+          liveFormats.excel = (range) => {
+            const fresh = latestAdminDownloadConfigRef.current().find((a) => a.label === targetLabel);
+            fresh?.formats?.excel?.(range);
+          };
+        }
+        return { label: item.label, formats: liveFormats };
+      }
+      return {
+        label: item.label,
+        type: item.type,
+        onClick: () => {
+          const fresh = latestAdminDownloadConfigRef.current().find((a) => a.label === targetLabel);
+          fresh?.onClick?.();
+        },
+      };
+    });
+    setDownloadActions(liveActions, 'admin');
+  }, [activeTab, setDownloadActions]);
+
+  useEffect(() => {
+    return () => clearDownloadActions('admin');
+  }, [clearDownloadActions]);
 
   return (
     <div className="space-y-6">

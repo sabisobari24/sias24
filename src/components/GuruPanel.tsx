@@ -1213,9 +1213,12 @@ export default function GuruPanel({
   const { setDownloadActions, clearDownloadActions } = useDownload();
 
   useEffect(() => {
-    setDownloadActions(downloadButtons);
-    return () => clearDownloadActions();
-  }, [activeTab, selectedClassId, attendanceDate, attendance.length, violations.length, teachingJournals.length, examSchedules.length, teacherBanks.length, permits.length, ecoDeposits.length]);
+    setDownloadActions(downloadButtons, 'guru');
+  }, [activeTab, selectedClassId, attendanceDate, attendance.length, violations.length, teachingJournals.length, examSchedules.length, teacherBanks.length, permits.length, ecoDeposits.length, setDownloadActions]);
+
+  useEffect(() => {
+    return () => clearDownloadActions('guru');
+  }, [clearDownloadActions]);
 
   // Calculate roles this teacher holds
   const qualifiedRoles: { role: string; label: string }[] = [

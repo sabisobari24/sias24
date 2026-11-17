@@ -205,7 +205,7 @@ export default function App({ initialMode }: AppProps = {}) {
   }, [isDarkMode]);
 
   // Contextual Download Menu for all dashboards
-  const { downloadActions } = useDownload();
+  const { downloadActions, clearDownloadActions } = useDownload();
 
   // Firebase connection monitor state
   const [dbStatus, setDbStatus] = useState<'online' | 'offline' | 'high_latency'>('online');
@@ -676,6 +676,12 @@ export default function App({ initialMode }: AppProps = {}) {
     } catch { /* ignore */ }
     return null;
   });
+
+  useEffect(() => {
+    if (!activeRole) {
+      clearDownloadActions();
+    }
+  }, [activeRole, clearDownloadActions]);
   const [activeUser, setActiveUser] = useState<any>(() => {
     try {
       const savedUser = localStorage.getItem('siakad_active_user');
@@ -5151,14 +5157,12 @@ export default function App({ initialMode }: AppProps = {}) {
                     </AnimatePresence>
                   </div>
 
-                  {/* Contextual Unified Download Menu in Top Border Bar (Filter Waktu, Jenis Data & Format) */}
-                  {downloadActions && downloadActions.length > 0 && (
-                    <UnifiedDownloadMenu
-                      actions={downloadActions}
-                      roleLabel={activeRole || 'Portal'}
-                      variant="navbar"
-                    />
-                  )}
+                  {/* Contextual Unified Download Menu in Top Border Bar (Always Visible) */}
+                  <UnifiedDownloadMenu
+                    actions={downloadActions}
+                    roleLabel={activeRole || 'Portal'}
+                    variant="navbar"
+                  />
 
                   {/* Profile info & Mobile Logout */}
                   <div className="flex items-center gap-3 border-l border-slate-100 pl-3">

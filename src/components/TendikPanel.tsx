@@ -766,9 +766,12 @@ export default function TendikPanel({
   const { setDownloadActions, clearDownloadActions } = useDownload();
 
   useEffect(() => {
-    setDownloadActions(getTendikDownloadConfig());
-    return () => clearDownloadActions();
-  }, [activeTab, filteredKjpStudents.length, pemberkasanSchedules.length, nomorSuratList.length, inventoryItems.length, inventoryLoans.length, bosBopReports.length]);
+    setDownloadActions(getTendikDownloadConfig(), 'tendik');
+  }, [activeTab, filteredKjpStudents.length, pemberkasanSchedules.length, nomorSuratList.length, inventoryItems.length, inventoryLoans.length, bosBopReports.length, setDownloadActions]);
+
+  useEffect(() => {
+    return () => clearDownloadActions('tendik');
+  }, [clearDownloadActions]);
 
   return (
     <div className="space-y-6 relative">

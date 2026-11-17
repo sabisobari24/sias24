@@ -517,9 +517,12 @@ export default function WaliKelasPanel({
   const { setDownloadActions, clearDownloadActions } = useDownload();
 
   useEffect(() => {
-    setDownloadActions(getWaliKelasDownloadConfig());
-    return () => clearDownloadActions();
-  }, [activeTab, managedClass?.id, classStudents.length, attendance.length, homeroomNotes.length, classAchievements.length]);
+    setDownloadActions(getWaliKelasDownloadConfig(), 'wali_kelas');
+  }, [activeTab, managedClass?.id, classStudents.length, attendance.length, homeroomNotes.length, classAchievements.length, setDownloadActions]);
+
+  useEffect(() => {
+    return () => clearDownloadActions('wali_kelas');
+  }, [clearDownloadActions]);
 
   return (
     <div className="space-y-6">

@@ -32,16 +32,16 @@ export default function UnifiedDownloadMenu({
   const [customEnd, setCustomEnd] = useState('');
   const [selectedFormat, setSelectedFormat] = useState<DocFormat>('excel');
 
-  const firstLabel = actions[0]?.label || '';
+  const safeActions = actions || [];
+  const firstLabel = safeActions[0]?.label || '';
 
   useEffect(() => {
     setSelectedIdx(0);
-  }, [firstLabel, actions.length]);
+  }, [firstLabel, safeActions.length]);
 
-  if (!actions || actions.length === 0) return null;
-
-  const safeIdx = selectedIdx < actions.length ? selectedIdx : 0;
-  const activeAction = actions[safeIdx];
+  const hasActions = safeActions.length > 0;
+  const safeIdx = selectedIdx < safeActions.length ? selectedIdx : 0;
+  const activeAction = hasActions ? safeActions[safeIdx] : undefined;
   const resolvedRange = resolveDatePreset(preset, customStart, customEnd);
 
   const availableFormats: DocFormat[] = activeAction?.formats
@@ -75,12 +75,12 @@ export default function UnifiedDownloadMenu({
         className={
           variant === 'coach'
             ? 'flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs'
-            : 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs border cursor-pointer bg-white hover:bg-slate-50 text-slate-800 border-slate-200/90 hover:border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-100 dark:border-slate-700'
+            : 'flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs border cursor-pointer bg-white hover:bg-slate-50 text-slate-800 border-slate-200/90 hover:border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-100 dark:border-slate-700 shrink-0'
         }
         title="Unduh Dokumen (Filter Waktu, Jenis Data & Format .docx / .pdf / .xls)"
       >
         <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-        <span className="font-bold">Unduh Dokumen</span>
+        <span className="font-bold whitespace-nowrap">Unduh Dokumen</span>
         <ChevronDown
           className={`w-3 h-3 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
         />
@@ -88,8 +88,8 @@ export default function UnifiedDownloadMenu({
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-2 w-80 sm:w-[340px] bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-3.5 z-40 text-slate-800 dark:text-slate-200 text-xs space-y-3">
+          <div className="fixed inset-0 z-[55]" onClick={() => setIsOpen(false)} />
+          <div className="absolute right-0 mt-2 w-[calc(100vw-1.5rem)] max-w-[340px] sm:w-[340px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-3.5 z-[60] text-slate-800 dark:text-slate-200 text-xs space-y-3">
             {/* Header */}
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-700">
               <div className="flex items-center gap-1.5">
@@ -103,23 +103,32 @@ export default function UnifiedDownloadMenu({
               </span>
             </div>
 
-            {/* 1. Jenis Data Dropdown */}
-            <div className="space-y-1">
-              <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                1. Jenis Data Dokumen
-              </label>
-              <select
-                value={safeIdx}
-                onChange={(e) => setSelectedIdx(Number(e.target.value))}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 cursor-pointer"
-              >
-                {actions.map((action, idx) => (
-                  <option key={`${action.label}-${idx}`} value={idx}>
-                    {action.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!hasActions ? (
+              <div className="py-4 px-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-center space-y-1">
+                <p className="font-bold text-slate-700 dark:text-slate-200">Menyiapkan Dokumen Portal...</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Daftar dokumen akan tersedia sesaat setelah halaman selesai dimuat.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* 1. Jenis Data Dropdown */}
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    1. Jenis Data Dokumen
+                  </label>
+                  <select
+                    value={safeIdx}
+                    onChange={(e) => setSelectedIdx(Number(e.target.value))}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 cursor-pointer"
+                  >
+                    {safeActions.map((action, idx) => (
+                      <option key={`${action.label}-${idx}`} value={idx}>
+                        {action.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
             {/* 2. Filter Waktu */}
             <div className="space-y-1.5">
@@ -242,16 +251,18 @@ export default function UnifiedDownloadMenu({
                 </button>
               </div>
             ) : (
-              <div className="pt-1 border-t border-slate-100 dark:border-slate-700">
-                <button
-                  type="button"
-                  onClick={() => handleTriggerDownload()}
-                  className="w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5 shrink-0" />
-                  <span>{activeAction?.label || 'Unduh Dokumen'}</span>
-                </button>
-              </div>
+                <div className="pt-1 border-t border-slate-100 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => handleTriggerDownload()}
+                    className="w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 shrink-0" />
+                    <span>{activeAction?.label || 'Unduh Dokumen'}</span>
+                  </button>
+                </div>
+              )}
+              </>
             )}
           </div>
         </>

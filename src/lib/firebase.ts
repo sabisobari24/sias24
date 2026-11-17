@@ -198,17 +198,27 @@ export function isPermissionDeniedError(err: any): boolean {
 }
 
 export function formatFirestoreErrorMessage(err: any): string {
-  if (getActiveDbBackend() === 'supabase') {
+  const rawMsg = err instanceof Error ? err.message : String(err || 'Kesalahan tidak diketahui');
+  const lowerMsg = rawMsg.toLowerCase();
+  const isExplicitFirestoreErr =
+    lowerMsg.includes('firestore.googleapis.com') ||
+    lowerMsg.includes('free daily read units') ||
+    isQuotaExceededError(err) ||
+    isPermissionDeniedError(err);
+
+  if (getActiveDbBackend() === 'supabase' && !isExplicitFirestoreErr) {
     return formatSupabaseErrorMessage(err);
   }
-  const rawMsg = err instanceof Error ? err.message : String(err || 'Kesalahan tidak diketahui');
   if (isQuotaExceededError(err)) {
+    if (getActiveDbBackend() === 'supabase') {
+      return 'Kuota baca harian gratis Firebase Firestore (database lama) hari ini telah habis. Supabase Pro Anda SUDAH ONLINE & aman; coba klik lagi "Salin Data Firestore -> Supabase" besok setelah kuota harian Firebase reset (~pukul 15.00 WIB).';
+    }
     return 'Kuota harian gratis Firebase Firestore (Spark Plan) terlampaui (Quota exceeded). Kuota akan reset besok atau tingkatkan paket proyek Firebase ke Blaze Plan.';
   }
   if (isPermissionDeniedError(err)) {
     return 'Akses tulis ditolak oleh aturan keamanan Firestore (Missing or insufficient permissions). Pastikan panjang karakter data sesuai batas & aturan keamanan telah di-deploy.';
   }
-  if (rawMsg.toLowerCase().includes('offline') || rawMsg.toLowerCase().includes('unavailable') || rawMsg.toLowerCase().includes('network')) {
+  if (lowerMsg.includes('offline') || lowerMsg.includes('unavailable') || lowerMsg.includes('network')) {
     return 'Server Firebase Firestore tidak dapat dijangkau (Offline/Timeout). Periksa koneksi internet Anda lalu coba lagi.';
   }
   return rawMsg;

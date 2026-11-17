@@ -38,8 +38,9 @@ import {
 import { syncCollection } from '../../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../../data/initialWebContent';
 import { WebVisionPillar } from '../../types';
-import FormattedText from '../common/FormattedText';
+import FormattedText, { stripHtmlToText } from '../common/FormattedText';
 import { getYouTubeEmbedUrl } from '../../utils/mediaHelper';
+import { getHighResMediaUrl } from '../../utils/imageHelper';
 
 function renderPillarIcon(iconName?: string) {
   switch (iconName) {
@@ -380,21 +381,22 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
   return (
     <div className="space-y-10 pb-12 font-sans">
       {/* HERO SLIDER BANNER */}
-      <div className="relative rounded-3xl overflow-hidden h-[440px] shadow-xl border-b-6 border-amber-400 group">
-        <div className="absolute inset-0 bg-slate-950">
+      <div className="relative rounded-3xl overflow-hidden h-[360px] sm:h-[440px] lg:h-[480px] shadow-xl border-b-6 border-amber-400 group">
+        <div className="absolute inset-0 bg-slate-900">
           <AnimatePresence mode="wait">
             {slides[currentSlide] && (() => {
               const sl = slides[currentSlide];
               const isVideo = sl.type === 'video' || (sl.videoUrl && sl.videoUrl.trim() !== '');
               const ytUrl = isVideo ? getYouTubeEmbedUrl(sl.videoUrl) : null;
+              const highResBannerSrc = getHighResMediaUrl(sl.image, 1920);
 
               return (
                 <motion.div
                   key={currentSlide}
-                  initial={{ opacity: 0, scale: 1.05 }}
-                  animate={{ opacity: 1, scale: 1 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.8 }}
+                  transition={{ duration: 0.5 }}
                   className="absolute inset-0"
                 >
                   {isVideo ? (
@@ -408,28 +410,27 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
                       />
                     ) : (
                       <video 
-                        src={sl.videoUrl || sl.image} 
+                        src={sl.videoUrl || highResBannerSrc} 
                         autoPlay 
                         loop 
                         muted 
                         playsInline 
-                        poster={sl.image}
-                        className="absolute inset-0 w-full h-full object-cover" 
+                        poster={highResBannerSrc}
+                        className="absolute inset-0 w-full h-full object-cover object-center" 
                       />
                     )
                   ) : (
                     <img 
-                      src={sl.image} 
+                      src={highResBannerSrc} 
                       alt={sl.title ? sl.title.replace(/<[^>]*>/g, '') : "Banner"} 
-                      className="absolute inset-0 w-full h-full object-cover"
-                      style={{ imageRendering: '-webkit-optimize-contrast' }}
+                      className="absolute inset-0 w-full h-full object-cover object-center"
                       loading="eager"
                       decoding="async"
                       referrerPolicy="no-referrer"
                     />
                   )}
-                  {/* Gradient overlay on top of media */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent pointer-events-none" />
+                  {/* Bottom-focused gradient scrim keeps the main photo bright and crisp while text stays legible */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/15 to-transparent pointer-events-none" />
                 </motion.div>
               );
             })()}
@@ -690,7 +691,7 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
                   born: headBorn,
                   subject: headSubject,
                   hobby: headHobby,
-                  motto: headMotto || 'Dedikasi tinggi untuk pendidikan.'
+                  motto: stripHtmlToText(headMotto) || 'Dedikasi tinggi untuk pendidikan.'
                 })}
                 className="relative w-48 h-60 sm:w-52 sm:h-64 md:w-56 md:h-70 mx-auto mb-5 p-1.5 bg-gradient-to-tr from-amber-400 via-amber-500 to-blue-700 rounded-3xl shadow-xl group-hover:scale-[1.02] transition-all duration-300 group/photo cursor-pointer ring-4 ring-amber-400/20"
               >
@@ -731,7 +732,7 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
                     </div>
                     <div>
                       <span className="text-amber-300 block font-bold">Motto Hidup:</span>
-                      <span className="italic text-slate-200">"{headMotto || 'Dedikasi tinggi untuk pendidikan.'}"</span>
+                      <span className="italic text-slate-200">"{stripHtmlToText(headMotto) || 'Dedikasi tinggi untuk pendidikan.'}"</span>
                     </div>
                   </div>
                   {/* Tooltip Arrow */}

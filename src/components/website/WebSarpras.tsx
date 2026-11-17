@@ -21,6 +21,7 @@ import { syncCollection } from '../../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../../data/initialWebContent';
 import { WebSectionContent, WebProgram } from '../../types';
 import { WebIcon } from './WebIcon';
+import FormattedText, { stripHtmlToText } from '../common/FormattedText';
 
 export default function WebSarpras() {
   const [webContent, setWebContent] = useState<WebSectionContent>(() => {
@@ -109,7 +110,7 @@ export default function WebSarpras() {
                   born: webContent.headBorn || '-',
                   department: webContent.headSubject || 'Sarana Prasarana',
                   hobby: webContent.headHobby || '-',
-                  motto: webContent.headMotto || 'Dedikasi tinggi untuk sekolah.'
+                  motto: stripHtmlToText(webContent.headMotto) || 'Dedikasi tinggi untuk sekolah.'
                 })}
                 className="relative w-32 h-40 mx-auto mb-4 p-1 bg-gradient-to-tr from-amber-400 to-emerald-700 rounded-xl shadow-md cursor-pointer hover:scale-[1.03] transition-transform duration-300 group/waka"
               >
@@ -144,7 +145,7 @@ export default function WebSarpras() {
                     </div>
                     <div>
                       <span className="text-amber-300 block font-bold">Motto Hidup:</span>
-                      <span className="italic text-slate-200">"{webContent.headMotto || 'Dedikasi tinggi untuk sekolah.'}"</span>
+                      <span className="italic text-slate-200">"{stripHtmlToText(webContent.headMotto) || 'Dedikasi tinggi untuk sekolah.'}"</span>
                     </div>
                   </div>
                   {/* Tooltip Arrow */}
@@ -155,10 +156,9 @@ export default function WebSarpras() {
               <span className="text-[9px] font-bold text-slate-400 tracking-wider uppercase block mb-0.5">{webContent.headRole}</span>
               <h3 className="font-extrabold text-emerald-900 text-sm leading-tight mb-2">{webContent.headName}</h3>
               
-              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-justify text-xs text-slate-600 leading-relaxed italic">
-                <p>
-                  <strong>Sambutan:</strong> {webContent.headMotto}
-                </p>
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-justify text-xs text-slate-600 leading-relaxed">
+                <span className="font-extrabold text-slate-700 block mb-1">Sambutan:</span>
+                <FormattedText content={webContent.headMotto || ''} />
               </div>
             </div>
           </div>

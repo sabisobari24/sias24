@@ -469,9 +469,12 @@ export default function GuruWaliPanel({
   const { setDownloadActions, clearDownloadActions } = useDownload();
 
   useEffect(() => {
-    setDownloadActions(getGuruWaliDownloadConfig());
-    return () => clearDownloadActions();
-  }, [activeTab, myStudents.length, attendance.length, counselorNotes.length, parentMessages.length, studentAchievements.length]);
+    setDownloadActions(getGuruWaliDownloadConfig(), 'guru_wali');
+  }, [activeTab, myStudents.length, attendance.length, counselorNotes.length, parentMessages.length, studentAchievements.length, setDownloadActions]);
+
+  useEffect(() => {
+    return () => clearDownloadActions('guru_wali');
+  }, [clearDownloadActions]);
 
   return (
     <div className="space-y-6">

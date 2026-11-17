@@ -469,9 +469,12 @@ export default function BKPanel({
   const { setDownloadActions, clearDownloadActions } = useDownload();
 
   useEffect(() => {
-    setDownloadActions(getBKDownloadConfig());
-    return () => clearDownloadActions();
-  }, [activeTab, counselorNotes.length, violations.length, bimbinganJournals.length, bimbinganSchedules.length, parentMessages.length, studentAchievements.length]);
+    setDownloadActions(getBKDownloadConfig(), 'bk');
+  }, [activeTab, counselorNotes.length, violations.length, bimbinganJournals.length, bimbinganSchedules.length, parentMessages.length, studentAchievements.length, setDownloadActions]);
+
+  useEffect(() => {
+    return () => clearDownloadActions('bk');
+  }, [clearDownloadActions]);
 
   return (
     <div className="space-y-6">

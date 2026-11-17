@@ -216,9 +216,12 @@ export default function OrangTuaPanel({
   const { setDownloadActions, clearDownloadActions } = useDownload();
 
   useEffect(() => {
-    setDownloadActions(getParentDownloadConfig());
-    return () => clearDownloadActions();
-  }, [activeTab, student.id, studentAttendance.length, studentViolations.length, studentHomeroomNotes.length, studentCounselorNotes.length, studentAchievements.length, studentMessages.length]);
+    setDownloadActions(getParentDownloadConfig(), 'orang_tua');
+  }, [activeTab, student.id, studentAttendance.length, studentViolations.length, studentHomeroomNotes.length, studentCounselorNotes.length, studentAchievements.length, studentMessages.length, setDownloadActions]);
+
+  useEffect(() => {
+    return () => clearDownloadActions('orang_tua');
+  }, [clearDownloadActions]);
 
   return (
     <div className="space-y-6">

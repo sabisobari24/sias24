@@ -8,6 +8,27 @@ interface FormattedTextProps {
 }
 
 /**
+ * Extracts plain readable text from an HTML string without rendering raw HTML tags.
+ */
+export function stripHtmlToText(input?: string | string[]): string {
+  if (!input) return '';
+  const raw = Array.isArray(input) ? input.join(' ') : String(input);
+  const noTags = raw
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/(p|div|li|h[1-6]|blockquote)>/gi, ' ')
+    .replace(/<[^>]*>/g, '');
+  return noTags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * FormattedText: Safely renders rich text and formatted HTML tags,
  * protecting against Stored and Reflected XSS attacks with strict DOMPurify rules.
  */
@@ -53,7 +74,7 @@ export default function FormattedText({ content, className = '', asParagraphs = 
 
     return (
       <div 
-        className={`formatted-content max-w-none leading-relaxed ${className}`}
+        className={`formatted-content max-w-none leading-relaxed [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_u]:underline [&_s]:line-through [&_strike]:line-through [&_h3]:text-base [&_h3]:font-extrabold [&_h3]:mt-2 [&_h3]:mb-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_blockquote]:border-l-4 [&_blockquote]:border-blue-600 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-slate-600 [&_blockquote]:my-2 [&_a]:text-blue-600 [&_a]:underline [&_a]:font-semibold [&_mark]:bg-amber-200 [&_mark]:px-1 [&_mark]:rounded ${className}`}
         dangerouslySetInnerHTML={{ __html: cleanHtml }}
       />
     );

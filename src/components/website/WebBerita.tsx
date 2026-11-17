@@ -185,9 +185,9 @@ export default function WebBerita() {
                   {spotlightArticle.title}
                 </h3>
 
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium line-clamp-2">
-                  {spotlightArticle.summary}
-                </p>
+                <div className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium line-clamp-2">
+                  <FormattedText content={spotlightArticle.summary} />
+                </div>
 
                 <div className="pt-1 flex items-center justify-between">
                   <span className="inline-flex items-center gap-1.5 text-xs font-black text-blue-700 group-hover:gap-2.5 transition-all">
@@ -246,9 +246,9 @@ export default function WebBerita() {
                         </h4>
 
                         {art.summary && (
-                          <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed font-medium">
-                            {art.summary}
-                          </p>
+                          <div className="text-xs text-slate-500 line-clamp-2 leading-relaxed font-medium">
+                            <FormattedText content={art.summary} />
+                          </div>
                         )}
                       </div>
                     </div>
