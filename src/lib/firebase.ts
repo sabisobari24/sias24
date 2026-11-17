@@ -52,14 +52,9 @@ import {
   supabaseDeleteByField,
   supabaseGetAttendanceWithFilter,
   supabasePingServer,
-  supabaseTestReadWrite,
-  migrateAllFirestoreToSupabase,
-  buildFullMigrationSqlFromFirestore,
-  MigrationProgress,
-  MigrationSummary
+  supabaseTestReadWrite
 } from './supabaseDb';
 
-export type { MigrationProgress, MigrationSummary };
 export { isSupabaseConfigured };
 
 export function getActiveDbBackend(): 'supabase' | 'firebase' {
@@ -210,9 +205,6 @@ export function formatFirestoreErrorMessage(err: any): string {
     return formatSupabaseErrorMessage(err);
   }
   if (isQuotaExceededError(err)) {
-    if (getActiveDbBackend() === 'supabase') {
-      return 'Kuota baca harian gratis Firebase Firestore (database lama) hari ini telah habis. Supabase Pro Anda SUDAH ONLINE & aman; coba klik lagi "Salin Data Firestore -> Supabase" besok setelah kuota harian Firebase reset (~pukul 15.00 WIB).';
-    }
     return 'Kuota harian gratis Firebase Firestore (Spark Plan) terlampaui (Quota exceeded). Kuota akan reset besok atau tingkatkan paket proyek Firebase ke Blaze Plan.';
   }
   if (isPermissionDeniedError(err)) {
@@ -336,14 +328,6 @@ export async function deleteDocumentsByField(collectionPath: string, field: stri
   return snap.size;
 }
 
-export async function migrateFirestoreToSupabase(onProgress?: (progress: MigrationProgress) => void): Promise<MigrationSummary> {
-  return migrateAllFirestoreToSupabase(db, onProgress);
-}
-
-export async function exportFirestoreSqlForSupabase(): Promise<string> {
-  return buildFullMigrationSqlFromFirestore(db);
-}
-
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
@@ -446,6 +430,17 @@ export interface UserStaticProfile {
  * Hemat biaya karena HANYA melakukan 1x read Firestore per login (tanpa persistent realtime listener).
  */
 export async function getUserProfileOnce(userId: string): Promise<UserStaticProfile | null> {
+  if (getActiveDbBackend() === 'supabase') {
+    try {
+      const data = await supabaseGetDocument<UserStaticProfile>('users', userId);
+      if (data) return data;
+    } catch { /* fallback to cache */ }
+    const cached = safeLocalStorageGet(`user_profile_${userId}`);
+    if (cached) {
+      try { return JSON.parse(cached) as UserStaticProfile; } catch { /* ignore */ }
+    }
+    return null;
+  }
   try {
     const docRef = doc(db, 'users', userId);
     const docSnap = await getDoc(docRef);
@@ -478,6 +473,11 @@ export async function saveUserProfile(userId: string, profileData: Partial<UserS
   });
   safeLocalStorageSet(`user_profile_${userId}`, JSON.stringify(cleanData));
 
+  if (getActiveDbBackend() === 'supabase') {
+    await supabaseSaveDocument('users', userId, cleanData).catch((e) => console.warn('[Supabase Profile] Error:', e));
+    return;
+  }
+
   try {
     const docRef = doc(db, 'users', userId);
     await setDoc(docRef, cleanData, { merge: true });
@@ -499,8 +499,18 @@ export async function appendAggregatedItem<T>(
   docId: string,
   newItem: T
 ) {
-  const docRef = doc(db, collectionPath, docId);
   const cleanItem = sanitizeData(newItem);
+  if (getActiveDbBackend() === 'supabase') {
+    const existing = await supabaseGetDocument<{ items?: T[]; createdAt?: string }>(collectionPath, docId).catch(() => null);
+    const currentItems = Array.isArray(existing?.items) ? existing.items : [];
+    await supabaseSaveDocument(collectionPath, docId, {
+      items: [...currentItems, cleanItem],
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+    });
+    return;
+  }
+  const docRef = doc(db, collectionPath, docId);
 
   try {
     // Coba tambahkan item ke array 'items' menggunakan arrayUnion
@@ -533,10 +543,21 @@ export async function removeAggregatedItem<T>(
   docId: string,
   targetItem: T
 ) {
+  const cleanTarget = sanitizeData(targetItem);
+  if (getActiveDbBackend() === 'supabase') {
+    const existing = await supabaseGetDocument<{ items?: T[] }>(collectionPath, docId).catch(() => null);
+    const currentItems = Array.isArray(existing?.items) ? existing.items : [];
+    const targetJson = JSON.stringify(cleanTarget);
+    await supabaseSaveDocument(collectionPath, docId, {
+      items: currentItems.filter((item) => JSON.stringify(item) !== targetJson),
+      lastUpdated: new Date().toISOString(),
+    });
+    return;
+  }
   const docRef = doc(db, collectionPath, docId);
   try {
     await updateDoc(docRef, {
-      items: arrayRemove(sanitizeData(targetItem)),
+      items: arrayRemove(cleanTarget),
       lastUpdated: new Date().toISOString()
     });
   } catch (error) {
@@ -560,7 +581,6 @@ export function subscribeToAggregatedDoc<T>(
   onUpdate: (items: T[]) => void,
   options: AggregatedSubscriptionOptions = {}
 ) {
-  const docRef = doc(db, collectionPath, docId);
   const cacheKey = `aggregated_cache_${collectionPath}_${docId}`;
 
   // Tampilkan data lokal/cached terlebih dahulu untuk respon UI instan
@@ -576,6 +596,35 @@ export function subscribeToAggregatedDoc<T>(
     }
   }
 
+  const processItems = (raw: T[]) => {
+    let rawItems = [...raw];
+    if (options.sortKey) {
+      const key = options.sortKey;
+      rawItems.sort((a: any, b: any) => {
+        const valA = a[key] ?? '';
+        const valB = b[key] ?? '';
+        if (valA < valB) return options.reverse ? 1 : -1;
+        if (valA > valB) return options.reverse ? -1 : 1;
+        return 0;
+      });
+    } else if (options.reverse) {
+      rawItems.reverse();
+    }
+    if (options.limitCount && options.limitCount > 0) {
+      rawItems = rawItems.slice(0, options.limitCount);
+    }
+    onUpdate(rawItems);
+    safeLocalStorageSet(cacheKey, JSON.stringify(rawItems));
+  };
+
+  if (getActiveDbBackend() === 'supabase') {
+    return supabaseSyncSingleDoc<{ items?: T[] }>(collectionPath, docId, (data) => {
+      processItems(Array.isArray(data?.items) ? data.items : []);
+    });
+  }
+
+  const docRef = doc(db, collectionPath, docId);
+
   // Pasang onSnapshot SPESIFIK ke SATU DOKUMEN TUNGGAL (Hanya dihitung 1 read per snapshot update!)
   return onSnapshot(docRef, (snapshot) => {
     notifyFirestoreStatus('online');
@@ -586,28 +635,8 @@ export function subscribeToAggregatedDoc<T>(
     }
 
     const data = snapshot.data();
-    let rawItems: T[] = Array.isArray(data?.items) ? data.items : [];
-
-    // Client-side sorting & reversing di memori browser
-    if (options.sortKey) {
-      const key = options.sortKey;
-      rawItems = [...rawItems].sort((a: any, b: any) => {
-        const valA = a[key] ?? '';
-        const valB = b[key] ?? '';
-        if (valA < valB) return options.reverse ? 1 : -1;
-        if (valA > valB) return options.reverse ? -1 : 1;
-        return 0;
-      });
-    } else if (options.reverse) {
-      rawItems = [...rawItems].reverse();
-    }
-
-    if (options.limitCount && options.limitCount > 0) {
-      rawItems = rawItems.slice(0, options.limitCount);
-    }
-
-    onUpdate(rawItems);
-    safeLocalStorageSet(cacheKey, JSON.stringify(rawItems));
+    const rawItems: T[] = Array.isArray(data?.items) ? data.items : [];
+    processItems(rawItems);
   }, (error) => {
     handleQuotaError(error);
     console.warn(`[Document Aggregation Notice] Listener ${collectionPath}/${docId} terganggu, menggunakan data cache:`, error.message || error);
@@ -622,8 +651,10 @@ export function subscribeToAggregatedDoc<T>(
   });
 }
 
-// Ensure network is always active so data updates in real-time from the database
-enableNetwork(db).catch(() => {});
+// Activate Firestore network ONLY when Firestore is the active backend
+if (getActiveDbBackend() !== 'supabase') {
+  enableNetwork(db).catch(() => {});
+}
 safeLocalStorageSet('siakad_firestore_quota_exceeded', 'false');
 
 function handleQuotaError(err: any) {

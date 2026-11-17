@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig, EcoWasteCategory, EcoWasteDeposit, EcoReward, EcoRedemption, EcoConfig, StudentPermitLog, StudentPermitType } from '../types';
 import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown, Leaf, Recycle, Crown, Printer, DoorOpen } from 'lucide-react';
 import { downloadExcel, parseExcel } from '../utils/excelExport';
@@ -23,12 +23,8 @@ import {
   syncCollection,
   saveDocument,
   formatFirestoreErrorMessage,
-  FIRESTORE_UPGRADE_URL,
   getActiveDbBackend,
-  isSupabaseConfigured,
-  migrateFirestoreToSupabase,
-  exportFirestoreSqlForSupabase,
-  MigrationProgress
+  isSupabaseConfigured
 } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import { compressImageFile, compressAvatarImage, convertGoogleDriveLink } from '../utils/imageHelper';
@@ -228,65 +224,9 @@ export default function AdminPanel({
   const [processingRegId, setProcessingRegId] = useState<string | null>(null);
   const [isApprovingAll, setIsApprovingAll] = useState(false);
 
-  // Supabase Pro Migration States
+  // Database Backend States
   const activeDbBackend = getActiveDbBackend();
   const supabaseEnvReady = isSupabaseConfigured();
-  const [isMigratingToSupabase, setIsMigratingToSupabase] = useState(false);
-  const [migrationProgress, setMigrationProgress] = useState<MigrationProgress | null>(null);
-  const [migrationSummaryMsg, setMigrationSummaryMsg] = useState('');
-  const [isExportingSqlDump, setIsExportingSqlDump] = useState(false);
-
-  const handleMigrateFirestoreToSupabaseClick = async () => {
-    if (isMigratingToSupabase) return;
-    if (!supabaseEnvReady) {
-      showErrorToast('Variabel environment VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY belum terpasang.');
-      return;
-    }
-    setIsMigratingToSupabase(true);
-    setMigrationSummaryMsg('');
-    setMigrationProgress({ collection: 'Memeriksa tabel Supabase...', doneCollections: 0, totalCollections: 37, migratedDocs: 0, currentCount: 0 });
-    try {
-      const summary = await migrateFirestoreToSupabase((prog) => {
-        setMigrationProgress(prog);
-      });
-      const hasQuotaSkips = Boolean(summary.quotaLimitedCollections && summary.quotaLimitedCollections.length > 0);
-      const msg = hasQuotaSkips
-        ? `${summary.totalDocuments} dokumen dari ${summary.details.length} koleksi berhasil disalin ke Supabase Pro (dari cache lokal). ${summary.quotaLimitedCollections!.length} koleksi lainnya menunggu kuota harian Firebase reset besok untuk disalin ulang.`
-        : `Migrasi selesai! ${summary.totalDocuments} dokumen dari ${summary.details.length} koleksi aktif berhasil disalin ke Supabase Pro.`;
-      setMigrationSummaryMsg(msg);
-      setSuccessMsg(msg);
-      setTimeout(() => setSuccessMsg(''), 7000);
-    } catch (err) {
-      const formattedErr = formatFirestoreErrorMessage(err);
-      setErrorMsg(formattedErr);
-      setTimeout(() => setErrorMsg(''), 12000);
-    } finally {
-      setIsMigratingToSupabase(false);
-    }
-  };
-
-  const handleDownloadSqlDumpClick = async () => {
-    if (isExportingSqlDump) return;
-    setIsExportingSqlDump(true);
-    try {
-      const sqlContent = await exportFirestoreSqlForSupabase();
-      const blob = new Blob([sqlContent], { type: 'application/sql;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `sias_backup_supabase_${new Date().toISOString().split('T')[0]}.sql`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      setSuccessMsg('Skrip SQL backup data Firestore siap diunduh untuk diimpor ke Supabase SQL Editor.');
-      setTimeout(() => setSuccessMsg(''), 5000);
-    } catch (err) {
-      showErrorToast(formatFirestoreErrorMessage(err));
-    } finally {
-      setIsExportingSqlDump(false);
-    }
-  };
 
   const handleRefreshRegistrationsClick = async () => {
     if (isRefreshingReg) return;
@@ -2129,6 +2069,7 @@ export default function AdminPanel({
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
+  const downloadOwnerId = useId();
   const latestAdminDownloadConfigRef = useRef(getAdminDownloadConfig);
   latestAdminDownloadConfigRef.current = getAdminDownloadConfig;
 
@@ -2168,12 +2109,12 @@ export default function AdminPanel({
         },
       };
     });
-    setDownloadActions(liveActions, 'admin');
-  }, [activeTab, setDownloadActions]);
+    setDownloadActions(liveActions, downloadOwnerId);
+  }, [activeTab, downloadOwnerId, setDownloadActions]);
 
   useEffect(() => {
-    return () => clearDownloadActions('admin');
-  }, [clearDownloadActions]);
+    return () => clearDownloadActions(downloadOwnerId);
+  }, [clearDownloadActions, downloadOwnerId]);
 
   return (
     <div className="space-y-6">
@@ -3599,8 +3540,8 @@ export default function AdminPanel({
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5">
                     {activeDbBackend === 'supabase'
-                      ? 'Seluruh entitas data kelas, siswa, pendidik, registrasi, CBT, dan ECo-Tiket tersimpan langsung di Supabase PostgreSQL secara real-time.'
-                      : 'Seluruh entitas data saat ini tersimpan di Firebase Firestore. Aktifkan konfigurasi Supabase Pro untuk memindahkan seluruh database ke PostgreSQL.'}
+                      ? 'Seluruh entitas data kelas, siswa, pendidik, registrasi, CBT, ECo-Tiket, dan konten web tersimpan langsung di Supabase PostgreSQL secara real-time.'
+                      : 'Tambahkan VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY (Publishable Key) pada Environment Variables dan jalankan skrip SQL tabel public.sias_documents untuk menghubungkan ke Supabase.'}
                   </p>
                 </div>
               </div>
@@ -3634,111 +3575,35 @@ export default function AdminPanel({
               </div>
             </div>
 
-            {/* Pusat Migrasi Database ke Supabase Pro */}
-            <div className="md:col-span-2 bg-gradient-to-r from-emerald-50/70 via-white to-teal-50/70 rounded-2xl p-5 border border-emerald-200 shadow-xs space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                      <Database className="w-4 h-4 text-emerald-600" />
-                      <span>Migrasi &amp; Sinkronisasi Penuh ke Supabase Pro</span>
-                    </h4>
-                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase ${
-                      supabaseEnvReady ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
-                    }`}>
-                      {supabaseEnvReady ? 'Kredensial Env Supabase Terdeteksi' : 'Menunggu Variabel Env Supabase'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    {supabaseEnvReady
-                      ? 'Salin seluruh data aktif dari Firebase Firestore (Kelas, Guru, Siswa, Antrean Pendaftaran, CBT, ECo-Tiket, Konten Web) ke tabel public.sias_documents Supabase Pro Anda dalam 1 klik.'
-                      : 'Tambahkan VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY pada pengaturan Environment Variables, lalu jalankan skrip setup SQL di Supabase Dashboard untuk mengaktifkan backend Supabase Pro.'}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleDownloadSqlDumpClick}
-                    disabled={isExportingSqlDump || isMigratingToSupabase}
-                    className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
-                  >
-                    <Download className="w-3.5 h-3.5 text-slate-600" />
-                    <span>{isExportingSqlDump ? 'Menyiapkan SQL...' : 'Unduh Backup Data (.sql)'}</span>
-                  </button>
-
-                  {supabaseEnvReady && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        triggerConfirm(
-                          'Salin Semua Data Firestore ke Supabase Pro',
-                          'Proses ini akan menyalin seluruh koleksi aktif dari Firebase Firestore ke tabel public.sias_documents di proyek Supabase Pro Anda tanpa menghapus data yang sudah ada. Lanjutkan?',
-                          handleMigrateFirestoreToSupabaseClick,
-                          'Ya, Mulai Salin Data'
-                        );
-                      }}
-                      disabled={isMigratingToSupabase}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm disabled:opacity-50"
-                    >
-                      <Upload className={`w-3.5 h-3.5 ${isMigratingToSupabase ? 'animate-bounce' : ''}`} />
-                      <span>{isMigratingToSupabase ? 'Menyalin Data...' : 'Salin Data Firestore -> Supabase'}</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {migrationProgress && isMigratingToSupabase && (
-                <div className="bg-white border border-emerald-200 rounded-xl p-3 space-y-2">
-                  <div className="flex justify-between text-[11px] font-bold text-slate-700">
-                    <span>Memindahkan koleksi: <span className="font-mono text-emerald-700">{migrationProgress.collection}</span></span>
-                    <span>{migrationProgress.doneCollections}/{migrationProgress.totalCollections} koleksi ({migrationProgress.migratedDocs} dokumen)</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 transition-all duration-300"
-                      style={{ width: `${Math.min(100, Math.round((migrationProgress.doneCollections / Math.max(1, migrationProgress.totalCollections)) * 100))}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {migrationSummaryMsg && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs font-semibold text-emerald-900 flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{migrationSummaryMsg}</span>
-                </div>
-              )}
-            </div>
-
-            {(isQuotaExceeded || dbStatus === 'offline') && (
+            {((activeDbBackend !== 'supabase' && isQuotaExceeded) || dbStatus === 'offline' || !supabaseEnvReady) && (
               <div className="md:col-span-2 bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="space-y-1 text-xs text-rose-900">
                   <p className="font-bold flex items-center gap-1.5">
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                     <span>
-                      {activeDbBackend === 'supabase'
+                      {!supabaseEnvReady
+                        ? 'Kredensial Supabase Environment Belum Terkonfigurasi'
+                        : activeDbBackend === 'supabase'
                         ? 'Koneksi Supabase PostgreSQL Sedang Terputus'
-                        : isQuotaExceeded
-                        ? 'Kuota Harian Firebase Firestore Tercapai (Spark Plan)'
-                        : 'Koneksi Database Firebase Firestore Sedang Offline'}
+                        : 'Koneksi Database Sedang Offline'}
                     </span>
                   </p>
                   <p className="text-rose-700 leading-relaxed">
-                    {quotaErrorDetail || (activeDbBackend === 'supabase'
-                      ? 'Pastikan skrip SQL setup Supabase sudah dijalankan dan koneksi internet stabil.'
-                      : 'Saat ini aplikasi masih berjalan di Firebase Firestore. Aktifkan konfigurasi Supabase Pro atau tingkatkan ke Firebase Blaze.')}
+                    {quotaErrorDetail || (
+                      !supabaseEnvReady
+                        ? 'Tambahkan VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY (Publishable Key) pada pengaturan Environment Variables lalu redeploy.'
+                        : 'Pastikan skrip SQL setup tabel public.sias_documents sudah dijalankan di Supabase Dashboard dan koneksi internet stabil.'
+                    )}
                   </p>
                 </div>
-                {activeDbBackend === 'firebase' && (
-                  <a
-                    href={FIRESTORE_UPGRADE_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shrink-0 shadow-xs transition-all"
+                {onReconnectDb && (
+                  <button
+                    type="button"
+                    onClick={onReconnectDb}
+                    className="px-3.5 py-2 bg-white hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl shrink-0 shadow-xs transition-all cursor-pointer"
                   >
-                    Cek Kuota / Upgrade Firebase Blaze
-                  </a>
+                    Uji Koneksi Ulang
+                  </button>
                 )}
               </div>
             )}
@@ -5170,7 +5035,7 @@ export default function AdminPanel({
               </div>
             </div>
 
-            {(isQuotaExceeded || dbStatus === 'offline') && (
+            {((activeDbBackend !== 'supabase' && isQuotaExceeded) || dbStatus === 'offline') && (
               <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
                 <div className="space-y-1 text-xs text-rose-900">
                   <p className="font-bold flex items-center gap-1.5">
@@ -5178,15 +5043,11 @@ export default function AdminPanel({
                     <span>
                       {activeDbBackend === 'supabase'
                         ? 'Koneksi Database Supabase Sedang Terputus'
-                        : isQuotaExceeded
-                        ? 'Peringatan Kuota Firebase Firestore Penuh — Validasi Dapat Terhambat'
-                        : 'Status Database Firebase Firestore Sedang Offline'}
+                        : 'Status Database Sedang Offline'}
                     </span>
                   </p>
                   <p className="text-rose-700 leading-relaxed">
-                    {quotaErrorDetail || (activeDbBackend === 'supabase'
-                      ? 'Periksa koneksi internet Anda atau pastikan tabel public.sias_documents sudah dijalankan di SQL Editor Supabase.'
-                      : 'Saat ini masih terhubung ke Firebase Firestore. Aktifkan konfigurasi Supabase Pro di menu Kelas & Database atau cek kuota Firebase.')}
+                    {quotaErrorDetail || 'Periksa koneksi internet Anda atau pastikan tabel public.sias_documents sudah dijalankan di SQL Editor Supabase.'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -5198,16 +5059,6 @@ export default function AdminPanel({
                     >
                       Cek Ulang Koneksi
                     </button>
-                  )}
-                  {activeDbBackend === 'firebase' && (
-                    <a
-                      href={FIRESTORE_UPGRADE_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs"
-                    >
-                      Console Firebase Blaze
-                    </a>
                   )}
                 </div>
               </div>

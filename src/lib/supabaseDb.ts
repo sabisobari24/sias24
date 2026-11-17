@@ -1,25 +1,8 @@
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { Firestore, QuerySnapshot, DocumentData, collection, getDocs, getDocsFromCache } from 'firebase/firestore';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { safeLocalStorageSet, safeLocalStorageGet } from '../utils/storageHelper';
 
 const TABLE_NAME = 'sias_documents';
-
-export interface MigrationProgress {
-  collection: string;
-  doneCollections: number;
-  totalCollections: number;
-  migratedDocs: number;
-  currentCount: number;
-}
-
-export interface MigrationSummary {
-  totalCollections: number;
-  totalDocuments: number;
-  details: { collection: string; count: number }[];
-  usedCacheFallback?: boolean;
-  quotaLimitedCollections?: string[];
-}
 
 // Known static collections across the entire SIAS application
 export const ALL_SIAS_COLLECTIONS = [
@@ -357,7 +340,6 @@ export function supabaseSyncCollection<T extends { id: string }>(
     if (!supabase) return;
     try {
       const serverItems = await fetchCollectionRows(collectionPath);
-      const isInitLocally = safeLocalStorageGet(initKey) === 'true';
 
       if (serverItems.length === 0 && initialData.length > 0) {
         const initDocId = `init_${collectionPath}`;
@@ -368,9 +350,8 @@ export function supabaseSyncCollection<T extends { id: string }>(
           .eq('id', initDocId)
           .maybeSingle();
 
-        const shouldSeed =
-          !colInit &&
-          (!isInitLocally || collectionPath === 'web_content' || collectionPath === 'teachers');
+        // Always seed an uninitialized Supabase database regardless of stale browser localStorage
+        const shouldSeed = !colInit;
 
         if (shouldSeed) {
           const toSeed = initialData.filter((item) => item && item.id && !deletedIds.has(item.id));
@@ -654,6 +635,12 @@ export async function supabaseClearAllCollections(collectionsToClear: string[]):
     if (error) {
       console.warn(`[Supabase] Error clearing ${col}:`, formatSupabaseErrorMessage(error));
     }
+    // Record server initialization marker so intentionally cleared collections do not re-seed defaults on reload
+    await supabaseSaveDocument('settings', `init_${col}`, {
+      initialized: true,
+      collection: col,
+      clearedAt: new Date().toISOString(),
+    }).catch(() => {});
     notifyCollectionSubscribers(col);
   }
 
@@ -779,305 +766,4 @@ export async function supabaseTestReadWrite(): Promise<{ readMs: number; totalMs
   if (writeErr) throw writeErr;
   const totalMs = Math.round(performance.now() - startTime);
   return { readMs, totalMs };
-}
-
-// ============================================================================
-// ONE-CLICK MIGRATION ENGINE: FIREBASE FIRESTORE -> SUPABASE PRO
-// ============================================================================
-
-function isFirestoreQuotaErr(err: any): boolean {
-  if (!err) return false;
-  const code = String(err?.code || '').toLowerCase();
-  const msg = String(err?.message || err || '').toLowerCase();
-  return (
-    code === 'resource-exhausted' ||
-    msg.includes('quota') ||
-    msg.includes('resource-exhausted') ||
-    msg.includes('free daily read units')
-  );
-}
-
-function readLocalStorageCollectionFallback(colName: string): { id: string; data: any }[] {
-  const raw = safeLocalStorageGet(`siakad_${colName}`);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const results: { id: string; data: any }[] = [];
-    for (const item of parsed) {
-      if (item && typeof item === 'object' && typeof item.id === 'string' && item.id.trim() !== '') {
-        // Ignore diagnostic artifacts
-        if (item.id === 'test-diagnostics' || item.test === true) continue;
-        results.push({ id: item.id, data: sanitizeForStorage(item) });
-      }
-    }
-    return results;
-  } catch {
-    return [];
-  }
-}
-
-async function readFirestoreCollectionResilient(
-  firestoreDb: Firestore,
-  colName: string,
-  state: { quotaHit: boolean; cachedSnaps: Map<string, QuerySnapshot<DocumentData>> }
-): Promise<{ docs: { id: string; data: any }[]; fromCache: boolean; hitQuota: boolean }> {
-  const existingSnap = state.cachedSnaps.get(colName);
-  if (existingSnap) {
-    const docs: { id: string; data: any }[] = [];
-    existingSnap.forEach((docSnap) => {
-      docs.push({
-        id: docSnap.id,
-        data: sanitizeForStorage({ ...(docSnap.data() || {}), id: docSnap.id }),
-      });
-    });
-    return { docs, fromCache: false, hitQuota: false };
-  }
-
-  const colRef = collection(firestoreDb, colName);
-
-  if (!state.quotaHit) {
-    try {
-      const snap = await getDocs(colRef);
-      const docs: { id: string; data: any }[] = [];
-      snap.forEach((docSnap) => {
-        docs.push({
-          id: docSnap.id,
-          data: sanitizeForStorage({ ...(docSnap.data() || {}), id: docSnap.id }),
-        });
-      });
-      return { docs, fromCache: false, hitQuota: false };
-    } catch (err) {
-      if (isFirestoreQuotaErr(err)) {
-        state.quotaHit = true;
-      } else {
-        throw err;
-      }
-    }
-  }
-
-  // Fallback 1: Firestore IndexedDB offline cache (0 quota reads)
-  try {
-    const cacheSnap = await getDocsFromCache(colRef);
-    if (!cacheSnap.empty) {
-      const docs: { id: string; data: any }[] = [];
-      cacheSnap.forEach((docSnap) => {
-        docs.push({
-          id: docSnap.id,
-          data: sanitizeForStorage({ ...(docSnap.data() || {}), id: docSnap.id }),
-        });
-      });
-      return { docs, fromCache: true, hitQuota: true };
-    }
-  } catch {
-    /* ignore cache miss */
-  }
-
-  // Fallback 2: Browser localStorage siakad_* cache (0 quota reads)
-  const localDocs = readLocalStorageCollectionFallback(colName);
-  if (localDocs.length > 0) {
-    return { docs: localDocs, fromCache: true, hitQuota: true };
-  }
-
-  return { docs: [], fromCache: true, hitQuota: true };
-}
-
-async function discoverAllCollectionsFromFirestore(
-  firestoreDb: Firestore,
-  state: { quotaHit: boolean; cachedSnaps: Map<string, QuerySnapshot<DocumentData>> }
-): Promise<string[]> {
-  const collectionSet = new Set<string>(ALL_SIAS_COLLECTIONS);
-
-  const tryReadSnap = async (colName: string): Promise<QuerySnapshot<DocumentData> | null> => {
-    const colRef = collection(firestoreDb, colName);
-    if (!state.quotaHit) {
-      try {
-        const snap = await getDocs(colRef);
-        state.cachedSnaps.set(colName, snap);
-        return snap;
-      } catch (err) {
-        if (isFirestoreQuotaErr(err)) {
-          state.quotaHit = true;
-        }
-      }
-    }
-    try {
-      const cacheSnap = await getDocsFromCache(colRef);
-      if (!cacheSnap.empty) {
-        state.cachedSnaps.set(colName, cacheSnap);
-        return cacheSnap;
-      }
-    } catch {
-      /* ignore */
-    }
-    return null;
-  };
-
-  // Discover dynamic extracurricular collections from teachers & web_content/kesiswaan
-  const teachersSnap = await tryReadSnap('teachers');
-  if (teachersSnap) {
-    teachersSnap.forEach((docSnap) => {
-      const ekskulId = docSnap.data()?.ekskulId;
-      if (ekskulId && typeof ekskulId === 'string') {
-        collectionSet.add(`attendance_${ekskulId}`);
-        collectionSet.add(`journals_${ekskulId}`);
-        collectionSet.add(`grades_${ekskulId}`);
-      }
-    });
-  }
-
-  const webSnap = await tryReadSnap('web_content');
-  if (webSnap) {
-    webSnap.forEach((docSnap) => {
-      if (docSnap.id === 'kesiswaan') {
-        const ekskuls = docSnap.data()?.extracurriculars;
-        if (Array.isArray(ekskuls)) {
-          ekskuls.forEach((eks: any) => {
-            if (eks?.id) {
-              collectionSet.add(`attendance_${eks.id}`);
-              collectionSet.add(`journals_${eks.id}`);
-              collectionSet.add(`grades_${eks.id}`);
-            }
-          });
-        }
-      }
-    });
-  }
-
-  return Array.from(collectionSet);
-}
-
-export async function migrateAllFirestoreToSupabase(
-  firestoreDb: Firestore,
-  onProgress?: (progress: MigrationProgress) => void
-): Promise<MigrationSummary> {
-  if (!isSupabaseConfigured() || !supabase) {
-    throw new Error('VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY belum dikonfigurasi di Environment Variables.');
-  }
-
-  // Verify Supabase table exists before migrating
-  await supabasePingServer();
-
-  const discoveryState = { quotaHit: false, cachedSnaps: new Map<string, QuerySnapshot<DocumentData>>() };
-  const collections = await discoverAllCollectionsFromFirestore(firestoreDb, discoveryState);
-  let totalDocuments = 0;
-  let usedCacheFallback = discoveryState.quotaHit;
-  const quotaLimitedCollections: string[] = [];
-  const details: { collection: string; count: number }[] = [];
-
-  for (let idx = 0; idx < collections.length; idx++) {
-    const colName = collections[idx];
-    const { docs, fromCache, hitQuota } = await readFirestoreCollectionResilient(
-      firestoreDb,
-      colName,
-      discoveryState
-    );
-
-    if (fromCache) usedCacheFallback = true;
-    if (hitQuota && docs.length === 0) {
-      quotaLimitedCollections.push(colName);
-    }
-
-    const nowIso = new Date().toISOString();
-    const rows = docs.map((d) => ({
-      collection_name: colName,
-      id: d.id,
-      data: d.data,
-      updated_at: d.data?.updatedAt || nowIso,
-    }));
-
-    if (rows.length > 0) {
-      const chunkSize = 200;
-      for (let i = 0; i < rows.length; i += chunkSize) {
-        const chunk = rows.slice(i, i + chunkSize);
-        const { error } = await supabase
-          .from(TABLE_NAME)
-          .upsert(chunk, { onConflict: 'collection_name,id' });
-        if (error) throw error;
-      }
-      totalDocuments += rows.length;
-      details.push({ collection: colName, count: rows.length });
-    }
-
-    if (onProgress) {
-      onProgress({
-        collection: colName,
-        doneCollections: idx + 1,
-        totalCollections: collections.length,
-        migratedDocs: totalDocuments,
-        currentCount: rows.length,
-      });
-    }
-  }
-
-  if (totalDocuments === 0 && quotaLimitedCollections.length > 0) {
-    throw new Error(
-      'Kuota baca harian gratis Firebase Firestore (database lama) hari ini telah habis (Quota limit exceeded) dan tidak ada cache lokal tersisa di peramban ini. Supabase Pro Anda SUDAH ONLINE & aman; coba jalankan ulang "Salin Data Firestore -> Supabase" besok setelah kuota harian Firebase reset (~pukul 15.00 WIB).'
-    );
-  }
-
-  // Refresh all active Supabase collection subscriptions & settings so UI updates immediately
-  const colsToRefresh = Array.from(new Set([...Array.from(collectionListeners.keys()), 'settings']));
-  for (const activeCol of colsToRefresh) {
-    try {
-      await fetchCollectionRows(activeCol);
-      notifyCollectionSubscribers(activeCol);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  return {
-    totalCollections: collections.length,
-    totalDocuments,
-    details,
-    usedCacheFallback,
-    quotaLimitedCollections,
-  };
-}
-
-export async function buildFullMigrationSqlFromFirestore(firestoreDb: Firestore): Promise<string> {
-  const discoveryState = { quotaHit: false, cachedSnaps: new Map<string, QuerySnapshot<DocumentData>>() };
-  const collections = await discoverAllCollectionsFromFirestore(firestoreDb, discoveryState);
-  const lines: string[] = [
-    '-- ============================================================================',
-    '-- BACKUP & MIGRASI DATA LENGKAP SIAS SMPN 50 JAKARTA (FIRESTORE -> SUPABASE)',
-    `-- Dibuat otomatis pada: ${new Date().toISOString()}`,
-    '-- Jalankan di Supabase Dashboard -> SQL Editor SETELAH menjalankan supabase_full_migration.sql',
-    '-- ============================================================================\n',
-  ];
-
-  let exportedCount = 0;
-
-  for (const colName of collections) {
-    try {
-      const { docs } = await readFirestoreCollectionResilient(firestoreDb, colName, discoveryState);
-      if (docs.length === 0) continue;
-
-      lines.push(`-- Koleksi: ${colName} (${docs.length} dokumen)`);
-      for (const docItem of docs) {
-        const escapedCol = colName.replace(/'/g, "''");
-        const escapedId = docItem.id.replace(/'/g, "''");
-        const jsonStr = JSON.stringify(docItem.data).replace(/'/g, "''");
-        lines.push(
-          `INSERT INTO public.sias_documents (collection_name, id, data) ` +
-          `VALUES ('${escapedCol}', '${escapedId}', '${jsonStr}'::jsonb) ` +
-          `ON CONFLICT (collection_name, id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();`
-        );
-        exportedCount++;
-      }
-      lines.push('');
-    } catch {
-      /* skip unreadable collection */
-    }
-  }
-
-  if (exportedCount === 0 && discoveryState.quotaHit) {
-    throw new Error(
-      'Kuota baca harian gratis Firebase Firestore (database lama) hari ini habis dan cache lokal tidak ditemukan di peramban ini. Silakan coba unduh backup besok setelah kuota Firebase reset.'
-    );
-  }
-
-  lines.push(`-- Total dokumen diekspor: ${exportedCount}`);
-  return lines.join('\n');
 }

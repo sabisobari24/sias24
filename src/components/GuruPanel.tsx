@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { 
   Student, 
   Attendance, 
@@ -1211,14 +1211,15 @@ export default function GuruPanel({
 
   const downloadButtons = getContextualDownloadConfig();
   const { setDownloadActions, clearDownloadActions } = useDownload();
+  const downloadOwnerId = useId();
 
   useEffect(() => {
-    setDownloadActions(downloadButtons, 'guru');
-  }, [activeTab, selectedClassId, attendanceDate, attendance.length, violations.length, teachingJournals.length, examSchedules.length, teacherBanks.length, permits.length, ecoDeposits.length, setDownloadActions]);
+    setDownloadActions(downloadButtons, downloadOwnerId);
+  }, [activeTab, selectedClassId, attendanceDate, attendance.length, violations.length, teachingJournals.length, examSchedules.length, teacherBanks.length, permits.length, ecoDeposits.length, downloadOwnerId, setDownloadActions]);
 
   useEffect(() => {
-    return () => clearDownloadActions('guru');
-  }, [clearDownloadActions]);
+    return () => clearDownloadActions(downloadOwnerId);
+  }, [clearDownloadActions, downloadOwnerId]);
 
   // Calculate roles this teacher holds
   const qualifiedRoles: { role: string; label: string }[] = [

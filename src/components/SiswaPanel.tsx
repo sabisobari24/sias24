@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import {
   Student,
   Attendance,
@@ -865,6 +865,7 @@ export default function SiswaPanel({
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
+  const downloadOwnerId = useId();
 
   // Leaderboard ranking to determine Duta Kebersihan
   const isDutaKebersihan = React.useMemo(() => {
@@ -892,12 +893,12 @@ export default function SiswaPanel({
   }, [ecoDeposits, student.id, student.nisn, totalEarnedEcoPoints, ecoConfig?.ambassadorMinPoints]);
 
   useEffect(() => {
-    setDownloadActions(getSiswaDownloadConfig(), 'siswa');
-  }, [activeTab, student.id, myAchievements.length, studentAttendance.length, matchedGrades.length, studentViolations.length, myEcoDeposits.length, setDownloadActions]);
+    setDownloadActions(getSiswaDownloadConfig(), downloadOwnerId);
+  }, [activeTab, student.id, myAchievements.length, studentAttendance.length, matchedGrades.length, studentViolations.length, myEcoDeposits.length, downloadOwnerId, setDownloadActions]);
 
   useEffect(() => {
-    return () => clearDownloadActions('siswa');
-  }, [clearDownloadActions]);
+    return () => clearDownloadActions(downloadOwnerId);
+  }, [clearDownloadActions, downloadOwnerId]);
 
   return (
     <div className="space-y-6">

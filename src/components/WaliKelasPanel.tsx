@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teacher, HomeroomNote, ParentMessage, StudentAchievement, StudentGrade } from '../types';
 import { GraduationCap, Users, Calendar, AlertTriangle, FileText, CheckCircle, Save, MessageSquare, Send, Check, Award, FileSpreadsheet, Search, Download, Filter, ChevronDown } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
@@ -515,14 +515,15 @@ export default function WaliKelasPanel({
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
+  const downloadOwnerId = useId();
 
   useEffect(() => {
-    setDownloadActions(getWaliKelasDownloadConfig(), 'wali_kelas');
-  }, [activeTab, managedClass?.id, classStudents.length, attendance.length, homeroomNotes.length, classAchievements.length, setDownloadActions]);
+    setDownloadActions(getWaliKelasDownloadConfig(), downloadOwnerId);
+  }, [activeTab, managedClass?.id, classStudents.length, attendance.length, homeroomNotes.length, classAchievements.length, downloadOwnerId, setDownloadActions]);
 
   useEffect(() => {
-    return () => clearDownloadActions('wali_kelas');
-  }, [clearDownloadActions]);
+    return () => clearDownloadActions(downloadOwnerId);
+  }, [clearDownloadActions, downloadOwnerId]);
 
   return (
     <div className="space-y-6">

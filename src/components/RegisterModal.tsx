@@ -255,7 +255,8 @@ export default function RegisterModal({
             errorDetails.includes('Nomor') ||
             errorDetails.includes('NIP') ||
             errorDetails.includes('Kuota') ||
-            errorDetails.includes('Firebase')
+            errorDetails.includes('Firebase') ||
+            errorDetails.includes('Supabase')
             ? errorDetails
             : `Gagal mengirim pendaftaran ke database (${errorDetails}). Periksa koneksi internet Anda atau hubungi Admin.`
         );

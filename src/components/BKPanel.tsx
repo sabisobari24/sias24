@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teacher, CounselorNote, ParentMessage, BimbinganJournal, BimbinganSchedule, StudentAchievement } from '../types';
 import { HeartHandshake, Search, FileText, CheckCircle, Save, Send, MessageSquare, AlertTriangle, ShieldCheck, Download, FileSpreadsheet, Calendar, Trash2, Clock, Users, UserCheck, Award, ChevronDown } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
@@ -467,14 +467,15 @@ export default function BKPanel({
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
+  const downloadOwnerId = useId();
 
   useEffect(() => {
-    setDownloadActions(getBKDownloadConfig(), 'bk');
-  }, [activeTab, counselorNotes.length, violations.length, bimbinganJournals.length, bimbinganSchedules.length, parentMessages.length, studentAchievements.length, setDownloadActions]);
+    setDownloadActions(getBKDownloadConfig(), downloadOwnerId);
+  }, [activeTab, counselorNotes.length, violations.length, bimbinganJournals.length, bimbinganSchedules.length, parentMessages.length, studentAchievements.length, downloadOwnerId, setDownloadActions]);
 
   useEffect(() => {
-    return () => clearDownloadActions('bk');
-  }, [clearDownloadActions]);
+    return () => clearDownloadActions(downloadOwnerId);
+  }, [clearDownloadActions, downloadOwnerId]);
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import {
   Student,
   Attendance,
@@ -653,6 +653,7 @@ export default function PiketPanel({
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
+  const downloadOwnerId = useId();
 
   useEffect(() => {
     const allActions = [
@@ -706,12 +707,12 @@ export default function PiketPanel({
     const ordered = priorityIdx > 0
       ? [allActions[priorityIdx], ...allActions.filter((_, i) => i !== priorityIdx)]
       : allActions;
-    setDownloadActions(ordered.map(({ label, formats }) => ({ label, formats })), 'piket');
-  }, [activeTab, attendance, violations, absentTeachers, importantEvents, permits, ecoDeposits, setDownloadActions]);
+    setDownloadActions(ordered.map(({ label, formats }) => ({ label, formats })), downloadOwnerId);
+  }, [activeTab, attendance, violations, absentTeachers, importantEvents, permits, ecoDeposits, downloadOwnerId, setDownloadActions]);
 
   useEffect(() => {
-    return () => clearDownloadActions('piket');
-  }, [clearDownloadActions]);
+    return () => clearDownloadActions(downloadOwnerId);
+  }, [clearDownloadActions, downloadOwnerId]);
 
   return (
     <div className="space-y-6">

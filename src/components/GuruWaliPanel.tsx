@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { Student, Attendance, SchoolClass, ViolationType, StudentViolation, Teacher, CounselorNote, ParentMessage, BimbinganJournal, BimbinganSchedule, StudentAchievement } from '../types';
 import { HeartHandshake, Search, FileText, CheckCircle, Save, Send, MessageSquare, AlertTriangle, ShieldCheck, Download, FileSpreadsheet, Star, Award, GraduationCap, Users, Calendar, Activity, Clock, Trash } from 'lucide-react';
 import { downloadExcel } from '../utils/excelExport';
@@ -467,14 +467,15 @@ export default function GuruWaliPanel({
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
+  const downloadOwnerId = useId();
 
   useEffect(() => {
-    setDownloadActions(getGuruWaliDownloadConfig(), 'guru_wali');
-  }, [activeTab, myStudents.length, attendance.length, counselorNotes.length, parentMessages.length, studentAchievements.length, setDownloadActions]);
+    setDownloadActions(getGuruWaliDownloadConfig(), downloadOwnerId);
+  }, [activeTab, myStudents.length, attendance.length, counselorNotes.length, parentMessages.length, studentAchievements.length, downloadOwnerId, setDownloadActions]);
 
   useEffect(() => {
-    return () => clearDownloadActions('guru_wali');
-  }, [clearDownloadActions]);
+    return () => clearDownloadActions(downloadOwnerId);
+  }, [clearDownloadActions, downloadOwnerId]);
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { Student, Attendance, StudentViolation, CounselorNote, HomeroomNote, ViolationType, SchoolClass, Teacher, ParentMessage, BimbinganSchedule, StudentAchievement, PemberkasanSchedule } from '../types';
 import { User, Calendar, AlertTriangle, FileText, HeartHandshake, CheckCircle2, MessageSquare, Send, Check, RefreshCw, Clock, Award, Download, Sparkles, FileCheck } from 'lucide-react';
 import { printCertificate, printTablePDF } from '../utils/printHelper';
@@ -214,14 +214,15 @@ export default function OrangTuaPanel({
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
+  const downloadOwnerId = useId();
 
   useEffect(() => {
-    setDownloadActions(getParentDownloadConfig(), 'orang_tua');
-  }, [activeTab, student.id, studentAttendance.length, studentViolations.length, studentHomeroomNotes.length, studentCounselorNotes.length, studentAchievements.length, studentMessages.length, setDownloadActions]);
+    setDownloadActions(getParentDownloadConfig(), downloadOwnerId);
+  }, [activeTab, student.id, studentAttendance.length, studentViolations.length, studentHomeroomNotes.length, studentCounselorNotes.length, studentAchievements.length, studentMessages.length, downloadOwnerId, setDownloadActions]);
 
   useEffect(() => {
-    return () => clearDownloadActions('orang_tua');
-  }, [clearDownloadActions]);
+    return () => clearDownloadActions(downloadOwnerId);
+  }, [clearDownloadActions, downloadOwnerId]);
 
   return (
     <div className="space-y-6">

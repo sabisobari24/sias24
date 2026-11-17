@@ -257,11 +257,22 @@ export default function App({ initialMode }: AppProps = {}) {
     } catch (error) {
       console.warn("Connection ping notice:", error);
       consecutiveFailuresRef.current += 1;
-      if (isQuotaExceededError(error)) {
+      const activeBackend = getActiveDbBackend();
+      if (activeBackend !== 'supabase' && isQuotaExceededError(error)) {
         setIsQuotaExceeded(true);
         setQuotaErrorDetail(formatFirestoreErrorMessage(error));
         setDbStatus('offline');
         setHasSyncError(true);
+      } else if (activeBackend === 'supabase') {
+        const msg = formatFirestoreErrorMessage(error);
+        setIsQuotaExceeded(false);
+        setQuotaErrorDetail(msg);
+        if (!navigator.onLine || msg.includes('Secret Key') || msg.includes('sias_documents') || msg.includes('RLS') || consecutiveFailuresRef.current >= 2) {
+          setDbStatus('offline');
+          setHasSyncError(true);
+        } else {
+          setDbStatus('high_latency');
+        }
       } else if (!navigator.onLine) {
         setDbStatus('offline');
         setHasSyncError(true);
@@ -289,11 +300,13 @@ export default function App({ initialMode }: AppProps = {}) {
     } catch (err: any) {
       console.error("Diagnostic error:", err);
       const msg = formatFirestoreErrorMessage(err);
-      if (isQuotaExceededError(err)) {
+      if (activeBackend !== 'supabase' && isQuotaExceededError(err)) {
         setIsQuotaExceeded(true);
         setQuotaErrorDetail(msg);
-        setDiagnosticResult(`KUOTA HABIS: ${msg} (Catatan: saat ini masih terhubung ke Firebase Firestore).`);
+        setDiagnosticResult(`KUOTA HABIS: ${msg}`);
       } else {
+        setIsQuotaExceeded(false);
+        setQuotaErrorDetail(msg);
         setDiagnosticResult(`GAGAL (${backendLabel}): ${msg}`);
       }
       setDbStatus('offline');
@@ -303,7 +316,7 @@ export default function App({ initialMode }: AppProps = {}) {
     }
   }, []);
 
-  // Monitor navigator online/offline & real-time Firestore status events
+  // Monitor navigator online/offline & real-time database status events
   useEffect(() => {
     const handleOnline = () => {
       checkFirebaseConnection();
@@ -321,6 +334,8 @@ export default function App({ initialMode }: AppProps = {}) {
         consecutiveFailuresRef.current = 0;
         setDbStatus('online');
         setHasSyncError(false);
+        setIsQuotaExceeded(false);
+        setQuotaErrorDetail('');
         if (latency !== undefined) setDbLatency(latency);
         setLastSyncTime(Date.now());
       } else if (status === 'offline') {
@@ -329,6 +344,7 @@ export default function App({ initialMode }: AppProps = {}) {
     });
 
     const unsubscribeQuota = onFirestoreQuotaChange((exceeded, detail) => {
+      if (getActiveDbBackend() === 'supabase') return;
       setIsQuotaExceeded(exceeded);
       setQuotaErrorDetail(detail || '');
       if (exceeded) {
@@ -1532,11 +1548,11 @@ export default function App({ initialMode }: AppProps = {}) {
 
   // Database preservation: Students and classes are managed strictly by Admin without auto-mutation
 
-  // Update helper that syncs specific table to localStorage and Firebase Firestore
-  const syncTable = (key: string, data: any) => {
+  // Update helper that syncs specific table to localStorage and active database
+  const syncTable = async (key: string, data: any) => {
     safeLocalStorageSet(key, JSON.stringify(data));
     const collectionName = key.replace('siakad_', '');
-    syncCollectionWithArray(collectionName, data);
+    await syncCollectionWithArray(collectionName, data);
   };
 
   const handleUpdateHeadmasterName = (
@@ -3239,36 +3255,40 @@ export default function App({ initialMode }: AppProps = {}) {
     const collections = [
       'students', 'teachers', 'classes', 'violation_types', 'violations',
       'attendance', 'counselor_notes', 'homeroom_notes', 'parent_messages',
-      'exam_schedules', 'exam_grades', 'absent_teachers', 'important_events',
-      'teaching_journals', 'bimbingan_journals', 'bimbingan_schedules', 'pending_registrations',
-      'student_achievements'
+      'exam_schedules', 'exam_grades', 'student_submissions', 'question_banks',
+      'absent_teachers', 'important_events', 'teaching_journals',
+      'bimbingan_journals', 'bimbingan_schedules', 'pending_registrations',
+      'student_achievements', 'elearning_materials', 'elearning_progress',
+      'pemberkasan_schedules', 'nomor_surat', 'inventory_items', 'inventory_loans',
+      'bos_bop_reports', 'eco_deposits', 'eco_redemptions', 'student_permits'
     ];
     await clearAllCollections(collections);
 
-    syncTable('siakad_students', []);
-    syncTable('siakad_teachers', []);
-    syncTable('siakad_classes', []);
-    syncTable('siakad_violation_types', INITIAL_VIOLATION_TYPES);
-    syncTable('siakad_violations', []);
-    syncTable('siakad_attendance', []);
-    syncTable('siakad_counselor_notes', []);
-    syncTable('siakad_homeroom_notes', []);
-    syncTable('siakad_parent_messages', []);
-    syncTable('siakad_exam_schedules', []);
-    syncTable('siakad_exam_grades', []);
-    syncTable('siakad_absent_teachers', []);
-    syncTable('siakad_important_events', []);
-    syncTable('siakad_student_achievements', []);
-    syncTable('siakad_teaching_journals', []);
-    syncTable('siakad_bimbingan_journals', []);
-    syncTable('siakad_pending_registrations', []);
-    syncTable('siakad_bimbingan_schedules', []);
-    handleUpdateHeadmasterName('Dra. Hj. Endah Purwani, M.M.');
+    const preservedAdmin =
+      activeUser && (activeRole === 'admin' || activeUser.roles?.includes('admin'))
+        ? [activeUser]
+        : [DEFAULT_ADMIN_ACCOUNT];
 
-    // If activeUser is logged in, sync their state to the reset values
-    if (activeUser && (activeRole === 'admin' || activeUser.roles?.includes('admin'))) {
-      syncTable('siakad_teachers', [activeUser]);
-    }
+    safeLocalStorageSet('siakad_students', JSON.stringify([]));
+    safeLocalStorageSet('siakad_classes', JSON.stringify([]));
+    safeLocalStorageSet('siakad_violations', JSON.stringify([]));
+    safeLocalStorageSet('siakad_attendance', JSON.stringify([]));
+    safeLocalStorageSet('siakad_counselor_notes', JSON.stringify([]));
+    safeLocalStorageSet('siakad_homeroom_notes', JSON.stringify([]));
+    safeLocalStorageSet('siakad_parent_messages', JSON.stringify([]));
+    safeLocalStorageSet('siakad_exam_schedules', JSON.stringify([]));
+    safeLocalStorageSet('siakad_exam_grades', JSON.stringify([]));
+    safeLocalStorageSet('siakad_absent_teachers', JSON.stringify([]));
+    safeLocalStorageSet('siakad_important_events', JSON.stringify([]));
+    safeLocalStorageSet('siakad_student_achievements', JSON.stringify([]));
+    safeLocalStorageSet('siakad_teaching_journals', JSON.stringify([]));
+    safeLocalStorageSet('siakad_bimbingan_journals', JSON.stringify([]));
+    safeLocalStorageSet('siakad_bimbingan_schedules', JSON.stringify([]));
+    safeLocalStorageSet('siakad_pending_registrations', JSON.stringify([]));
+
+    await syncTable('siakad_violation_types', INITIAL_VIOLATION_TYPES);
+    await syncTable('siakad_teachers', preservedAdmin);
+    handleUpdateHeadmasterName('Dra. Hj. Endah Purwani, M.M.');
   };
 
   // Database Clear (Kosongkan) - clears everything except Admin account
@@ -3283,27 +3303,33 @@ export default function App({ initialMode }: AppProps = {}) {
     const collections = [
       'students', 'teachers', 'classes', 'violation_types', 'violations',
       'attendance', 'counselor_notes', 'homeroom_notes', 'parent_messages',
-      'exam_schedules', 'exam_grades', 'absent_teachers', 'important_events',
-      'teaching_journals', 'bimbingan_journals', 'bimbingan_schedules', 'pending_registrations'
+      'exam_schedules', 'exam_grades', 'student_submissions', 'question_banks',
+      'absent_teachers', 'important_events', 'teaching_journals',
+      'bimbingan_journals', 'bimbingan_schedules', 'pending_registrations',
+      'student_achievements', 'elearning_materials', 'elearning_progress',
+      'pemberkasan_schedules', 'nomor_surat', 'inventory_items', 'inventory_loans',
+      'bos_bop_reports', 'eco_deposits', 'eco_redemptions', 'student_permits'
     ];
     await clearAllCollections(collections);
 
-    syncTable('siakad_students', []);
-    syncTable('siakad_teachers', finalAdminTeachers);
-    syncTable('siakad_classes', []);
-    syncTable('siakad_violations', []);
-    syncTable('siakad_attendance', []);
-    syncTable('siakad_counselor_notes', []);
-    syncTable('siakad_homeroom_notes', []);
-    syncTable('siakad_parent_messages', []);
-    syncTable('siakad_exam_schedules', []);
-    syncTable('siakad_exam_grades', []);
-    syncTable('siakad_absent_teachers', []);
-    syncTable('siakad_important_events', []);
-    syncTable('siakad_teaching_journals', []);
-    syncTable('siakad_bimbingan_journals', []);
-    syncTable('siakad_bimbingan_schedules', []);
-    syncTable('siakad_pending_registrations', []);
+    safeLocalStorageSet('siakad_students', JSON.stringify([]));
+    safeLocalStorageSet('siakad_classes', JSON.stringify([]));
+    safeLocalStorageSet('siakad_violations', JSON.stringify([]));
+    safeLocalStorageSet('siakad_attendance', JSON.stringify([]));
+    safeLocalStorageSet('siakad_counselor_notes', JSON.stringify([]));
+    safeLocalStorageSet('siakad_homeroom_notes', JSON.stringify([]));
+    safeLocalStorageSet('siakad_parent_messages', JSON.stringify([]));
+    safeLocalStorageSet('siakad_exam_schedules', JSON.stringify([]));
+    safeLocalStorageSet('siakad_exam_grades', JSON.stringify([]));
+    safeLocalStorageSet('siakad_absent_teachers', JSON.stringify([]));
+    safeLocalStorageSet('siakad_important_events', JSON.stringify([]));
+    safeLocalStorageSet('siakad_teaching_journals', JSON.stringify([]));
+    safeLocalStorageSet('siakad_bimbingan_journals', JSON.stringify([]));
+    safeLocalStorageSet('siakad_bimbingan_schedules', JSON.stringify([]));
+    safeLocalStorageSet('siakad_pending_registrations', JSON.stringify([]));
+    safeLocalStorageSet('siakad_student_achievements', JSON.stringify([]));
+
+    await syncTable('siakad_teachers', finalAdminTeachers);
     handleUpdateHeadmasterName('Dra. Hj. Endah Purwani, M.M.');
 
     if (activeUser && (activeUser.role === 'admin' || activeUser.roles?.includes('admin'))) {
@@ -4236,14 +4262,20 @@ export default function App({ initialMode }: AppProps = {}) {
                     </div>
                     <div>
                       <h4 className="font-bold text-xs">
-                        {isQuotaExceeded ? 'Kuota Harian Database Firebase Habis (Quota Exceeded)' : 'Realtime Sync Error'}
+                        {getActiveDbBackend() === 'supabase'
+                          ? 'Gangguan Koneksi Database Supabase'
+                          : isQuotaExceeded
+                          ? 'Kuota Harian Database Firebase Habis (Quota Exceeded)'
+                          : 'Realtime Sync Error'}
                       </h4>
                       <p className="text-[10px] text-rose-600 mt-0.5 leading-snug">
-                        {isQuotaExceeded
-                          ? `${quotaErrorDetail} (Sistem ini menggunakan Firebase Firestore, bukan Supabase).`
+                        {getActiveDbBackend() === 'supabase'
+                          ? (quotaErrorDetail || 'Koneksi ke server Supabase PostgreSQL terganggu. Periksa koneksi internet atau konfigurasi env Supabase Anda.')
+                          : isQuotaExceeded
+                          ? quotaErrorDetail
                           : 'Koneksi database Firebase terganggu atau tidak ter-update. Mengaktifkan mode cache offline.'}
                       </p>
-                      {isQuotaExceeded && (
+                      {getActiveDbBackend() !== 'supabase' && isQuotaExceeded && (
                         <a
                           href={FIRESTORE_UPGRADE_URL}
                           target="_blank"
@@ -5206,7 +5238,7 @@ export default function App({ initialMode }: AppProps = {}) {
               <div className="w-full max-w-[1920px] 2xl:max-w-[2160px] mx-auto p-3 sm:p-5 md:p-8 2xl:px-12 2xl:py-8 flex-1">
                 <AnimatePresence mode="wait">
                   <motion.div
-                    key={(adminTabOverride ? 'override-' + adminTabOverride : activeRole) + (activeUser?.id || '')}
+                    key={(adminTabOverride !== null ? 'admin-panel' : activeRole || 'portal') + '-' + (activeUser?.id || 'guest')}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}

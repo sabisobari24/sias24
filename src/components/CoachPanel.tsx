@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
@@ -1089,14 +1089,15 @@ export default function CoachPanel({
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
+  const downloadOwnerId = useId();
 
   useEffect(() => {
-    setDownloadActions(getCoachDownloadConfig(), 'pelatih');
-  }, [activeTab, attendanceList.length, studentGrades.length, memberIds.length, journals.length, studentAchievements.length, setDownloadActions]);
+    setDownloadActions(getCoachDownloadConfig(), downloadOwnerId);
+  }, [activeTab, attendanceList.length, studentGrades.length, memberIds.length, journals.length, studentAchievements.length, downloadOwnerId, setDownloadActions]);
 
   useEffect(() => {
-    return () => clearDownloadActions('pelatih');
-  }, [clearDownloadActions]);
+    return () => clearDownloadActions(downloadOwnerId);
+  }, [clearDownloadActions, downloadOwnerId]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">

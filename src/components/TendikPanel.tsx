@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { useDownload } from '../context/DownloadContext';
 import { isSameClass } from '../utils/classUtils';
 import {
@@ -764,14 +764,15 @@ export default function TendikPanel({
   };
 
   const { setDownloadActions, clearDownloadActions } = useDownload();
+  const downloadOwnerId = useId();
 
   useEffect(() => {
-    setDownloadActions(getTendikDownloadConfig(), 'tendik');
-  }, [activeTab, filteredKjpStudents.length, pemberkasanSchedules.length, nomorSuratList.length, inventoryItems.length, inventoryLoans.length, bosBopReports.length, setDownloadActions]);
+    setDownloadActions(getTendikDownloadConfig(), downloadOwnerId);
+  }, [activeTab, filteredKjpStudents.length, pemberkasanSchedules.length, nomorSuratList.length, inventoryItems.length, inventoryLoans.length, bosBopReports.length, downloadOwnerId, setDownloadActions]);
 
   useEffect(() => {
-    return () => clearDownloadActions('tendik');
-  }, [clearDownloadActions]);
+    return () => clearDownloadActions(downloadOwnerId);
+  }, [clearDownloadActions, downloadOwnerId]);
 
   return (
     <div className="space-y-6 relative">
