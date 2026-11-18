@@ -1,5 +1,5 @@
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured, isSupabaseSecretKeyConfigured } from './supabase';
 import { safeLocalStorageSet, safeLocalStorageGet } from '../utils/storageHelper';
 
 const TABLE_NAME = 'sias_documents';
@@ -111,8 +111,8 @@ export function formatSupabaseErrorMessage(err: any): string {
   const code = String(err?.code || '').toUpperCase();
   const msg = String(err?.message || err || 'Kesalahan koneksi Supabase');
 
-  if (msg.toLowerCase().includes('forbidden use of secret api key in browser')) {
-    return 'Kunci API yang dimasukkan ke VITE_SUPABASE_ANON_KEY adalah Secret Key (sb_secret_... / service_role), yang dilarang dipakai di browser. Ganti dengan Publishable Key (sb_publishable_...) atau anon public key dari Supabase -> Project Settings -> API Keys, lalu redeploy/restart.';
+  if (isSupabaseSecretKeyConfigured() || msg.toLowerCase().includes('forbidden use of secret api key in browser')) {
+    return 'Kunci API yang terbaca pada VITE_SUPABASE_ANON_KEY masih berupa Secret Key (sb_secret_... / service_role), yang dilarang dipakai di browser. Jika di Vite/Vercel sudah diubah, pastikan juga Secret VITE_SUPABASE_ANON_KEY di Google AI Studio diganti ke Publishable Key (sb_publishable_...) atau anon public key (eyJ...) lalu muat ulang preview.';
   }
   if (code === '42P01' || (msg.includes('sias_documents') && msg.includes('does not exist'))) {
     return 'Tabel public.sias_documents belum dibuat di Supabase. Jalankan skrip SQL setup di Supabase Dashboard -> SQL Editor terlebih dahulu.';
@@ -220,6 +220,9 @@ function ensureSharedRealtimeSubscription() {
 }
 
 async function fetchCollectionRows(collectionPath: string): Promise<any[]> {
+  if (isSupabaseSecretKeyConfigured()) {
+    throw new Error('Forbidden use of secret API key in browser');
+  }
   if (!supabase) return [];
 
   const existingFetch = inflightFetches.get(collectionPath);
@@ -337,6 +340,10 @@ export function supabaseSyncCollection<T extends { id: string }>(
 
   // Fetch authoritative rows from Supabase PostgreSQL
   (async () => {
+    if (isSupabaseSecretKeyConfigured()) {
+      statusNotifier('offline');
+      return;
+    }
     if (!supabase) return;
     try {
       const serverItems = await fetchCollectionRows(collectionPath);
@@ -722,6 +729,9 @@ export async function supabaseGetAttendanceWithFilter(dateFilter?: string, limit
 }
 
 export async function supabasePingServer(): Promise<number> {
+  if (isSupabaseSecretKeyConfigured()) {
+    throw new Error('Forbidden use of secret API key in browser');
+  }
   if (!supabase) throw new Error('Supabase belum dikonfigurasi.');
   const startTime = performance.now();
   const { error } = await supabase
@@ -733,6 +743,9 @@ export async function supabasePingServer(): Promise<number> {
 }
 
 export async function supabaseTestReadWrite(): Promise<{ readMs: number; totalMs: number }> {
+  if (isSupabaseSecretKeyConfigured()) {
+    throw new Error('Forbidden use of secret API key in browser');
+  }
   if (!supabase) throw new Error('Supabase belum dikonfigurasi.');
   const startTime = performance.now();
   const { error: readErr } = await supabase

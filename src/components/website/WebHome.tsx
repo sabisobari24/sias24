@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   School, 
@@ -1202,10 +1203,11 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
         </div>
       </div>
 
-      {/* POPUP DETAIL STAFF MODAL */}
-      <AnimatePresence>
-        {activeStaff && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* POPUP MODALS (PORTAL TO BODY AGAR TIDAK TERTUTUP HEADER / TAMPILAN LAIN) */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {activeStaff && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1261,13 +1263,11 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
               </div>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
+          )}
 
-      {/* DIRECTORY TEACHERS & TENDIK MODAL */}
-      <AnimatePresence>
-        {showTeachersModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* DIRECTORY TEACHERS & TENDIK MODAL */}
+          {showTeachersModal && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1516,7 +1516,9 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
 
     </div>
   );

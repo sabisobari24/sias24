@@ -130,86 +130,15 @@ CREATE POLICY "SIAS App Delete"
     TO anon, authenticated
     USING (true);
 
--- 7. View Relasional (Opsional untuk memantau data lebih rapi di Table Editor Supabase)
-CREATE OR REPLACE VIEW public.v_classes AS
-SELECT
-    id,
-    data->>'name' AS name,
-    data->>'homeroomTeacherId' AS homeroom_teacher_id,
-    updated_at
-FROM public.sias_documents
-WHERE collection_name = 'classes';
-
-CREATE OR REPLACE VIEW public.v_teachers AS
-SELECT
-    id,
-    data->>'name' AS name,
-    data->>'nip' AS nip,
-    data->>'email' AS email,
-    data->>'role' AS role,
-    data->>'classId' AS class_id,
-    data->>'ekskulId' AS ekskul_id,
-    updated_at
-FROM public.sias_documents
-WHERE collection_name = 'teachers';
-
-CREATE OR REPLACE VIEW public.v_students AS
-SELECT
-    id,
-    data->>'name' AS name,
-    data->>'nisn' AS nisn,
-    data->>'classId' AS class_id,
-    data->>'gender' AS gender,
-    data->>'phone' AS phone,
-    data->>'parentName' AS parent_name,
-    data->>'parentNik' AS parent_nik,
-    data->>'parentPhone' AS parent_phone,
-    data->>'guruWaliTeacherId' AS guru_wali_teacher_id,
-    updated_at
-FROM public.sias_documents
-WHERE collection_name = 'students';
-
-CREATE OR REPLACE VIEW public.v_pending_registrations AS
-SELECT
-    id,
-    data->>'role' AS role,
-    data->>'name' AS name,
-    data->>'nipOrNisnOrNik' AS nip_or_nisn_or_nik,
-    data->>'classId' AS class_id,
-    data->>'studentNisnOrName' AS student_nisn_or_name,
-    data->>'phone' AS phone,
-    data->>'email' AS email,
-    data->>'createdAt' AS created_at_str,
-    updated_at
-FROM public.sias_documents
-WHERE collection_name = 'pending_registrations';
-
-CREATE OR REPLACE VIEW public.v_attendance AS
-SELECT
-    id,
-    data->>'studentId' AS student_id,
-    data->>'classId' AS class_id,
-    data->>'date' AS date,
-    data->>'status' AS status,
-    data->>'recordedBy' AS recorded_by,
-    updated_at
-FROM public.sias_documents
-WHERE collection_name = 'attendance';
-
-CREATE OR REPLACE VIEW public.v_eco_deposits AS
-SELECT
-    id,
-    data->>'studentId' AS student_id,
-    data->>'studentName' AS student_name,
-    data->>'classId' AS class_id,
-    data->>'categoryName' AS category_name,
-    (data->>'quantity')::NUMERIC AS quantity,
-    (data->>'pointsEarned')::INTEGER AS points_earned,
-    data->>'status' AS status,
-    data->>'date' AS date,
-    updated_at
-FROM public.sias_documents
-WHERE collection_name = 'eco_deposits';
+-- 7. Bersihkan View Tambahan yang Memunculkan Label "UNRESTRICTED" di Table Editor
+-- Aplikasi SIAS hanya membaca & menulis langsung ke tabel public.sias_documents (yang sudah terlindungi RLS).
+-- PostgreSQL Views tidak memiliki RLS mandiri sehingga sering ditandai "UNRESTRICTED" oleh dashboard Supabase.
+DROP VIEW IF EXISTS public.v_classes;
+DROP VIEW IF EXISTS public.v_teachers;
+DROP VIEW IF EXISTS public.v_students;
+DROP VIEW IF EXISTS public.v_pending_registrations;
+DROP VIEW IF EXISTS public.v_attendance;
+DROP VIEW IF EXISTS public.v_eco_deposits;
 
 -- 8. Akun Admin Bawaan (Username/NIP: 20103599 | Password: admin50)
 INSERT INTO public.sias_documents (collection_name, id, data)

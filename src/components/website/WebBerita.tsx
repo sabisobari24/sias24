@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Flame, 
@@ -332,10 +333,11 @@ export default function WebBerita() {
 
       </div>
 
-      {/* POPUP ARTICLE DETAIL MODAL */}
-      <AnimatePresence>
-        {activeArticle && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* POPUP MODALS (PORTAL TO BODY AGAR TIDAK TERTUTUP HEADER / TAMPILAN LAIN) */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {activeArticle && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -459,7 +461,7 @@ export default function WebBerita() {
 
         {/* MODAL VIEW PENGUMUMAN SEKOLAH */}
         {activeTicker && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -567,7 +569,9 @@ export default function WebBerita() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
 
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes marquee {

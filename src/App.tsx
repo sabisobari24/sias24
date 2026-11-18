@@ -66,6 +66,7 @@ import {
   getCollectionDocs,
   deleteDocumentsByField,
   getActiveDbBackend,
+  isSupabaseConfigured,
   onFirestoreQuotaChange,
   isQuotaExceededError,
   formatFirestoreErrorMessage,
@@ -889,6 +890,14 @@ export default function App({ initialMode }: AppProps = {}) {
     if (!activeUser || !activeRole) return;
 
     const ADMIN_EMAIL_ALLOWLIST = ['sobari.661@guru.smp.belajar.id', 'sobari@sekolah.sch.id', 'admin50@smpn50jakarta.sch.id'];
+    const GENERIC_PLACEHOLDER_EMAILS = new Set([
+      'guru@sekolah.sch.id',
+      'admin@sekolah.sch.id',
+      'tendik@sekolah.sch.id',
+      'pelatih@sekolah.sch.id',
+      'bk@sekolah.sch.id',
+      'piket@sekolah.sch.id',
+    ]);
 
     if (activeRole !== 'siswa' && activeRole !== 'orang_tua') {
       if (teachers.length === 0) {
@@ -901,12 +910,23 @@ export default function App({ initialMode }: AppProps = {}) {
         ) return;
       }
 
-      const freshTeacher = teachers.find(
-        (t) =>
-          (activeUser.id && t.id === activeUser.id) ||
-          (t.nip && activeUser.nip && t.nip === activeUser.nip) ||
-          (t.email && activeUser.email && t.email.toLowerCase().trim() === String(activeUser.email).toLowerCase().trim())
-      );
+      const activeId = String(activeUser.id || '').trim();
+      const activeNip = String(activeUser.nip || '').trim();
+      const activeEmail = String(activeUser.email || '').toLowerCase().trim();
+
+      // Tiered strict matching: 1) Exact ID, 2) Exact NIP, 3) Unique non-placeholder Email
+      let freshTeacher = activeId ? teachers.find((t) => t.id === activeId) : undefined;
+      if (!freshTeacher && activeNip) {
+        freshTeacher = teachers.find((t) => String(t.nip || '').trim() === activeNip);
+      }
+      if (!freshTeacher && activeEmail && !GENERIC_PLACEHOLDER_EMAILS.has(activeEmail)) {
+        const emailMatches = teachers.filter(
+          (t) => String(t.email || '').toLowerCase().trim() === activeEmail
+        );
+        if (emailMatches.length === 1) {
+          freshTeacher = emailMatches[0];
+        }
+      }
 
       if (freshTeacher) {
         const currentRoles = freshTeacher.roles && freshTeacher.roles.length > 0 ? freshTeacher.roles : [freshTeacher.role];
@@ -929,11 +949,10 @@ export default function App({ initialMode }: AppProps = {}) {
           safeLocalStorageSet('siakad_active_user', JSON.stringify(mergedTeacher));
         }
       } else if (teachers.length > 0) {
-        const userEmail = String(activeUser.email || '').toLowerCase().trim();
         const isBootstrapAdmin =
           activeRole === 'admin' &&
           (activeUser.id === DEFAULT_ADMIN_ACCOUNT.id || activeUser.nip === DEFAULT_ADMIN_ACCOUNT.nip);
-        if (!isBootstrapAdmin && !(activeRole === 'admin' && ADMIN_EMAIL_ALLOWLIST.includes(userEmail))) {
+        if (!isBootstrapAdmin && !(activeRole === 'admin' && ADMIN_EMAIL_ALLOWLIST.includes(activeEmail))) {
           setActiveUser(null);
           setActiveRole(null);
           localStorage.removeItem('siakad_active_user');
@@ -942,11 +961,12 @@ export default function App({ initialMode }: AppProps = {}) {
       }
     } else if (activeRole === 'siswa' || activeRole === 'orang_tua') {
       if (students.length > 0) {
-        const freshStudent = students.find(
-          (s) =>
-            (activeUser.id && s.id === activeUser.id) ||
-            (s.nisn && activeUser.nisn && s.nisn === activeUser.nisn)
-        );
+        const activeId = String(activeUser.id || '').trim();
+        const activeNisn = String(activeUser.nisn || '').trim();
+        let freshStudent = activeId ? students.find((s) => s.id === activeId) : undefined;
+        if (!freshStudent && activeNisn) {
+          freshStudent = students.find((s) => String(s.nisn || '').trim() === activeNisn);
+        }
         if (freshStudent) {
           const mergedStudent = {
             ...freshStudent,
@@ -964,7 +984,7 @@ export default function App({ initialMode }: AppProps = {}) {
         }
       }
     }
-  }, [teachers, students, activeRole]);
+  }, [teachers, students, activeRole, activeUser?.id]);
 
   // Form Login States
   const [loginRole, setLoginRole] = useState<UserRole>('siswa');
@@ -1043,12 +1063,18 @@ export default function App({ initialMode }: AppProps = {}) {
         'sobari@sekolah.sch.id'
       ];
 
-      // 1. Match with exact verified Super Admin allowlist
+      // 1. Match with exact verified Super Admin allowlist (strict email/NIP/Sobari identity, never steal another user's profile)
       if (ADMIN_EMAIL_ALLOWLIST.includes(googleEmail)) {
         resetLoginRateLimit();
-        const existingAdmin = teachers.find(
-          t => (t.email || '').toLowerCase().trim() === googleEmail || t.role === 'admin' || t.roles?.includes('admin')
-        );
+        const existingAdmin =
+          teachers.find((t) => (t.email || '').toLowerCase().trim() === googleEmail) ||
+          teachers.find(
+            (t) =>
+              t.id === 't-sobari' ||
+              t.nip === '199504242023211018' ||
+              t.id === DEFAULT_ADMIN_ACCOUNT.id ||
+              t.nip === DEFAULT_ADMIN_ACCOUNT.nip
+          );
         const adminUser: Teacher = {
           ...(existingAdmin || {}),
           id: existingAdmin?.id || res.user.uid,
@@ -1061,14 +1087,15 @@ export default function App({ initialMode }: AppProps = {}) {
         };
 
         setTeachers(prev => {
-          const exists = prev.some(t => t.id === adminUser.id || t.nip === adminUser.nip);
+          const exists = prev.some(t => t.id === adminUser.id || (adminUser.nip && t.nip === adminUser.nip));
           const next = exists
-            ? prev.map(t => (t.id === adminUser.id || t.nip === adminUser.nip) ? adminUser : t)
+            ? prev.map(t => (t.id === adminUser.id || (adminUser.nip && t.nip === adminUser.nip)) ? adminUser : t)
             : [...prev, adminUser];
           safeLocalStorageSet('siakad_teachers', JSON.stringify(next));
           return next;
         });
 
+        setAdminTabOverride(null);
         setActiveRole('admin');
         setActiveUser(adminUser);
         setPageMode('portal');
@@ -1079,12 +1106,17 @@ export default function App({ initialMode }: AppProps = {}) {
         return;
       }
       
-      // 2. Match strictly by exact registered email in Teachers / Staff
-      const matchTeacher = teachers.find(t => (t.email || '').toLowerCase().trim() === googleEmail);
+      // 2. Match strictly by exact unique registered email in Teachers / Staff (exclude shared placeholder emails)
+      const PLACEHOLDER_TEACHER_EMAILS = new Set(['guru@sekolah.sch.id', 'admin@sekolah.sch.id', 'tendik@sekolah.sch.id', 'pelatih@sekolah.sch.id']);
+      const emailTeacherMatches = PLACEHOLDER_TEACHER_EMAILS.has(googleEmail)
+        ? []
+        : teachers.filter(t => (t.email || '').toLowerCase().trim() === googleEmail);
+      const matchTeacher = emailTeacherMatches.length === 1 ? emailTeacherMatches[0] : undefined;
       if (matchTeacher) {
         resetLoginRateLimit();
         const userRoles = matchTeacher.roles || [matchTeacher.role];
         const targetRole = matchTeacher.role || userRoles[0] || 'guru';
+        setAdminTabOverride(null);
         setActiveRole(targetRole);
         setActiveUser(matchTeacher);
         setPageMode('portal');
@@ -1137,6 +1169,31 @@ export default function App({ initialMode }: AppProps = {}) {
 
   // 1. Core Public & Auth Listeners (Lightweight: 5 collections only, prevents quota exhaustion from public traffic)
   useEffect(() => {
+    // One-time cleanup of legacy stale localStorage caches when running on Supabase PostgreSQL
+    if (getActiveDbBackend() === 'supabase' && typeof window !== 'undefined') {
+      try {
+        if (!localStorage.getItem('siakad_supabase_cache_clean_v4')) {
+          const keysToPurge: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (!k) continue;
+            if (
+              k.startsWith('siakad_deleted_') ||
+              k.startsWith('siakad_col_initialized_') ||
+              k === 'siakad_students' ||
+              k === 'siakad_teachers' ||
+              k === 'siakad_pending_registrations' ||
+              k === 'siakad_classes'
+            ) {
+              keysToPurge.push(k);
+            }
+          }
+          keysToPurge.forEach((k) => localStorage.removeItem(k));
+          safeLocalStorageSet('siakad_supabase_cache_clean_v4', 'true');
+        }
+      } catch { /* ignore storage cleanup failure */ }
+    }
+
     const unsubHeadmaster = syncHeadmaster((settings) => {
       setHeadmasterName(settings.name);
       safeLocalStorageSet('siakad_headmaster_name', settings.name);
@@ -2188,7 +2245,7 @@ export default function App({ initialMode }: AppProps = {}) {
 
       // 1. Immediately update state and localStorage for students
       setStudents((prev) => {
-        const next = prev.filter((i) => i.id !== id && (!targetNisn || i.nisn !== targetNisn));
+        const next = prev.filter((i) => i.id !== id && (!targetNisn || (i.nisn || '').trim() !== targetNisn));
         safeLocalStorageSet('siakad_students', JSON.stringify(next));
         return next;
       });
@@ -2196,8 +2253,8 @@ export default function App({ initialMode }: AppProps = {}) {
       // 2. Track deleted ID in cache
       trackDeletedId('students', id);
 
-      // 3. Delete document from database 'students' collection by document ID
-      deleteDocument('students', id).catch((err) => console.error("Error deleting student by id:", err));
+      // 3. Delete document from database 'students' collection by document ID (awaited so server stays authoritative)
+      await deleteDocument('students', id).catch((err) => console.error("Error deleting student by id:", err));
 
       // 4. Query database 'students' by NISN to purge any duplicate or alternate-ID documents
       if (targetNisn) {
@@ -2212,8 +2269,11 @@ export default function App({ initialMode }: AppProps = {}) {
       if (targetNisn || targetPhone || targetParentPhone) {
         setPendingRegistrations((prev) => {
           const filtered = prev.filter((p) => {
-            const matchNisn = targetNisn && (p.nipOrNisnOrNik === targetNisn || p.studentNisnOrName === targetNisn);
-            const matchPhone = (targetPhone && p.phone === targetPhone) || (targetParentPhone && p.phone === targetParentPhone);
+            const pRef = (p.nipOrNisnOrNik || '').trim();
+            const pChild = (p.studentNisnOrName || '').trim();
+            const pPhone = (p.phone || '').trim();
+            const matchNisn = targetNisn && (pRef === targetNisn || pChild === targetNisn);
+            const matchPhone = (targetPhone && pPhone === targetPhone) || (targetParentPhone && pPhone === targetParentPhone);
             return !matchNisn && !matchPhone;
           });
           safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(filtered));
@@ -2437,12 +2497,41 @@ export default function App({ initialMode }: AppProps = {}) {
       password: regData.password ? regData.password.slice(0, 150) : undefined,
     };
 
+    // Fetch fresh authoritative records from Supabase before validating duplicates so deleted accounts never block re-registration due to stale browser cache
+    let liveStudents = students;
+    let liveTeachers = teachers;
+    let livePending = pendingRegistrations;
+    if (getActiveDbBackend() === 'supabase' && isSupabaseConfigured()) {
+      try {
+        const [srvStudents, srvTeachers, srvPending] = await Promise.all([
+          getCollectionDocs<Student>('students'),
+          getCollectionDocs<Teacher>('teachers'),
+          getCollectionDocs<PendingRegistration>('pending_registrations'),
+        ]);
+        liveStudents = deduplicateStudents(srvStudents).uniqueStudents;
+        liveTeachers = srvTeachers;
+        livePending = srvPending.filter(
+          (item) => item && item.id && item.id !== 'test-diagnostics' && !(item as any).test && item.role
+        );
+        clearDeletedIds('students');
+        clearDeletedIds('pending_registrations');
+        setStudents(liveStudents);
+        setTeachers(liveTeachers);
+        setPendingRegistrations(livePending);
+        safeLocalStorageSet('siakad_students', JSON.stringify(liveStudents));
+        safeLocalStorageSet('siakad_teachers', JSON.stringify(liveTeachers));
+        safeLocalStorageSet('siakad_pending_registrations', JSON.stringify(livePending));
+      } catch (syncErr) {
+        console.warn('Notice refreshing server data before registration validation:', syncErr);
+      }
+    }
+
     // Check duplicate Phone Number across active students, teachers, and unverified pending registrations
     if (sanitizedRegData.phone && sanitizedRegData.phone.trim()) {
       const inputPhone = sanitizedRegData.phone.trim();
-      const phoneExistsStudent = students.some((s) => (s.phone && s.phone.trim() === inputPhone) || (s.parentPhone && s.parentPhone.trim() === inputPhone));
-      const phoneExistsTeacher = teachers.some((t) => (t as any).phone && (t as any).phone.trim() === inputPhone);
-      const phoneExistsPending = pendingRegistrations.some((p) => p.phone && p.phone.trim() === inputPhone && p.status !== 'ditolak');
+      const phoneExistsStudent = liveStudents.some((s) => (s.phone && s.phone.trim() === inputPhone) || (s.parentPhone && s.parentPhone.trim() === inputPhone));
+      const phoneExistsTeacher = liveTeachers.some((t) => (t as any).phone && (t as any).phone.trim() === inputPhone);
+      const phoneExistsPending = livePending.some((p) => p.phone && p.phone.trim() === inputPhone && p.status !== 'ditolak');
       if (phoneExistsStudent || phoneExistsTeacher || phoneExistsPending) {
         throw new Error('Nomor Telepon sudah terdaftar. Silakan gunakan nomor telepon lain.');
       }
@@ -2452,11 +2541,11 @@ export default function App({ initialMode }: AppProps = {}) {
     if (sanitizedRegData.role === 'siswa') {
       const nisnToCheck = sanitizedRegData.nipOrNisnOrNik?.trim();
       if (nisnToCheck) {
-        const nisnExistsStudent = students.some((s) => s.nisn && s.nisn.trim() === nisnToCheck);
+        const nisnExistsStudent = liveStudents.some((s) => s.nisn && s.nisn.trim() === nisnToCheck);
         if (nisnExistsStudent) {
           throw new Error(`NISN ${nisnToCheck} sudah terdaftar sebagai Siswa aktif.`);
         }
-        const nisnExistsPending = pendingRegistrations.some((p) => p.role === 'siswa' && p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === nisnToCheck && p.status !== 'ditolak');
+        const nisnExistsPending = livePending.some((p) => p.role === 'siswa' && p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === nisnToCheck && p.status !== 'ditolak');
         if (nisnExistsPending) {
           throw new Error(`NISN ${nisnToCheck} sudah diajukan dan sedang menunggu verifikasi Admin.`);
         }
@@ -2467,11 +2556,11 @@ export default function App({ initialMode }: AppProps = {}) {
     if (sanitizedRegData.role === 'guru') {
       const nipToCheck = sanitizedRegData.nipOrNisnOrNik?.trim();
       if (nipToCheck) {
-        const nipExistsTeacher = teachers.some((t) => t.nip && t.nip.trim() === nipToCheck);
+        const nipExistsTeacher = liveTeachers.some((t) => t.nip && t.nip.trim() === nipToCheck);
         if (nipExistsTeacher) {
           throw new Error(`NIP ${nipToCheck} sudah terdaftar sebagai Tenaga Pendidik aktif.`);
         }
-        const nipExistsPending = pendingRegistrations.some((p) => (p.role === 'guru' || p.role === 'pelatih') && p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === nipToCheck && p.status !== 'ditolak');
+        const nipExistsPending = livePending.some((p) => (p.role === 'guru' || p.role === 'pelatih') && p.nipOrNisnOrNik && p.nipOrNisnOrNik.trim() === nipToCheck && p.status !== 'ditolak');
         if (nipExistsPending) {
           throw new Error(`NIP ${nipToCheck} sudah diajukan dan sedang menunggu verifikasi Admin.`);
         }
@@ -3927,7 +4016,8 @@ export default function App({ initialMode }: AppProps = {}) {
                                     
                                     if (loginRole === 'admin' || loginRole === 'guru' || loginRole === 'wali_kelas' || loginRole === 'bk' || loginRole === 'piket' || loginRole === 'guru_wali') {
                                       const match = teachers.find((t) => {
-                                        const isIdMatch = t.nip === trimmedCode || (t.role === 'admin' && trimmedCode === 'admin');
+                                        const tNip = String(t.nip || '').trim();
+                                        const isIdMatch = tNip === trimmedCode || (t.role === 'admin' && trimmedCode === 'admin');
                                         if (!isIdMatch) return false;
 
                                         const hasCustomPassword = Boolean(t.password && t.password.trim() !== '');
@@ -3935,26 +4025,29 @@ export default function App({ initialMode }: AppProps = {}) {
                                           return trimmedPassword === t.password!.trim();
                                         }
 
-                                        const isDefaultAdmin = t.role === 'admin' && (trimmedPassword === 'admin123' || trimmedPassword === t.nip);
-                                        const isDefaultTeacher = t.role !== 'admin' && (trimmedPassword === 'guru123' || trimmedPassword === t.nip);
+                                        const isDefaultAdmin = t.role === 'admin' && (trimmedPassword === 'admin123' || trimmedPassword === tNip);
+                                        const isDefaultTeacher = t.role !== 'admin' && (trimmedPassword === 'guru123' || trimmedPassword === tNip);
                                         return isDefaultAdmin || isDefaultTeacher;
                                       });
 
                                       if (match) {
                                         resetLoginRateLimit();
+                                        setAdminTabOverride(null);
                                         const userRoles = match.roles || [match.role];
+                                        let resolvedRole: UserRole = match.role || userRoles[0] || 'guru';
                                         if (loginRole === 'guru') {
                                           const teacherRole = userRoles.find(r => ['guru', 'wali_kelas', 'bk', 'piket', 'guru_wali'].includes(r));
-                                          setActiveRole(teacherRole || 'guru');
+                                          resolvedRole = (teacherRole || 'guru') as UserRole;
                                         } else {
                                           const canAccessSelected = userRoles.includes(loginRole as any);
                                           if (canAccessSelected) {
-                                            setActiveRole(loginRole);
-                                          } else {
-                                            setActiveRole(match.role || userRoles[0]);
+                                            resolvedRole = loginRole;
                                           }
                                         }
+                                        setActiveRole(resolvedRole);
                                         setActiveUser(match);
+                                        safeLocalStorageSet('siakad_active_role', resolvedRole);
+                                        safeLocalStorageSet('siakad_active_user', JSON.stringify(match));
                                         setLoginCode('');
                                         setLoginPassword('');
                                         setIsLoginModalOpen(false);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Building, 
@@ -242,39 +243,23 @@ export default function WebSarpras() {
 
             <div className="grid grid-cols-1 gap-4">
               {webContent.programs.map((prog, idx) => (
-                <div 
+                <button
                   key={idx}
-                  className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col sm:flex-row items-start gap-4 sm:gap-5 hover:border-emerald-500/30 transition-all hover:bg-emerald-50/10 hover:shadow-lg hover:scale-[1.01] duration-300"
+                  type="button"
+                  onClick={() => {
+                    setSelectedProgram(prog);
+                    setCurrentProgramSlide(0);
+                  }}
+                  className="w-full text-left bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col sm:flex-row items-start gap-4 sm:gap-5 hover:border-emerald-500/40 transition-all hover:bg-emerald-50/10 hover:shadow-lg hover:scale-[1.01] duration-300 cursor-pointer group"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0">
-                    <WebIcon name={prog.icon || '🏆'} className="w-6 h-6 text-emerald-800" />
+                  <div className="w-12 h-12 rounded-xl bg-emerald-50 group-hover:bg-emerald-800 text-emerald-800 group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
+                    <WebIcon name={prog.icon || '🏆'} className="w-6 h-6 text-current" />
                   </div>
-                  <div className="space-y-2 flex-1 text-left">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <h4 className="font-extrabold text-slate-800 text-sm sm:text-base">{prog.title}</h4>
-                      {prog.images && prog.images.length > 0 && (
-                        <span className="text-[10px] bg-emerald-50 text-emerald-900 border border-emerald-200/80 font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
-                          <Camera className="w-3 h-3 text-emerald-600" />
-                          <span>{prog.images.length} Foto Slider</span>
-                        </span>
-                      )}
-                    </div>
+                  <div className="space-y-1.5 flex-1 text-left">
+                    <h4 className="font-extrabold text-slate-800 group-hover:text-emerald-900 transition-colors text-sm sm:text-base">{prog.title}</h4>
                     <p className="text-xs text-slate-500 leading-relaxed font-medium">{prog.desc}</p>
-                    {prog.images && prog.images.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedProgram(prog);
-                          setCurrentProgramSlide(0);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200/80 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs mt-1"
-                      >
-                        <Camera className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>Buka Galeri Foto Slider ({prog.images.length} Foto) &rarr;</span>
-                      </button>
-                    )}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -367,10 +352,11 @@ export default function WebSarpras() {
         </div>
       </div>
 
-      {/* POPUP DETAIL STAFF MODAL */}
-      <AnimatePresence>
-        {activeStaff && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* POPUP MODALS (PORTAL TO BODY AGAR TIDAK TERTUTUP HEADER / TAMPILAN LAIN) */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {activeStaff && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -426,13 +412,11 @@ export default function WebSarpras() {
               </div>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
+          )}
 
-      {/* POPUP DETAIL FACILITY MODAL */}
-      <AnimatePresence>
-        {activeFacility && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* POPUP DETAIL FACILITY MODAL */}
+          {activeFacility && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -574,7 +558,7 @@ export default function WebSarpras() {
         {/* MODAL DETAIL PROGRAM UNGGULAN & SLIDER FOTO */}
         {selectedProgram && (
           <div 
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
             onClick={() => setSelectedProgram(null)}
           >
             <motion.div 
@@ -582,7 +566,7 @@ export default function WebSarpras() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-slate-900 border border-slate-800 text-white rounded-3xl p-6 sm:p-7 max-w-2xl w-full shadow-2xl relative space-y-5 my-8"
+              className="bg-slate-900 border border-slate-800 text-white rounded-3xl p-6 sm:p-7 max-w-2xl w-full shadow-2xl relative space-y-5 max-h-[90vh] overflow-y-auto scrollbar-thin"
             >
               <button 
                 onClick={() => setSelectedProgram(null)}
@@ -693,7 +677,9 @@ export default function WebSarpras() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
 
     </div>
   );

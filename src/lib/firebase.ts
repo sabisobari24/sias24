@@ -34,7 +34,7 @@ import {
   setLogLevel
 } from 'firebase/firestore';
 import { safeLocalStorageSet, safeLocalStorageGet, clearQuotaHeavyKeys } from '../utils/storageHelper';
-import { isSupabaseConfigured } from './supabase';
+import { isSupabaseConfigured, isSupabaseSecretKeyConfigured } from './supabase';
 import {
   setSupabaseStatusNotifier,
   formatSupabaseErrorMessage,
@@ -55,12 +55,12 @@ import {
   supabaseTestReadWrite
 } from './supabaseDb';
 
-export { isSupabaseConfigured };
+export { isSupabaseConfigured, isSupabaseSecretKeyConfigured };
 
 export function getActiveDbBackend(): 'supabase' | 'firebase' {
   const configuredBackend = String((import.meta as any).env?.VITE_STORAGE_BACKEND || '').toLowerCase().trim();
   if (configuredBackend === 'firebase') return 'firebase';
-  if (isSupabaseConfigured()) return 'supabase';
+  if (configuredBackend === 'supabase' || isSupabaseConfigured() || isSupabaseSecretKeyConfigured()) return 'supabase';
   return 'firebase';
 }
 
