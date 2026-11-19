@@ -146,7 +146,7 @@ export function enhanceAndCompressBannerImage(
       return;
     }
 
-    const TARGET_MAX_BYTES = 220 * 1024;
+    const TARGET_MAX_BYTES = 145 * 1024;
 
     const processImageElement = (img: HTMLImageElement) => {
       try {
@@ -198,12 +198,12 @@ export function enhanceAndCompressBannerImage(
         // 4. Gentle edge sharpening to avoid softness without JPEG haloing
         applySharpenAndClarityFilter(ctx, width, height, 0.14);
 
-        // 5. Intelligent encoding: Prefer crisp WebP first (<= 220KB), fallback to high-quality JPEG
+        // 5. Intelligent encoding: Prefer crisp WebP first (<= 145KB), fallback to high-quality JPEG
         let outputUrl = '';
         try {
           let wq = quality;
           let webp = canvas.toDataURL('image/webp', wq);
-          while (webp.startsWith('data:image/webp') && webp.length > TARGET_MAX_BYTES && wq > 0.72) {
+          while (webp.startsWith('data:image/webp') && webp.length > TARGET_MAX_BYTES && wq > 0.66) {
             wq -= 0.05;
             webp = canvas.toDataURL('image/webp', wq);
           }
@@ -215,12 +215,12 @@ export function enhanceAndCompressBannerImage(
         if (!outputUrl) {
           let q = quality;
           outputUrl = canvas.toDataURL('image/jpeg', q);
-          while (outputUrl.length > TARGET_MAX_BYTES && q > 0.70) {
+          while (outputUrl.length > TARGET_MAX_BYTES && q > 0.65) {
             q -= 0.05;
             outputUrl = canvas.toDataURL('image/jpeg', q);
           }
-          // Only scale down slightly if still exceptionally large (> 280KB)
-          if (outputUrl.length > 280 * 1024) {
+          // Only scale down slightly if still exceptionally large (> 180KB)
+          if (outputUrl.length > 180 * 1024) {
             const smallerCanvas = document.createElement('canvas');
             smallerCanvas.width = Math.round(width * 0.85);
             smallerCanvas.height = Math.round(height * 0.85);
@@ -229,7 +229,7 @@ export function enhanceAndCompressBannerImage(
               sCtx.imageSmoothingEnabled = true;
               sCtx.imageSmoothingQuality = 'high';
               sCtx.drawImage(canvas, 0, 0, smallerCanvas.width, smallerCanvas.height);
-              outputUrl = smallerCanvas.toDataURL('image/jpeg', 0.78);
+              outputUrl = smallerCanvas.toDataURL('image/jpeg', 0.76);
             }
           }
         }

@@ -862,7 +862,7 @@ export default function App({ initialMode }: AppProps = {}) {
   const handleUpdateSocialLinks = async (instagram: string, whatsapp: string, email: string) => {
     try {
       setWebHomeContent(prev => ({ ...prev, instagram, whatsapp, email }));
-      await saveDocument('web_content', 'home', { ...webHomeContent, instagram, whatsapp, email });
+      await saveDocument('web_content', 'home', { id: 'home', instagram, whatsapp, email });
     } catch (err) {
       console.error("Gagal menyimpan media sosial:", err);
     }
@@ -1709,9 +1709,7 @@ export default function App({ initialMode }: AppProps = {}) {
     }).catch(err => console.error("Error saving headmaster info:", err));
 
     if (finalPhoto || name) {
-      const existingHome = webHomeContent || {};
       saveDocument('web_content', 'home', {
-        ...existingHome,
         id: 'home',
         headName: name,
         ...(finalPhoto ? { headImage: finalPhoto } : {})

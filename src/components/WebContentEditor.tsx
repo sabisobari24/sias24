@@ -43,7 +43,7 @@ import {
   Zap,
   Compass
 } from 'lucide-react';
-import { syncCollection, saveDocument } from '../lib/firebase';
+import { formatFirestoreErrorMessage, syncCollection, saveDocument } from '../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../data/initialWebContent';
 import { WebSectionContent, WebStaff, WebProgram, WebSlide, WebSubject, WebExtracurricular, WebFacility, WebArticle, WebTicker, WebActivity, WebAgenda, WebVisionPillar } from '../types';
 import MediaUploadSelector from './MediaUploadSelector';
@@ -53,20 +53,54 @@ import { enhanceAndCompressBannerImage, compressAvatarImage } from '../utils/ima
 import { safeLocalStorageSet, safeLocalStorageGet } from '../utils/storageHelper';
 import { WebIcon } from './website/WebIcon';
 
+const DEFAULT_VISION_PILLARS: WebVisionPillar[] = [
+  {
+    id: 'p1',
+    title: 'Berkarakter',
+    desc: 'Akhlak mulia, religius, disiplin, santun, gotong royong, dan berintegritas.',
+    icon: 'Heart',
+    color: 'amber'
+  },
+  {
+    id: 'p2',
+    title: 'Berprestasi',
+    desc: 'Keunggulan akademik, sains, seni, literasi digital, & kompetisi nasional.',
+    icon: 'Award',
+    color: 'blue'
+  },
+  {
+    id: 'p3',
+    title: 'Berwawasan',
+    desc: 'Sekolah Adiwiyata, ramah anak, hijau, asri, sehat, & peduli lingkungan hidup.',
+    icon: 'Leaf',
+    color: 'emerald'
+  }
+];
+
 export default function WebContentEditor() {
-  const [contents, setContents] = useState<WebSectionContent[]>([]);
+  const [contents, setContents] = useState<WebSectionContent[]>(INITIAL_WEB_CONTENT);
   const [activeSectionId, setActiveSectionId] = useState<'home' | 'academic' | 'kesiswaan' | 'sarpras' | 'berita'>('home');
   const [activeSubTab, setActiveSubTab] = useState<'header' | 'staff' | 'programs' | 'slides' | 'specialized' | 'gallery' | 'articles' | 'tickers' | 'activities' | 'agendas' | 'vision-mission'>('header');
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
-  // Synchronization with Firestore
+  // Synchronization with Supabase / Firestore
   useEffect(() => {
     const unsubscribe = syncCollection<WebSectionContent>(
       'web_content', 
       (data) => {
-        // Sort to ensure home, academic, kesiswaan, sarpras, berita order
-        const sorted = [...data].sort((a, b) => {
+        // Merge with INITIAL_WEB_CONTENT baselines so no section ever becomes undefined
+        const mergedList = INITIAL_WEB_CONTENT.map((baseItem) => {
+          const remote = data.find((d) => d.id === baseItem.id);
+          return remote ? { ...baseItem, ...remote } : baseItem;
+        });
+        data.forEach((d) => {
+          if (d?.id && !mergedList.some((m) => m.id === d.id)) {
+            mergedList.push(d);
+          }
+        });
+        const sorted = [...mergedList].sort((a, b) => {
           const order = { home: 1, academic: 2, kesiswaan: 3, sarpras: 4, berita: 5 };
           return (order[a.id] || 99) - (order[b.id] || 99);
         });
@@ -79,7 +113,9 @@ export default function WebContentEditor() {
     return () => unsubscribe();
   }, []);
 
-  const activeSection = contents.find(c => c.id === activeSectionId);
+  const activeSection =
+    contents.find(c => c.id === activeSectionId) ||
+    INITIAL_WEB_CONTENT.find(c => c.id === activeSectionId);
 
   // Local editor states for Header Profile & Section Banner Header
   const [headerBgImage, setHeaderBgImage] = useState('');
@@ -157,46 +193,67 @@ export default function WebContentEditor() {
     setConfirmState({ isOpen: true, title, message, onConfirm });
   };
 
+  const errorTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const notifyEditorError = (msg: string) => {
+    setSaveStatus(null);
     setErrorStatus(msg);
-    setTimeout(() => setErrorStatus(''), 4000);
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => setErrorStatus(''), 8000);
   };
 
-  const prevSectionIdRef = React.useRef(activeSectionId);
+  const showToast = (message: string) => {
+    setErrorStatus('');
+    setSaveStatus(message);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => setSaveStatus(null), 4000);
+  };
 
-  // Update local states when active section changes
+  const prevSectionIdRef = React.useRef<string | null>(null);
+  const dirtyGroupsRef = React.useRef<{ header: boolean; vision: boolean; gallery: boolean }>({
+    header: false,
+    vision: false,
+    gallery: false,
+  });
+
+  // Hydrate form states when switching section, OR on remote refresh ONLY for non-dirty groups
   useEffect(() => {
     const isSectionSwitched = prevSectionIdRef.current !== activeSectionId;
     prevSectionIdRef.current = activeSectionId;
 
-    if (activeSection) {
-      if (isSectionSwitched) {
-        if (activeSection.id === 'berita') {
-          setActiveSubTab('articles');
-        } else if (activeSection.id === 'home') {
-          if (!['header', 'slides', 'vision-mission'].includes(activeSubTab)) {
-            setActiveSubTab('header');
-          }
-        } else {
-          if (['articles', 'tickers', 'activities', 'agendas'].includes(activeSubTab)) {
-            setActiveSubTab('header');
-          }
-        }
+    if (!activeSection) return;
 
-        // Close any active sub-editors ONLY upon switching section
-        setEditingStaffIdx(null);
-        setEditingProgIdx(null);
-        setEditingSlideIdx(null);
-        setEditingPillarIdx(null);
-        setEditingSubjectIdx(null);
-        setEditingExtraIdx(null);
-        setEditingFacilityIdx(null);
-        setEditingArticleIdx(null);
-        setEditingTickerIdx(null);
-        setEditingActivityIdx(null);
-        setEditingAgendaIdx(null);
+    if (isSectionSwitched) {
+      dirtyGroupsRef.current = { header: false, vision: false, gallery: false };
+
+      if (activeSection.id === 'berita') {
+        setActiveSubTab('articles');
+      } else if (activeSection.id === 'home') {
+        if (!['header', 'slides', 'vision-mission'].includes(activeSubTab)) {
+          setActiveSubTab('header');
+        }
+      } else {
+        if (['articles', 'tickers', 'activities', 'agendas'].includes(activeSubTab)) {
+          setActiveSubTab('header');
+        }
       }
 
+      // Close active sub-editors ONLY when switching section
+      setEditingStaffIdx(null);
+      setEditingProgIdx(null);
+      setEditingSlideIdx(null);
+      setEditingPillarIdx(null);
+      setEditingSubjectIdx(null);
+      setEditingExtraIdx(null);
+      setEditingFacilityIdx(null);
+      setEditingArticleIdx(null);
+      setEditingTickerIdx(null);
+      setEditingActivityIdx(null);
+      setEditingAgendaIdx(null);
+    }
+
+    if (isSectionSwitched || !dirtyGroupsRef.current.header) {
       setHeaderBgImage(activeSection.headerBgImage || (
         activeSection.id === 'academic' ? 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz' :
         activeSection.id === 'kesiswaan' ? 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz' :
@@ -222,70 +279,124 @@ export default function WebContentEditor() {
       setSchoolLogo(activeSection.schoolLogo || '');
       setHeaderMotto(activeSection.headerMotto || 'Berpacu dalam Prestasi');
       setAkreditasi(activeSection.akreditasi || 'Akreditasi A (Unggul)');
+    }
+
+    if (isSectionSwitched || !dirtyGroupsRef.current.vision) {
       setVision(activeSection.vision || '');
       setMissions(activeSection.missions || []);
       setVisionPillarsTitle(activeSection.visionPillarsTitle || '3 Pilar Inti Penopang Visi:');
-      setVisionPillars(Array.isArray(activeSection.visionPillars) && activeSection.visionPillars.length > 0 ? activeSection.visionPillars : [
-        {
-          id: 'p1',
-          title: 'Berkarakter',
-          desc: 'Akhlak mulia, religius, disiplin, santun, gotong royong, dan berintegritas.',
-          icon: 'Heart',
-          color: 'amber'
-        },
-        {
-          id: 'p2',
-          title: 'Berprestasi',
-          desc: 'Keunggulan akademik, sains, seni, literasi digital, & kompetisi nasional.',
-          icon: 'Award',
-          color: 'blue'
-        },
-        {
-          id: 'p3',
-          title: 'Berwawasan',
-          desc: 'Sekolah Adiwiyata, ramah anak, hijau, asri, sehat, & peduli lingkungan hidup.',
-          icon: 'Leaf',
-          color: 'emerald'
-        }
-      ]);
+      setVisionPillars(
+        Array.isArray(activeSection.visionPillars) && activeSection.visionPillars.length > 0
+          ? activeSection.visionPillars
+          : DEFAULT_VISION_PILLARS
+      );
       setInstagram(activeSection.instagram || '');
       setWhatsapp(activeSection.whatsapp || '');
       setEmail(activeSection.email || '');
+    }
+
+    if (isSectionSwitched || !dirtyGroupsRef.current.gallery) {
       setGalleryUrls(activeSection.popupImages || []);
     }
   }, [activeSectionId, contents]);
 
-  const showToast = (message: string) => {
-    setSaveStatus(message);
-    setTimeout(() => setSaveStatus(null), 3000);
+  // Helpers to compress oversized base64 images so Supabase JSONB rows stay fast & reliable
+  const compressAvatarIfNeeded = async (src: string): Promise<string> => {
+    if (!src) return src;
+    if (src.startsWith('data:image/') && src.length > 38 * 1024) {
+      try {
+        return await compressAvatarImage(src, 420, 525, 0.78);
+      } catch {
+        return src;
+      }
+    }
+    return src;
   };
 
-  // Save changes to Firestore
-  const handleSaveSection = async (updatedFields: Partial<WebSectionContent>) => {
-    if (!activeSection) return;
-    const fullUpdated = { ...activeSection, ...updatedFields };
-    // Optimistically update local contents state immediately so deletions/edits reflect instantly
-    setContents(prev => prev.map(item => item.id === activeSection.id ? fullUpdated : item));
+  const compressBannerIfNeeded = async (src: string): Promise<string> => {
+    if (!src) return src;
+    if (src.startsWith('data:image/') && src.length > 100 * 1024) {
+      try {
+        return await enhanceAndCompressBannerImage(src, 1280, 720, 0.78);
+      } catch {
+        return src;
+      }
+    }
+    return src;
+  };
+
+  const compressBannerArray = async (urls: string[] = []): Promise<string[]> => {
+    const filtered = urls.filter((img) => typeof img === 'string' && img.trim() !== '');
+    const results: string[] = [];
+    for (const img of filtered) {
+      results.push(await compressBannerIfNeeded(img));
+    }
+    return results;
+  };
+
+  // Save changes reliably to Supabase PostgreSQL / Firestore with rollback on failure
+  const handleSaveSection = async (
+    updatedFields: Partial<WebSectionContent>,
+    successMsg?: string
+  ): Promise<boolean> => {
+    const baseSection =
+      contents.find((c) => c.id === activeSectionId) ||
+      INITIAL_WEB_CONTENT.find((c) => c.id === activeSectionId);
+
+    if (!baseSection) {
+      notifyEditorError('Bagian konten tidak ditemukan.');
+      return false;
+    }
+
+    const previousContents = contents;
+    const fullUpdated: WebSectionContent = { ...baseSection, ...updatedFields, id: baseSection.id };
+
+    setIsSaving(true);
+    setContents((prev) => {
+      const exists = prev.some((item) => item.id === baseSection.id);
+      return exists
+        ? prev.map((item) => (item.id === baseSection.id ? fullUpdated : item))
+        : [...prev, fullUpdated];
+    });
+
     try {
-      // Save full updated section to Firestore so all devices receive complete data
-      await saveDocument('web_content', activeSection.id, fullUpdated);
-      showToast('Konten Berhasil Disinkronkan!');
-    } catch (err) {
-      console.error(err);
-      showToast('Error Menyimpan Konten');
+      await saveDocument('web_content', baseSection.id, fullUpdated);
+
+      if (baseSection.id === 'home') {
+        safeLocalStorageSet('siakad_web_home_content', JSON.stringify(fullUpdated));
+        window.dispatchEvent(new CustomEvent('siakad_web_content_updated', { detail: fullUpdated }));
+      }
+
+      showToast(successMsg || 'Konten Berhasil Disimpan & Disinkronkan!');
+      return true;
+    } catch (err: any) {
+      console.error('[WebContentEditor] Gagal menyimpan ke database:', err);
+      // Rollback UI state so user never sees fake/unsaved content that later vanishes
+      setContents(previousContents);
+      notifyEditorError(formatFirestoreErrorMessage(err) || 'Gagal menyimpan konten ke database Supabase.');
+      return false;
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleSaveHeader = async () => {
-    let finalHeadImage = headImage;
-    if (finalHeadImage && finalHeadImage.startsWith('data:image/') && finalHeadImage.length > 35 * 1024) {
-      try {
-        finalHeadImage = await compressAvatarImage(finalHeadImage, 420, 525, 0.78);
-        setHeadImage(finalHeadImage);
-      } catch (_) {}
+    const finalHeadImage = await compressAvatarIfNeeded(headImage);
+    if (finalHeadImage !== headImage) setHeadImage(finalHeadImage);
+
+    let finalHeaderBgImage = headerBgImage;
+    if (activeSectionId !== 'home' && finalHeaderBgImage) {
+      finalHeaderBgImage = await compressBannerIfNeeded(finalHeaderBgImage);
+      if (finalHeaderBgImage !== headerBgImage) setHeaderBgImage(finalHeaderBgImage);
     }
 
-    const updatedPayload = {
+    let finalSchoolLogo = schoolLogo;
+    if (activeSectionId === 'home' && finalSchoolLogo) {
+      finalSchoolLogo = await compressAvatarIfNeeded(finalSchoolLogo);
+      if (finalSchoolLogo !== schoolLogo) setSchoolLogo(finalSchoolLogo);
+    }
+
+    const updatedPayload: Partial<WebSectionContent> = {
       headName,
       headRole,
       headImage: finalHeadImage,
@@ -293,15 +404,23 @@ export default function WebContentEditor() {
       headBorn,
       headSubject,
       headHobby,
-      ...(activeSectionId === 'home' 
-        ? { akreditasi, headerMotto, schoolLogo, vision, missions, visionPillarsTitle, visionPillars, instagram, whatsapp, email } 
-        : { headerBgImage, headerTitle, headerSubtitle }
+      ...(activeSectionId === 'home'
+        ? { akreditasi, headerMotto, schoolLogo: finalSchoolLogo, vision, missions, visionPillarsTitle, visionPillars, instagram, whatsapp, email }
+        : { headerBgImage: finalHeaderBgImage, headerTitle, headerSubtitle }
       )
     };
 
-    await handleSaveSection(updatedPayload);
+    const ok = await handleSaveSection(
+      updatedPayload,
+      activeSectionId === 'home'
+        ? 'Profil Kepala Sekolah & Akreditasi berhasil disimpan!'
+        : 'Profil & Banner Kepala Bidang berhasil disimpan!'
+    );
 
-    // If saving the home section, also propagate to settings/headmaster, local storage, and broadcast event
+    if (!ok) return;
+    dirtyGroupsRef.current.header = false;
+
+    // If saving the home section, propagate headmaster metadata to settings/headmaster & global broadcasts
     if (activeSectionId === 'home') {
       if (finalHeadImage) {
         safeLocalStorageSet('siakad_headmaster_photo', finalHeadImage);
@@ -310,7 +429,6 @@ export default function WebContentEditor() {
         safeLocalStorageSet('siakad_headmaster_name', headName);
       }
 
-      // Sync to Firestore 'settings/headmaster'
       try {
         await saveDocument('settings', 'headmaster', {
           id: 'headmaster',
@@ -323,16 +441,6 @@ export default function WebContentEditor() {
         console.warn('Could not sync headmaster document in settings:', err);
       }
 
-      // Synchronize siakad_web_home_content
-      const cachedHomeRaw = safeLocalStorageGet('siakad_web_home_content');
-      let cachedHomeObj: any = {};
-      try {
-        if (cachedHomeRaw) cachedHomeObj = JSON.parse(cachedHomeRaw);
-      } catch (_) {}
-      const mergedHome = { ...cachedHomeObj, ...(activeSection || {}), ...updatedPayload };
-      safeLocalStorageSet('siakad_web_home_content', JSON.stringify(mergedHome));
-
-      // Global broadcast event for instantaneous UI reflection without reload
       window.dispatchEvent(new CustomEvent('siakad_headmaster_updated', {
         detail: {
           headImage: finalHeadImage,
@@ -344,20 +452,26 @@ export default function WebContentEditor() {
           headHobby
         }
       }));
-      window.dispatchEvent(new CustomEvent('siakad_web_content_updated', { detail: mergedHome }));
     }
   };
 
   // Staff CRUD Operations
-  const handleSaveStaff = () => {
-    if (!activeSection) return;
-    const staffList = [...(activeSection.staff || [])];
-    if (editingStaffIdx === null) return;
+  const handleSaveStaff = async () => {
+    if (!activeSection || editingStaffIdx === null) return;
+    if (!staffForm.name?.trim()) {
+      notifyEditorError('Nama lengkap staf wajib diisi.');
+      return;
+    }
 
+    const compressedImage = await compressAvatarIfNeeded(
+      staffForm.image || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400'
+    );
+
+    const staffList = [...(activeSection.staff || [])];
     const newStaff: WebStaff = {
-      name: staffForm.name || '',
+      name: staffForm.name.trim(),
       role: staffForm.role || '',
-      image: staffForm.image || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+      image: compressedImage,
       born: staffForm.born || '',
       subject: staffForm.subject || '',
       department: staffForm.department || '',
@@ -371,41 +485,39 @@ export default function WebContentEditor() {
       staffList[editingStaffIdx] = newStaff;
     }
 
-    handleSaveSection({ staff: staffList });
-    setEditingStaffIdx(null);
+    const ok = await handleSaveSection({ staff: staffList }, 'Data staf berhasil disimpan ke Supabase!');
+    if (ok) {
+      setEditingStaffIdx(null);
+    }
   };
 
   const handleDeleteStaff = (idx: number) => {
     if (!activeSection) return;
-    openConfirm('Hapus Staf', 'Apakah Anda yakin ingin menghapus staf ini?', () => {
+    openConfirm('Hapus Staf', 'Apakah Anda yakin ingin menghapus staf ini?', async () => {
       const staffList = [...(activeSection.staff || [])];
       staffList.splice(idx, 1);
-      handleSaveSection({ staff: staffList });
+      await handleSaveSection({ staff: staffList }, 'Staf berhasil dihapus.');
     });
   };
 
   // Program CRUD Operations
   const handleSaveProgram = async () => {
-    if (!activeSection) return;
-    const list = [...(activeSection.programs || [])];
-    if (editingProgIdx === null) return;
-
-    // Filter and sanitize images
-    const rawImages = (progForm.images || []).filter((img: string) => img && typeof img === 'string' && img.trim() !== '');
-    const cleanImages: string[] = [];
-    for (let img of rawImages) {
-      if (img.startsWith('data:image/') && img.length > 68 * 1024) {
-        try {
-          img = await enhanceAndCompressBannerImage(img, 1280, 720, 0.72);
-        } catch (_) {}
-      }
-      cleanImages.push(img);
+    if (!activeSection || editingProgIdx === null) return;
+    if (!progForm.title?.trim()) {
+      notifyEditorError('Nama program kerja wajib diisi.');
+      return;
     }
+
+    const list = [...(activeSection.programs || [])];
+    const cleanImages = await compressBannerArray(progForm.images || []);
+    const cleanIcon = progForm.icon?.startsWith('data:image/')
+      ? await compressAvatarIfNeeded(progForm.icon)
+      : (progForm.icon || '🏆');
 
     const newProg: WebProgram = {
       title: (progForm.title || '').replace(/<[^>]*>/g, '').trim(),
       desc: (progForm.desc || '').replace(/<[^>]*>/g, '').trim(),
-      icon: progForm.icon || '🏆',
+      icon: cleanIcon,
       images: cleanImages
     };
 
@@ -415,24 +527,25 @@ export default function WebContentEditor() {
       list[editingProgIdx] = newProg;
     }
 
-    handleSaveSection({ programs: list });
-    setEditingProgIdx(null);
+    const ok = await handleSaveSection({ programs: list }, 'Program kerja & foto slider berhasil disimpan!');
+    if (ok) {
+      setEditingProgIdx(null);
+    }
   };
 
   const handleDeleteProgram = (idx: number) => {
     if (!activeSection) return;
-    openConfirm('Hapus Program Kerja', 'Hapus program kerja ini?', () => {
+    openConfirm('Hapus Program Kerja', 'Hapus program kerja ini?', async () => {
       const list = [...(activeSection.programs || [])];
       list.splice(idx, 1);
-      handleSaveSection({ programs: list });
+      await handleSaveSection({ programs: list }, 'Program kerja berhasil dihapus.');
     });
   };
 
   // Slide CRUD Operations
   const handleSaveSlide = async () => {
-    if (!activeSection) return;
+    if (!activeSection || editingSlideIdx === null) return;
     const list = [...(activeSection.slides || [])];
-    if (editingSlideIdx === null) return;
 
     if (editingSlideIdx === -1 && list.length >= 15) {
       notifyEditorError('Jumlah maksimum slider adalah 15 slide.');
@@ -440,13 +553,7 @@ export default function WebContentEditor() {
     }
 
     let slideImage = slideForm.image || (slideForm.type === 'video' ? 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600' : 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz');
-
-    // Auto compress if heavy base64 (> 65KB) to protect Firestore 1MB document limit & LocalStorage quota
-    if (slideImage.startsWith('data:image/') && slideImage.length > 68 * 1024) {
-      try {
-        slideImage = await enhanceAndCompressBannerImage(slideImage, 1280, 720, 0.72);
-      } catch (_) {}
-    }
+    slideImage = await compressBannerIfNeeded(slideImage);
 
     const newSlide: WebSlide = {
       image: slideImage,
@@ -462,29 +569,29 @@ export default function WebContentEditor() {
       list[editingSlideIdx] = newSlide;
     }
 
-    // Auto-compress any other bloated slides in the list if they exist from before
+    // Auto-compress any other bloated slides in the list
     for (let i = 0; i < list.length; i++) {
-      if (list[i]?.image?.startsWith('data:image/') && list[i].image.length > 75 * 1024) {
-        try {
-          list[i].image = await enhanceAndCompressBannerImage(list[i].image, 1280, 720, 0.70);
-        } catch (_) {}
+      if (list[i]?.image?.startsWith('data:image/') && list[i].image.length > 100 * 1024) {
+        list[i] = { ...list[i], image: await compressBannerIfNeeded(list[i].image) };
       }
     }
 
-    await handleSaveSection({ slides: list });
-    setEditingSlideIdx(null);
+    const ok = await handleSaveSection({ slides: list }, 'Slide dokumentasi berhasil disimpan!');
+    if (ok) {
+      setEditingSlideIdx(null);
+    }
   };
 
   const handleDeleteSlide = (idx: number) => {
     if (!activeSection) return;
-    openConfirm('Hapus Slide', 'Hapus slide dokumentasi ini?', () => {
+    openConfirm('Hapus Slide', 'Hapus slide dokumentasi ini?', async () => {
       const list = [...(activeSection.slides || [])];
       list.splice(idx, 1);
-      handleSaveSection({ slides: list });
+      await handleSaveSection({ slides: list }, 'Slide dokumentasi berhasil dihapus.');
     });
   };
 
-  const handleMoveSlide = (idx: number, direction: 'up' | 'down') => {
+  const handleMoveSlide = async (idx: number, direction: 'up' | 'down') => {
     if (!activeSection) return;
     const list = [...(activeSection.slides || [])];
     const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -492,11 +599,11 @@ export default function WebContentEditor() {
     const temp = list[idx];
     list[idx] = list[targetIdx];
     list[targetIdx] = temp;
-    handleSaveSection({ slides: list });
+    await handleSaveSection({ slides: list });
   };
 
   // Vision Pillars CRUD Operations (Home Vision Support Points)
-  const handleSavePillar = () => {
+  const handleSavePillar = async () => {
     const list = [...(visionPillars || [])];
     if (editingPillarIdx === null) return;
 
@@ -519,71 +626,94 @@ export default function WebContentEditor() {
       list[editingPillarIdx] = newPillar;
     }
 
-    setVisionPillars(list);
-    handleSaveSection({ 
-      vision, 
-      missions, 
-      visionPillarsTitle, 
-      visionPillars: list, 
-      instagram, 
-      whatsapp, 
-      email 
-    });
-    setEditingPillarIdx(null);
+    const ok = await handleSaveSection(
+      {
+        vision,
+        missions,
+        visionPillarsTitle,
+        visionPillars: list,
+        instagram,
+        whatsapp,
+        email
+      },
+      'Point penopang visi berhasil disimpan!'
+    );
+    if (ok) {
+      dirtyGroupsRef.current.vision = false;
+      setVisionPillars(list);
+      setEditingPillarIdx(null);
+    }
   };
 
   const handleDeletePillar = (idx: number) => {
-    openConfirm('Hapus Pilar Visi', 'Hapus point penopang visi ini?', () => {
+    openConfirm('Hapus Pilar Visi', 'Hapus point penopang visi ini?', async () => {
       const list = [...(visionPillars || [])];
       list.splice(idx, 1);
-      setVisionPillars(list);
-      handleSaveSection({ 
-        vision, 
-        missions, 
-        visionPillarsTitle, 
-        visionPillars: list, 
-        instagram, 
-        whatsapp, 
-        email 
-      });
+      const ok = await handleSaveSection(
+        {
+          vision,
+          missions,
+          visionPillarsTitle,
+          visionPillars: list,
+          instagram,
+          whatsapp,
+          email
+        },
+        'Point penopang visi berhasil dihapus.'
+      );
+      if (ok) {
+        dirtyGroupsRef.current.vision = false;
+        setVisionPillars(list);
+      }
     });
   };
 
-  const handleMovePillar = (idx: number, direction: 'up' | 'down') => {
+  const handleMovePillar = async (idx: number, direction: 'up' | 'down') => {
     const list = [...(visionPillars || [])];
     const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
     if (targetIdx < 0 || targetIdx >= list.length) return;
     const temp = list[idx];
     list[idx] = list[targetIdx];
     list[targetIdx] = temp;
-    setVisionPillars(list);
-    handleSaveSection({ 
-      vision, 
-      missions, 
-      visionPillarsTitle, 
-      visionPillars: list, 
-      instagram, 
-      whatsapp, 
-      email 
+    const ok = await handleSaveSection({
+      vision,
+      missions,
+      visionPillarsTitle,
+      visionPillars: list,
+      instagram,
+      whatsapp,
+      email
     });
+    if (ok) {
+      dirtyGroupsRef.current.vision = false;
+      setVisionPillars(list);
+    }
   };
 
   // Subject CRUD Operations (Academic specific)
-  const handleSaveSubject = () => {
-    if (!activeSection) return;
+  const handleSaveSubject = async () => {
+    if (!activeSection || editingSubjectIdx === null) return;
+    if (!subjectForm.name?.trim()) {
+      notifyEditorError('Nama mata pelajaran wajib diisi.');
+      return;
+    }
+
     const list = [...(activeSection.subjects || [])];
-    if (editingSubjectIdx === null) return;
+    const cleanImages = await compressBannerArray(subjectForm.images || []);
+    const cleanIcon = subjectForm.icon?.startsWith('data:image/')
+      ? await compressAvatarIfNeeded(subjectForm.icon)
+      : (subjectForm.icon || 'book-open');
 
     const newSub: WebSubject = {
       id: subjectForm.id || Math.random().toString(36).substring(7),
-      name: subjectForm.name || '',
-      icon: subjectForm.icon || 'book-open',
+      name: subjectForm.name.trim(),
+      icon: cleanIcon,
       coordinator: subjectForm.coordinator || '',
       teachers: subjectForm.teachers || '',
       hours: subjectForm.hours || '',
       method: subjectForm.method || '',
       focus: subjectForm.focus || [],
-      images: subjectForm.images || []
+      images: cleanImages
     };
 
     if (editingSubjectIdx === -1) {
@@ -592,35 +722,45 @@ export default function WebContentEditor() {
       list[editingSubjectIdx] = newSub;
     }
 
-    handleSaveSection({ subjects: list });
-    setEditingSubjectIdx(null);
+    const ok = await handleSaveSection({ subjects: list }, 'Mata pelajaran & galeri foto berhasil disimpan!');
+    if (ok) {
+      setEditingSubjectIdx(null);
+    }
   };
 
   const handleDeleteSubject = (idx: number) => {
     if (!activeSection) return;
-    openConfirm('Hapus Mata Pelajaran', 'Hapus mata pelajaran ini dari web?', () => {
+    openConfirm('Hapus Mata Pelajaran', 'Hapus mata pelajaran ini dari web?', async () => {
       const list = [...(activeSection.subjects || [])];
       list.splice(idx, 1);
-      handleSaveSection({ subjects: list });
+      await handleSaveSection({ subjects: list }, 'Mata pelajaran berhasil dihapus.');
     });
   };
 
   // Extracurricular CRUD Operations (Kesiswaan specific)
-  const handleSaveExtra = () => {
-    if (!activeSection) return;
+  const handleSaveExtra = async () => {
+    if (!activeSection || editingExtraIdx === null) return;
+    if (!extraForm.name?.trim()) {
+      notifyEditorError('Nama ekstrakurikuler wajib diisi.');
+      return;
+    }
+
     const list = [...(activeSection.extracurriculars || [])];
-    if (editingExtraIdx === null) return;
+    const cleanImages = await compressBannerArray(extraForm.images || []);
+    const cleanIcon = extraForm.icon?.startsWith('data:image/')
+      ? await compressAvatarIfNeeded(extraForm.icon)
+      : (extraForm.icon || '🏆');
 
     const newExtra: WebExtracurricular = {
       id: extraForm.id || Math.random().toString(36).substring(7),
-      name: extraForm.name || '',
-      icon: extraForm.icon || '🏆',
+      name: extraForm.name.trim(),
+      icon: cleanIcon,
       coordinator: extraForm.coordinator || '',
       coach: extraForm.coach || '',
       members: extraForm.members || '',
       schedule: extraForm.schedule || '',
       achievements: extraForm.achievements || [],
-      images: extraForm.images || []
+      images: cleanImages
     };
 
     if (editingExtraIdx === -1) {
@@ -629,35 +769,45 @@ export default function WebContentEditor() {
       list[editingExtraIdx] = newExtra;
     }
 
-    handleSaveSection({ extracurriculars: list });
-    setEditingExtraIdx(null);
+    const ok = await handleSaveSection({ extracurriculars: list }, 'Ekstrakurikuler & foto slider berhasil disimpan!');
+    if (ok) {
+      setEditingExtraIdx(null);
+    }
   };
 
   const handleDeleteExtra = (idx: number) => {
     if (!activeSection) return;
-    openConfirm('Hapus Ekstrakurikuler', 'Hapus Ekstrakurikuler ini?', () => {
+    openConfirm('Hapus Ekstrakurikuler', 'Hapus Ekstrakurikuler ini?', async () => {
       const list = [...(activeSection.extracurriculars || [])];
       list.splice(idx, 1);
-      handleSaveSection({ extracurriculars: list });
+      await handleSaveSection({ extracurriculars: list }, 'Ekstrakurikuler berhasil dihapus.');
     });
   };
 
   // Facility CRUD Operations (Sarpras specific)
-  const handleSaveFacility = () => {
-    if (!activeSection) return;
+  const handleSaveFacility = async () => {
+    if (!activeSection || editingFacilityIdx === null) return;
+    if (!facilityForm.name?.trim()) {
+      notifyEditorError('Nama fasilitas sarana prasarana wajib diisi.');
+      return;
+    }
+
     const list = [...(activeSection.facilities || [])];
-    if (editingFacilityIdx === null) return;
+    const cleanImages = await compressBannerArray(facilityForm.images || []);
+    const cleanIcon = facilityForm.icon?.startsWith('data:image/')
+      ? await compressAvatarIfNeeded(facilityForm.icon)
+      : (facilityForm.icon || '🏫');
 
     const newFac: WebFacility = {
       id: facilityForm.id || Math.random().toString(36).substring(7),
-      name: facilityForm.name || '',
-      icon: facilityForm.icon || '🏫',
+      name: facilityForm.name.trim(),
+      icon: cleanIcon,
       coordinator: facilityForm.coordinator || '',
       condition: facilityForm.condition || '',
       capacity: facilityForm.capacity || '',
       mainFeatures: facilityForm.mainFeatures || '',
       inventory: facilityForm.inventory || [],
-      images: facilityForm.images || []
+      images: cleanImages
     };
 
     if (editingFacilityIdx === -1) {
@@ -666,32 +816,41 @@ export default function WebContentEditor() {
       list[editingFacilityIdx] = newFac;
     }
 
-    handleSaveSection({ facilities: list });
-    setEditingFacilityIdx(null);
+    const ok = await handleSaveSection({ facilities: list }, 'Sarana prasarana & foto slider berhasil disimpan!');
+    if (ok) {
+      setEditingFacilityIdx(null);
+    }
   };
 
   const handleDeleteFacility = (idx: number) => {
     if (!activeSection) return;
-    openConfirm('Hapus Sarana Utama', 'Hapus sarana utama ini?', () => {
+    openConfirm('Hapus Sarana Utama', 'Hapus sarana utama ini?', async () => {
       const list = [...(activeSection.facilities || [])];
       list.splice(idx, 1);
-      handleSaveSection({ facilities: list });
+      await handleSaveSection({ facilities: list }, 'Sarana prasarana berhasil dihapus.');
     });
   };
 
   // Article CRUD Operations
-  const handleSaveArticle = () => {
-    if (!activeSection) return;
+  const handleSaveArticle = async () => {
+    if (!activeSection || editingArticleIdx === null) return;
+    if (!articleForm.title?.trim()) {
+      notifyEditorError('Judul artikel wajib diisi.');
+      return;
+    }
+
     const list = [...(activeSection.articles || [])];
-    if (editingArticleIdx === null) return;
+    const compressedArticleImg = await compressBannerIfNeeded(
+      articleForm.image || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600'
+    );
 
     const newArticle: WebArticle = {
       id: articleForm.id || Math.random().toString(36).substring(7),
-      title: articleForm.title || '',
+      title: articleForm.title.trim(),
       category: articleForm.category || 'Edukasi',
       date: articleForm.date || new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
       author: articleForm.author || 'Admin Sekolah',
-      image: articleForm.image || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600',
+      image: compressedArticleImg,
       summary: articleForm.summary || '',
       content: articleForm.content || []
     };
@@ -702,29 +861,34 @@ export default function WebContentEditor() {
       list[editingArticleIdx] = newArticle;
     }
 
-    handleSaveSection({ articles: list });
-    setEditingArticleIdx(null);
+    const ok = await handleSaveSection({ articles: list }, 'Artikel berhasil disimpan!');
+    if (ok) {
+      setEditingArticleIdx(null);
+    }
   };
 
   const handleDeleteArticle = (idx: number) => {
     if (!activeSection) return;
-    openConfirm('Hapus Artikel', 'Apakah Anda yakin ingin menghapus artikel ini?', () => {
+    openConfirm('Hapus Artikel', 'Apakah Anda yakin ingin menghapus artikel ini?', async () => {
       const list = [...(activeSection.articles || [])];
       list.splice(idx, 1);
-      handleSaveSection({ articles: list });
+      await handleSaveSection({ articles: list }, 'Artikel berhasil dihapus.');
     });
   };
 
   // Ticker CRUD Operations
-  const handleSaveTicker = () => {
-    if (!activeSection) return;
-    const list = [...(activeSection.tickers || [])];
-    if (editingTickerIdx === null) return;
+  const handleSaveTicker = async () => {
+    if (!activeSection || editingTickerIdx === null) return;
+    if (!tickerForm.text?.trim()) {
+      notifyEditorError('Pesan pengumuman wajib diisi.');
+      return;
+    }
 
+    const list = [...(activeSection.tickers || [])];
     const newTicker: WebTicker = {
       id: tickerForm.id || Math.random().toString(36).substring(7),
       category: tickerForm.category || 'Sekolah',
-      text: tickerForm.text || '',
+      text: tickerForm.text.trim(),
       linkUrl: tickerForm.linkUrl || ''
     };
 
@@ -734,29 +898,34 @@ export default function WebContentEditor() {
       list[editingTickerIdx] = newTicker;
     }
 
-    handleSaveSection({ tickers: list });
-    setEditingTickerIdx(null);
+    const ok = await handleSaveSection({ tickers: list }, 'Hot News Ticker berhasil disimpan!');
+    if (ok) {
+      setEditingTickerIdx(null);
+    }
   };
 
   const handleDeleteTicker = (idx: number) => {
     if (!activeSection) return;
-    openConfirm('Hapus Hot News', 'Hapus teks berita berjalan ini?', () => {
+    openConfirm('Hapus Hot News', 'Hapus teks berita berjalan ini?', async () => {
       const list = [...(activeSection.tickers || [])];
       list.splice(idx, 1);
-      handleSaveSection({ tickers: list });
+      await handleSaveSection({ tickers: list }, 'Hot News Ticker berhasil dihapus.');
     });
   };
 
   // Activity CRUD Operations
-  const handleSaveActivity = () => {
-    if (!activeSection) return;
-    const list = [...(activeSection.activities || [])];
-    if (editingActivityIdx === null) return;
+  const handleSaveActivity = async () => {
+    if (!activeSection || editingActivityIdx === null) return;
+    if (!activityForm.title?.trim()) {
+      notifyEditorError('Judul kegiatan wajib diisi.');
+      return;
+    }
 
+    const list = [...(activeSection.activities || [])];
     const newAct: WebActivity = {
       id: activityForm.id || Math.random().toString(36).substring(7),
       day: activityForm.day || 'Senin',
-      title: activityForm.title || '',
+      title: activityForm.title.trim(),
       desc: activityForm.desc || '',
       time: activityForm.time || '07.30 - selesai'
     };
@@ -767,30 +936,35 @@ export default function WebContentEditor() {
       list[editingActivityIdx] = newAct;
     }
 
-    handleSaveSection({ activities: list });
-    setEditingActivityIdx(null);
+    const ok = await handleSaveSection({ activities: list }, 'Jadwal kegiatan berhasil disimpan!');
+    if (ok) {
+      setEditingActivityIdx(null);
+    }
   };
 
   const handleDeleteActivity = (idx: number) => {
     if (!activeSection) return;
-    openConfirm('Hapus Kegiatan', 'Hapus kegiatan terdaftar ini?', () => {
+    openConfirm('Hapus Kegiatan', 'Hapus kegiatan terdaftar ini?', async () => {
       const list = [...(activeSection.activities || [])];
       list.splice(idx, 1);
-      handleSaveSection({ activities: list });
+      await handleSaveSection({ activities: list }, 'Kegiatan berhasil dihapus.');
     });
   };
 
   // Agenda CRUD Operations
-  const handleSaveAgenda = () => {
-    if (!activeSection) return;
-    const list = [...(activeSection.agendas || [])];
-    if (editingAgendaIdx === null) return;
+  const handleSaveAgenda = async () => {
+    if (!activeSection || editingAgendaIdx === null) return;
+    if (!agendaForm.title?.trim()) {
+      notifyEditorError('Nama kegiatan agenda wajib diisi.');
+      return;
+    }
 
+    const list = [...(activeSection.agendas || [])];
     const newAge: WebAgenda = {
       id: agendaForm.id || Math.random().toString(36).substring(7),
       day: agendaForm.day || '01',
       month: agendaForm.month || 'JUL',
-      title: agendaForm.title || '',
+      title: agendaForm.title.trim(),
       location: agendaForm.location || 'Lapangan Sekolah'
     };
 
@@ -800,25 +974,35 @@ export default function WebContentEditor() {
       list[editingAgendaIdx] = newAge;
     }
 
-    handleSaveSection({ agendas: list });
-    setEditingAgendaIdx(null);
+    const ok = await handleSaveSection({ agendas: list }, 'Agenda mendatang berhasil disimpan!');
+    if (ok) {
+      setEditingAgendaIdx(null);
+    }
   };
 
   const handleDeleteAgenda = (idx: number) => {
     if (!activeSection) return;
-    openConfirm('Hapus Agenda', 'Hapus agenda mendatang ini?', () => {
+    openConfirm('Hapus Agenda', 'Hapus agenda mendatang ini?', async () => {
       const list = [...(activeSection.agendas || [])];
       list.splice(idx, 1);
-      handleSaveSection({ agendas: list });
+      await handleSaveSection({ agendas: list }, 'Agenda berhasil dihapus.');
     });
   };
 
   // Popup Gallery save
-  const handleSaveGallery = () => {
-    handleSaveSection({ popupImages: galleryUrls });
+  const handleSaveGallery = async () => {
+    const compressedUrls = await Promise.all(
+      galleryUrls.map((u) => (u && u.trim() ? compressBannerIfNeeded(u.trim()) : ''))
+    );
+    const ok = await handleSaveSection({ popupImages: compressedUrls }, 'Galeri PopUp berhasil disimpan!');
+    if (ok) {
+      dirtyGroupsRef.current.gallery = false;
+      setGalleryUrls(compressedUrls);
+    }
   };
 
   const handleGalleryUrlChange = (idx: number, val: string) => {
+    dirtyGroupsRef.current.gallery = true;
     const updated = [...galleryUrls];
     updated[idx] = val;
     setGalleryUrls(updated);
@@ -849,15 +1033,22 @@ export default function WebContentEditor() {
             </div>
             
             {saveStatus && (
-              <div className="bg-emerald-800 text-emerald-100 text-xs px-4 py-2 rounded-2xl flex items-center gap-1.5 border border-emerald-700 font-bold animate-pulse">
-                <Check className="w-4 h-4" />
+              <div className="bg-emerald-800 text-emerald-100 text-xs px-4 py-2 rounded-2xl flex items-center gap-1.5 border border-emerald-700 font-bold">
+                <Check className="w-4 h-4 shrink-0" />
                 <span>{saveStatus}</span>
               </div>
             )}
             {errorStatus && (
-              <div className="bg-rose-800 text-rose-100 text-xs px-4 py-2 rounded-2xl flex items-center gap-1.5 border border-rose-700 font-bold">
-                <AlertCircle className="w-4 h-4" />
-                <span>{errorStatus}</span>
+              <div className="bg-rose-800 text-rose-100 text-xs px-4 py-2 rounded-2xl flex items-center gap-2 border border-rose-600 font-bold max-w-md">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span className="text-left leading-snug">{errorStatus}</span>
+                <button
+                  type="button"
+                  onClick={() => setErrorStatus('')}
+                  className="p-0.5 hover:bg-rose-700 rounded-md shrink-0 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
             )}
           </div>
@@ -995,7 +1186,7 @@ export default function WebContentEditor() {
                     <input 
                       type="text" 
                       value={headName}
-                      onChange={(e) => setHeadName(e.target.value)}
+                      onChange={(e) => { dirtyGroupsRef.current.header = true; setHeadName(e.target.value); }}
                       className="w-full text-xs font-medium border border-slate-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-700 bg-slate-50"
                       placeholder="Contoh: Siti Kurniawati, S.Pd"
                     />
@@ -1006,7 +1197,7 @@ export default function WebContentEditor() {
                     <input 
                       type="text" 
                       value={headRole}
-                      onChange={(e) => setHeadRole(e.target.value)}
+                      onChange={(e) => { dirtyGroupsRef.current.header = true; setHeadRole(e.target.value); }}
                       className="w-full text-xs font-medium border border-slate-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-700 bg-slate-50"
                       placeholder="Contoh: Wakil Kepala Sekolah Bidang Sarana"
                     />
@@ -1015,7 +1206,7 @@ export default function WebContentEditor() {
 
                 <MediaUploadSelector
                   value={headImage}
-                  onChange={setHeadImage}
+                  onChange={(val) => { dirtyGroupsRef.current.header = true; setHeadImage(val); }}
                   mode="avatar"
                   label={activeSectionId === 'home' ? "Foto Profil Resmi Kepala Sekolah (Upload File / G-Drive)" : "Foto Profil Resmi Kepala Bidang (Upload / G-Drive)"}
                   placeholder="https://lh3.googleusercontent.com/... atau klik Upload File"
@@ -1027,7 +1218,7 @@ export default function WebContentEditor() {
                     <input 
                       type="text" 
                       value={headBorn}
-                      onChange={(e) => setHeadBorn(e.target.value)}
+                      onChange={(e) => { dirtyGroupsRef.current.header = true; setHeadBorn(e.target.value); }}
                       className="w-full text-xs font-medium border border-slate-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-700 bg-slate-50"
                       placeholder="Contoh: Jakarta, 17 Agustus 1970"
                     />
@@ -1038,7 +1229,7 @@ export default function WebContentEditor() {
                     <input 
                       type="text" 
                       value={headSubject}
-                      onChange={(e) => setHeadSubject(e.target.value)}
+                      onChange={(e) => { dirtyGroupsRef.current.header = true; setHeadSubject(e.target.value); }}
                       className="w-full text-xs font-medium border border-slate-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-700 bg-slate-50"
                       placeholder="Contoh: Manajemen Pendidikan / Matematika"
                     />
@@ -1049,7 +1240,7 @@ export default function WebContentEditor() {
                     <input 
                       type="text" 
                       value={headHobby}
-                      onChange={(e) => setHeadHobby(e.target.value)}
+                      onChange={(e) => { dirtyGroupsRef.current.header = true; setHeadHobby(e.target.value); }}
                       className="w-full text-xs font-medium border border-slate-200 rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-700 bg-slate-50"
                       placeholder="Contoh: Membaca & Menulis"
                     />
@@ -1070,7 +1261,7 @@ export default function WebContentEditor() {
 
                     <MediaUploadSelector
                       value={headerBgImage}
-                      onChange={setHeaderBgImage}
+                      onChange={(val) => { dirtyGroupsRef.current.header = true; setHeaderBgImage(val); }}
                       label="Background Header Banner"
                       mode="banner"
                       placeholder="https://..."
@@ -1082,7 +1273,7 @@ export default function WebContentEditor() {
                         <input 
                           type="text" 
                           value={headerTitle}
-                          onChange={(e) => setHeaderTitle(e.target.value)}
+                          onChange={(e) => { dirtyGroupsRef.current.header = true; setHeaderTitle(e.target.value); }}
                           className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3.5 py-2.5 bg-white focus:outline-none focus:border-emerald-700"
                           placeholder="Contoh: Bidang Akademik & Kurikulum"
                         />
@@ -1093,7 +1284,7 @@ export default function WebContentEditor() {
                         <textarea 
                           rows={2}
                           value={headerSubtitle}
-                          onChange={(e) => setHeaderSubtitle(e.target.value)}
+                          onChange={(e) => { dirtyGroupsRef.current.header = true; setHeaderSubtitle(e.target.value); }}
                           className="w-full text-xs font-medium border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-none focus:border-emerald-700 leading-relaxed"
                           placeholder="Contoh: Mewujudkan Standar Pendidikan Berkualitas Tinggi..."
                         />
@@ -1126,7 +1317,7 @@ export default function WebContentEditor() {
 
                     <MediaUploadSelector
                       value={schoolLogo}
-                      onChange={setSchoolLogo}
+                      onChange={(val) => { dirtyGroupsRef.current.header = true; setSchoolLogo(val); }}
                       label="Logo Sekolah (Upload Foto / Pilih Galeri / URL Direct)"
                       placeholder="https://..."
                     />
@@ -1136,7 +1327,7 @@ export default function WebContentEditor() {
                       <input 
                         type="text" 
                         value={headerMotto}
-                        onChange={(e) => setHeaderMotto(e.target.value)}
+                        onChange={(e) => { dirtyGroupsRef.current.header = true; setHeaderMotto(e.target.value); }}
                         className="w-full text-xs font-bold border border-amber-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-600 bg-white text-amber-950 shadow-2xs"
                         placeholder="Contoh: Berpacu dalam Prestasi"
                       />
@@ -1150,7 +1341,7 @@ export default function WebContentEditor() {
                       <input 
                         type="text" 
                         value={akreditasi}
-                        onChange={(e) => setAkreditasi(e.target.value)}
+                        onChange={(e) => { dirtyGroupsRef.current.header = true; setAkreditasi(e.target.value); }}
                         className="w-full text-xs font-bold border border-amber-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-600 bg-white text-amber-950 shadow-2xs"
                         placeholder="Contoh: Akreditasi A (Unggul)"
                       />
@@ -1164,18 +1355,20 @@ export default function WebContentEditor() {
                 <TextFormattingToolbar
                   label="Naskah Sambutan Utama / Motto / Moto Hidup"
                   value={headMotto}
-                  onChange={(val) => setHeadMotto(val)}
+                  onChange={(val) => { dirtyGroupsRef.current.header = true; setHeadMotto(val); }}
                   rows={6}
                   placeholder="Tuliskan naskah sambutan resmi kepala bidang di sini..."
                   helpText="Gunakan tombol toolbar di atas untuk menebalkan, miring, garis bawah, serta meratakan paragraf sambutan."
                 />
 
                 <button
+                  type="button"
+                  disabled={isSaving}
                   onClick={handleSaveHeader}
-                  className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                  className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{activeSectionId === 'home' ? 'Simpan Profil Kepsek & Status Akreditasi' : 'Simpan Profil Kepala Bidang'}</span>
+                  <span>{isSaving ? 'Menyimpan...' : (activeSectionId === 'home' ? 'Simpan Profil Kepsek & Status Akreditasi' : 'Simpan Profil Kepala Bidang')}</span>
                 </button>
               </motion.div>
             )}
@@ -1199,7 +1392,7 @@ export default function WebContentEditor() {
                   <textarea 
                     rows={3}
                     value={vision}
-                    onChange={(e) => setVision(e.target.value)}
+                    onChange={(e) => { dirtyGroupsRef.current.vision = true; setVision(e.target.value); }}
                     className="w-full text-xs font-medium border border-slate-200 rounded-2xl p-4 focus:outline-none focus:border-emerald-700 bg-slate-50 leading-relaxed text-slate-800 font-sans"
                     placeholder="Masukkan visi utama sekolah di sini..."
                   />
@@ -1244,7 +1437,7 @@ export default function WebContentEditor() {
                     <input 
                       type="text" 
                       value={visionPillarsTitle}
-                      onChange={(e) => setVisionPillarsTitle(e.target.value)}
+                      onChange={(e) => { dirtyGroupsRef.current.vision = true; setVisionPillarsTitle(e.target.value); }}
                       className="w-full text-xs font-medium border border-amber-200 rounded-xl px-3.5 py-2 bg-white focus:outline-none focus:border-amber-500 text-slate-800"
                       placeholder="Contoh: 3 Pilar Inti Penopang Visi:"
                     />
@@ -1439,125 +1632,134 @@ export default function WebContentEditor() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-500 block">Butir-Butir Misi Sekolah</label>
-                    <button
-                      type="button"
-                      onClick={() => setMissions([...missions, ''])}
-                      className="text-xs font-bold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100/80 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Tambah Butir Misi</span>
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => { dirtyGroupsRef.current.vision = true; setMissions([...missions, '']); }}
+                        className="text-xs font-bold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100/80 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Tambah Butir Misi</span>
+                      </button>
+                    </div>
 
-                  <div className="space-y-3">
-                    {missions.map((misi, idx) => (
-                      <div key={idx} className="flex items-start gap-2 bg-slate-50 border border-slate-100 p-3 rounded-2xl">
-                        <div className="w-7 h-7 rounded-lg bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center shrink-0 mt-1">
-                          {String(idx + 1).padStart(2, '0')}
+                    <div className="space-y-3">
+                      {missions.map((misi, idx) => (
+                        <div key={idx} className="flex items-start gap-2 bg-slate-50 border border-slate-100 p-3 rounded-2xl">
+                          <div className="w-7 h-7 rounded-lg bg-amber-400 text-slate-950 text-xs font-black flex items-center justify-center shrink-0 mt-1">
+                            {String(idx + 1).padStart(2, '0')}
+                          </div>
+                          <textarea
+                            rows={2}
+                            value={misi}
+                            onChange={(e) => {
+                              dirtyGroupsRef.current.vision = true;
+                              const copy = [...missions];
+                              copy[idx] = e.target.value;
+                              setMissions(copy);
+                            }}
+                            className="flex-1 text-xs font-semibold bg-transparent border-none focus:outline-none p-1 leading-relaxed text-slate-700 font-sans"
+                            placeholder={`Butir misi ke-${idx + 1}...`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              dirtyGroupsRef.current.vision = true;
+                              const copy = [...missions];
+                              copy.splice(idx, 1);
+                              setMissions(copy);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-red-600 rounded-xl hover:bg-red-50 transition-colors cursor-pointer mt-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                        <textarea
-                          rows={2}
-                          value={misi}
-                          onChange={(e) => {
-                            const copy = [...missions];
-                            copy[idx] = e.target.value;
-                            setMissions(copy);
-                          }}
-                          className="flex-1 text-xs font-semibold bg-transparent border-none focus:outline-none p-1 leading-relaxed text-slate-700 font-sans"
-                          placeholder={`Butir misi ke-${idx + 1}...`}
+                      ))}
+                      {missions.length === 0 && (
+                        <p className="text-xs text-slate-400 italic text-center py-4">Belum ada butir misi yang ditambahkan.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* MEDIA SOSIAL SEKOLAH SECTION */}
+                  <div className="border-t border-slate-100 pt-6 space-y-4">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-emerald-700" />
+                        <span>Media Sosial &amp; Kontak Resmi Sekolah</span>
+                      </h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Atur link atau detail kontak untuk ditampilkan pada bagian footer website sekolah.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                          <Instagram className="w-4 h-4 text-pink-600" />
+                          <span>Link Instagram</span>
+                        </label>
+                        <input 
+                          type="text" 
+                          value={instagram}
+                          onChange={(e) => { dirtyGroupsRef.current.vision = true; setInstagram(e.target.value); }}
+                          className="w-full text-xs font-medium border border-slate-200 rounded-2xl px-4 py-3.5 focus:outline-none focus:border-emerald-700 bg-slate-50"
+                          placeholder="https://instagram.com/smpn50jakarta"
                         />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const copy = [...missions];
-                            copy.splice(idx, 1);
-                            setMissions(copy);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-red-600 rounded-xl hover:bg-red-50 transition-colors cursor-pointer mt-1"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
-                    ))}
-                    {missions.length === 0 && (
-                      <p className="text-xs text-slate-400 italic text-center py-4">Belum ada butir misi yang ditambahkan.</p>
-                    )}
-                  </div>
-                </div>
 
-                {/* MEDIA SOSIAL SEKOLAH SECTION */}
-                <div className="border-t border-slate-100 pt-6 space-y-4">
-                  <div>
-                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-emerald-700" />
-                      <span>Media Sosial &amp; Kontak Resmi Sekolah</span>
-                    </h4>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Atur link atau detail kontak untuk ditampilkan pada bagian footer website sekolah.</p>
-                  </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                          <MessageCircle className="w-4 h-4 text-emerald-600" />
+                          <span>WhatsApp (Link atau No. HP)</span>
+                        </label>
+                        <input 
+                          type="text" 
+                          value={whatsapp}
+                          onChange={(e) => { dirtyGroupsRef.current.vision = true; setWhatsapp(e.target.value); }}
+                          className="w-full text-xs font-medium border border-slate-200 rounded-2xl px-4 py-3.5 focus:outline-none focus:border-emerald-700 bg-slate-50"
+                          placeholder="Contoh: https://wa.me/6281234567890"
+                        />
+                      </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                        <Instagram className="w-4 h-4 text-pink-600" />
-                        <span>Link Instagram</span>
-                      </label>
-                      <input 
-                        type="text" 
-                        value={instagram}
-                        onChange={(e) => setInstagram(e.target.value)}
-                        className="w-full text-xs font-medium border border-slate-200 rounded-2xl px-4 py-3.5 focus:outline-none focus:border-emerald-700 bg-slate-50"
-                        placeholder="https://instagram.com/smpn50jakarta"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                        <MessageCircle className="w-4 h-4 text-emerald-600" />
-                        <span>WhatsApp (Link atau No. HP)</span>
-                      </label>
-                      <input 
-                        type="text" 
-                        value={whatsapp}
-                        onChange={(e) => setWhatsapp(e.target.value)}
-                        className="w-full text-xs font-medium border border-slate-200 rounded-2xl px-4 py-3.5 focus:outline-none focus:border-emerald-700 bg-slate-50"
-                        placeholder="Contoh: https://wa.me/6281234567890"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                        <Mail className="w-4 h-4 text-blue-600" />
-                        <span>Email Resmi Sekolah</span>
-                      </label>
-                      <input 
-                        type="text" 
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full text-xs font-medium border border-slate-200 rounded-2xl px-4 py-3.5 focus:outline-none focus:border-emerald-700 bg-slate-50"
-                        placeholder="smpn50jakarta@gmail.com"
-                      />
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                          <Mail className="w-4 h-4 text-blue-600" />
+                          <span>Email Resmi Sekolah</span>
+                        </label>
+                        <input 
+                          type="text" 
+                          value={email}
+                          onChange={(e) => { dirtyGroupsRef.current.vision = true; setEmail(e.target.value); }}
+                          className="w-full text-xs font-medium border border-slate-200 rounded-2xl px-4 py-3.5 focus:outline-none focus:border-emerald-700 bg-slate-50"
+                          placeholder="smpn50jakarta@gmail.com"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <button
-                  onClick={async () => {
-                    await handleSaveSection({ 
-                      vision, 
-                      missions, 
-                      visionPillarsTitle, 
-                      visionPillars, 
-                      instagram, 
-                      whatsapp, 
-                      email 
-                    });
-                    showToast('Visi, Misi, Point Penopang Visi & Media Sosial berhasil disimpan!');
-                  }}
-                  className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>Simpan Visi, Misi, Penopang Visi &amp; Sosial Media</span>
-                </button>
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={async () => {
+                      const ok = await handleSaveSection(
+                        {
+                          vision,
+                          missions,
+                          visionPillarsTitle,
+                          visionPillars,
+                          instagram,
+                          whatsapp,
+                          email
+                        },
+                        'Visi, Misi, Point Penopang Visi & Media Sosial berhasil disimpan!'
+                      );
+                      if (ok) {
+                        dirtyGroupsRef.current.vision = false;
+                      }
+                    }}
+                    className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSaving ? 'Menyimpan...' : 'Simpan Visi, Misi, Penopang Visi & Sosial Media'}</span>
+                  </button>
               </motion.div>
             )}
 
@@ -1689,10 +1891,12 @@ export default function WebContentEditor() {
                         Batal
                       </button>
                       <button
+                        type="button"
+                        disabled={isSaving}
                         onClick={handleSaveStaff}
-                        className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
+                        className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
                       >
-                        Simpan Anggota
+                        {isSaving ? 'Menyimpan...' : 'Simpan Anggota'}
                       </button>
                     </div>
                   </div>
@@ -1866,35 +2070,39 @@ export default function WebContentEditor() {
                                   </button>
                                 </div>
 
-                                <MediaUploadSelector
-                                  value={imgUrl}
-                                  onChange={(val) => {
-                                    const updatedImgs = [...(progForm.images || [])];
-                                    updatedImgs[imgIdx] = val;
-                                    setProgForm({ ...progForm, images: updatedImgs });
-                                  }}
-                                  label=""
-                                  placeholder="Upload File Komputer atau paste Link Google Drive / Direct URL..."
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                                  <MediaUploadSelector
+                                    value={imgUrl}
+                                    onChange={(val) => {
+                                      const updatedImgs = [...(progForm.images || [])];
+                                      updatedImgs[imgIdx] = val;
+                                      setProgForm({ ...progForm, images: updatedImgs });
+                                    }}
+                                    mode="banner"
+                                    label=""
+                                    placeholder="Upload File Komputer atau paste Link Google Drive / Direct URL..."
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
                     <div className="flex gap-2 justify-end pt-2">
                       <button
+                        type="button"
                         onClick={() => setEditingProgIdx(null)}
                         className="border border-slate-200 text-slate-600 font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer hover:bg-slate-50"
                       >
                         Batal
                       </button>
                       <button
+                        type="button"
+                        disabled={isSaving}
                         onClick={handleSaveProgram}
-                        className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
+                        className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
                       >
-                        Simpan Program &amp; Slider Foto
+                        {isSaving ? 'Menyimpan...' : 'Simpan Program & Slider Foto'}
                       </button>
                     </div>
                   </div>
@@ -2130,10 +2338,11 @@ export default function WebContentEditor() {
                       </button>
                       <button
                         type="button"
+                        disabled={isSaving}
                         onClick={handleSaveSlide}
-                        className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
+                        className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
                       >
-                        Simpan Slide
+                        {isSaving ? 'Menyimpan...' : 'Simpan Slide'}
                       </button>
                     </div>
                   </div>
@@ -2437,6 +2646,7 @@ export default function WebContentEditor() {
                                       updatedImgs[imgIdx] = val;
                                       setSubjectForm({ ...subjectForm, images: updatedImgs });
                                     }}
+                                    mode="banner"
                                     label=""
                                     placeholder="Upload File Komputer atau paste Link Google Drive / Direct URL..."
                                   />
@@ -2448,16 +2658,19 @@ export default function WebContentEditor() {
 
                         <div className="flex gap-2 justify-end pt-2">
                           <button
+                            type="button"
                             onClick={() => setEditingSubjectIdx(null)}
                             className="border border-slate-200 text-slate-600 font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer"
                           >
                             Batal
                           </button>
                           <button
+                            type="button"
+                            disabled={isSaving}
                             onClick={handleSaveSubject}
-                            className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
+                            className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
                           >
-                            Simpan Mapel &amp; Foto Slider
+                            {isSaving ? 'Menyimpan...' : 'Simpan Mapel & Foto Slider'}
                           </button>
                         </div>
                       </div>
@@ -2704,6 +2917,7 @@ export default function WebContentEditor() {
                                       updatedImgs[imgIdx] = val;
                                       setExtraForm({ ...extraForm, images: updatedImgs });
                                     }}
+                                    mode="banner"
                                     label=""
                                     placeholder="Upload File Komputer atau paste Link Google Drive / Direct URL..."
                                   />
@@ -2715,16 +2929,19 @@ export default function WebContentEditor() {
 
                         <div className="flex gap-2 justify-end pt-2">
                           <button
+                            type="button"
                             onClick={() => setEditingExtraIdx(null)}
                             className="border border-slate-200 text-slate-600 font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer"
                           >
                             Batal
                           </button>
                           <button
+                            type="button"
+                            disabled={isSaving}
                             onClick={handleSaveExtra}
-                            className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
+                            className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
                           >
-                            Simpan Ekskul &amp; Foto Slider
+                            {isSaving ? 'Menyimpan...' : 'Simpan Ekskul & Foto Slider'}
                           </button>
                         </div>
                       </div>
@@ -2971,6 +3188,7 @@ export default function WebContentEditor() {
                                       updatedImgs[imgIdx] = val;
                                       setFacilityForm({ ...facilityForm, images: updatedImgs });
                                     }}
+                                    mode="banner"
                                     label=""
                                     placeholder="Upload File Komputer atau paste Link Google Drive / Direct URL..."
                                   />
@@ -2982,16 +3200,19 @@ export default function WebContentEditor() {
 
                         <div className="flex gap-2 justify-end pt-2">
                           <button
+                            type="button"
                             onClick={() => setEditingFacilityIdx(null)}
                             className="border border-slate-200 text-slate-600 font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer"
                           >
                             Batal
                           </button>
                           <button
+                            type="button"
+                            disabled={isSaving}
                             onClick={handleSaveFacility}
-                            className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
+                            className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
                           >
-                            Simpan Sarana &amp; Foto Slider
+                            {isSaving ? 'Menyimpan...' : 'Simpan Sarana & Foto Slider'}
                           </button>
                         </div>
                       </div>
@@ -3127,6 +3348,7 @@ export default function WebContentEditor() {
                           key={idx}
                           value={galleryUrls[idx] || ''}
                           onChange={(val) => handleGalleryUrlChange(idx, val)}
+                          mode="banner"
                           label={`Foto Galeri PopUp #${idx + 1}`}
                           placeholder="Masukkan URL foto, atau upload..."
                         />
@@ -3134,11 +3356,13 @@ export default function WebContentEditor() {
                     </div>
 
                     <button
+                      type="button"
+                      disabled={isSaving}
                       onClick={handleSaveGallery}
-                      className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                      className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
                     >
                       <Save className="w-4 h-4" />
-                      <span>Simpan Semua URL Galeri</span>
+                      <span>{isSaving ? 'Menyimpan...' : 'Simpan Semua URL Galeri'}</span>
                     </button>
                   </>
                 )}
@@ -3220,6 +3444,7 @@ export default function WebContentEditor() {
                       <MediaUploadSelector
                         value={articleForm.image || ''}
                         onChange={(val) => setArticleForm({ ...articleForm, image: val })}
+                        mode="banner"
                         label="Gambar Utama Artikel / Dokumentasi"
                         placeholder="Masukkan URL foto, atau upload..."
                       />
@@ -3257,16 +3482,19 @@ export default function WebContentEditor() {
 
                     <div className="flex gap-2 justify-end pt-2">
                       <button
+                        type="button"
                         onClick={() => setEditingArticleIdx(null)}
                         className="border border-slate-200 text-slate-600 font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer"
                       >
                         Batal
                       </button>
                       <button
+                        type="button"
+                        disabled={isSaving}
                         onClick={handleSaveArticle}
-                        className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
+                        className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
                       >
-                        Simpan Artikel
+                        {isSaving ? 'Menyimpan...' : 'Simpan Artikel'}
                       </button>
                     </div>
                   </div>
@@ -3395,10 +3623,12 @@ export default function WebContentEditor() {
                         Batal
                       </button>
                       <button
+                        type="button"
+                        disabled={isSaving}
                         onClick={handleSaveTicker}
-                        className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
+                        className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
                       >
-                        Simpan Hot News
+                        {isSaving ? 'Menyimpan...' : 'Simpan Hot News'}
                       </button>
                     </div>
                   </div>
@@ -3543,10 +3773,12 @@ export default function WebContentEditor() {
                         Batal
                       </button>
                       <button
+                        type="button"
+                        disabled={isSaving}
                         onClick={handleSaveActivity}
-                        className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
+                        className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
                       >
-                        Simpan Kegiatan
+                        {isSaving ? 'Menyimpan...' : 'Simpan Kegiatan'}
                       </button>
                     </div>
                   </div>
@@ -3683,10 +3915,12 @@ export default function WebContentEditor() {
                         Batal
                       </button>
                       <button
+                        type="button"
+                        disabled={isSaving}
                         onClick={handleSaveAgenda}
-                        className="bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
+                        className="bg-emerald-800 hover:bg-emerald-950 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
                       >
-                        Simpan Agenda
+                        {isSaving ? 'Menyimpan...' : 'Simpan Agenda'}
                       </button>
                     </div>
                   </div>

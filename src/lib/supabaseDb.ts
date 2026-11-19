@@ -134,7 +134,36 @@ const collectionListeners = new Map<string, Set<CollectionListener>>();
 const singleDocListeners = new Map<string, Set<(docData: any | null) => void>>();
 const collectionCache = new Map<string, Map<string, any>>();
 const inflightFetches = new Map<string, Promise<any[]>>();
+const recentLocalWrites = new Map<string, number>();
 let sharedRealtimeChannel: RealtimeChannel | null = null;
+
+function markRecentLocalWrite(collectionPath: string, id: string) {
+  recentLocalWrites.set(`${collectionPath}::${id}`, Date.now());
+}
+
+function isRecentLocalWrite(collectionPath: string, id: string, windowMs = 4500): boolean {
+  const ts = recentLocalWrites.get(`${collectionPath}::${id}`);
+  if (!ts) return false;
+  if (Date.now() - ts < windowMs) return true;
+  recentLocalWrites.delete(`${collectionPath}::${id}`);
+  return false;
+}
+
+function parseRowData(raw: any): Record<string, any> | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw;
+  }
+  return null;
+}
 
 function notifyCollectionSubscribers(collectionPath: string) {
   const map = collectionCache.get(collectionPath);
@@ -144,8 +173,12 @@ function notifyCollectionSubscribers(collectionPath: string) {
     : [];
 
   if (collectionPath !== 'settings') {
-    safeLocalStorageSet(`siakad_col_initialized_${collectionPath}`, 'true');
-    safeLocalStorageSet(`siakad_${collectionPath}`, JSON.stringify(items));
+    try {
+      safeLocalStorageSet(`siakad_col_initialized_${collectionPath}`, 'true');
+      safeLocalStorageSet(`siakad_${collectionPath}`, JSON.stringify(items));
+    } catch {
+      /* ignore localStorage quota overflow */
+    }
   }
 
   const listeners = collectionListeners.get(collectionPath);
@@ -202,11 +235,44 @@ function ensureSharedRealtimeSubscription() {
           map.delete(docId);
           const singleKey = `${colName}::${docId}`;
           singleDocListeners.get(singleKey)?.forEach((cb) => cb(null));
-        } else {
-          const docData = { ...(row.data || {}), id: docId };
-          map.set(docId, docData);
+          notifyCollectionSubscribers(colName);
+          return;
         }
 
+        // Ignore redundant realtime echo caused by this tab's own recent write
+        if (isRecentLocalWrite(colName, docId) && map.has(docId)) {
+          return;
+        }
+
+        const parsedData = parseRowData(row.data);
+        // Guard against Postgres WAL omitting large/TOASTed JSONB payloads or empty partial events:
+        // never overwrite a rich document with `{ id: docId }`, fetch authoritative row instead.
+        if (!parsedData || Object.keys(parsedData).length === 0) {
+          const client = supabase;
+          if (!client) return;
+          void (async () => {
+            try {
+              const { data: freshRow, error } = await client
+                .from(TABLE_NAME)
+                .select('id, data')
+                .eq('collection_name', colName)
+                .eq('id', docId)
+                .maybeSingle();
+              if (error || !freshRow) return;
+              const freshData = parseRowData(freshRow.data);
+              if (!freshData || Object.keys(freshData).length === 0) return;
+              if (isRecentLocalWrite(colName, docId) && map!.has(docId)) return;
+              map!.set(docId, { ...freshData, id: docId });
+              notifyCollectionSubscribers(colName);
+            } catch {
+              /* ignore realtime fetch retry failure */
+            }
+          })();
+          return;
+        }
+
+        const docData = { ...parsedData, id: docId };
+        map.set(docId, docData);
         notifyCollectionSubscribers(colName);
       }
     )
@@ -252,10 +318,18 @@ async function fetchCollectionRows(collectionPath: string): Promise<any[]> {
     const latency = Math.round(performance.now() - startTime);
     statusNotifier('online', latency);
 
+    const existingMemMap = collectionCache.get(collectionPath);
     const map = new Map<string, any>();
     for (const row of allRows) {
       if (row && row.id) {
-        map.set(row.id, { ...(row.data || {}), id: row.id });
+        const parsedData = parseRowData(row.data);
+        if (parsedData && Object.keys(parsedData).length > 0) {
+          map.set(row.id, { ...parsedData, id: row.id });
+        } else if (existingMemMap?.has(row.id)) {
+          map.set(row.id, existingMemMap.get(row.id));
+        } else {
+          map.set(row.id, { id: row.id });
+        }
       }
     }
     collectionCache.set(collectionPath, map);
@@ -302,8 +376,17 @@ export function supabaseSyncCollection<T extends { id: string }>(
   const initKey = `siakad_col_initialized_${collectionPath}`;
   const deletedIds = getLocalDeletedIds(collectionPath);
 
-  // Instant cached load
+  // Instant cached load (check authoritative in-memory cache first, then localStorage, then initialData)
   const loadFallback = () => {
+    const memMap = collectionCache.get(collectionPath);
+    if (memMap && memMap.size > 0) {
+      const memItems = Array.from(memMap.values()).filter((item: any) => item && item.id && !deletedIds.has(item.id));
+      if (memItems.length > 0) {
+        onUpdate(memItems as T[]);
+        return;
+      }
+    }
+
     const cached = safeLocalStorageGet(cacheKey);
     if (cached) {
       try {
@@ -320,7 +403,7 @@ export function supabaseSyncCollection<T extends { id: string }>(
       }
     }
     const isAlreadyInitialized = safeLocalStorageGet(initKey) === 'true';
-    if (!isAlreadyInitialized && initialData.length > 0) {
+    if ((!isAlreadyInitialized || collectionPath === 'web_content') && initialData.length > 0) {
       onUpdate(initialData.filter((i) => i && i.id && !deletedIds.has(i.id)));
       return;
     }
@@ -348,6 +431,51 @@ export function supabaseSyncCollection<T extends { id: string }>(
     try {
       const serverItems = await fetchCollectionRows(collectionPath);
 
+      if (collectionPath === 'web_content' && initialData.length > 0) {
+        // Ensure every canonical web section (home, academic, kesiswaan, sarpras, berita)
+        // exists in Supabase and sparse pre-created docs (e.g. only headmaster photo saved early)
+        // retain structural baseline keys without overwriting any user edits.
+        const serverMap = new Map<string, any>();
+        serverItems.forEach((item) => {
+          if (item && item.id) serverMap.set(item.id, item);
+        });
+
+        const docsToUpsert: any[] = [];
+        for (const baseItem of initialData) {
+          if (!baseItem || !baseItem.id || deletedIds.has(baseItem.id)) continue;
+          const existing = serverMap.get(baseItem.id);
+          if (!existing) {
+            serverMap.set(baseItem.id, baseItem);
+            docsToUpsert.push(baseItem);
+          } else {
+            // Hydrate missing structural keys ONLY when undefined on server
+            let needsHydration = false;
+            const hydrated = { ...existing };
+            for (const key of Object.keys(baseItem)) {
+              if (hydrated[key] === undefined) {
+                hydrated[key] = (baseItem as any)[key];
+                needsHydration = true;
+              }
+            }
+            if (needsHydration) {
+              serverMap.set(baseItem.id, hydrated);
+              docsToUpsert.push(hydrated);
+            }
+          }
+        }
+
+        collectionCache.set(collectionPath, serverMap);
+
+        if (docsToUpsert.length > 0) {
+          await supabaseSaveDocumentsBatch(collectionPath, docsToUpsert).catch((seedErr) => {
+            console.warn('[Supabase] Partial web_content hydration warning:', formatSupabaseErrorMessage(seedErr));
+          });
+        }
+
+        notifyCollectionSubscribers(collectionPath);
+        return;
+      }
+
       if (serverItems.length === 0 && initialData.length > 0) {
         const initDocId = `init_${collectionPath}`;
         const { data: colInit } = await supabase
@@ -373,14 +501,6 @@ export function supabaseSyncCollection<T extends { id: string }>(
           notifyCollectionSubscribers(collectionPath);
           return;
         }
-      }
-
-      if (serverItems.length === 0 && collectionPath === 'web_content' && initialData.length > 0) {
-        const map = new Map<string, any>();
-        initialData.forEach((item) => {
-          if (item && item.id) map.set(item.id, item);
-        });
-        collectionCache.set(collectionPath, map);
       }
 
       notifyCollectionSubscribers(collectionPath);
@@ -439,7 +559,8 @@ export function supabaseSyncSingleDoc<T extends Record<string, any>>(
           onUpdate(null);
         }
       } else {
-        const merged = { ...(data.data || {}), id: data.id } as unknown as T;
+        const parsedData = parseRowData(data.data) || {};
+        const merged = { ...parsedData, id: data.id } as unknown as T;
         let map = collectionCache.get(collectionPath);
         if (!map) {
           map = new Map();
@@ -465,39 +586,38 @@ export function supabaseSyncSingleDoc<T extends Record<string, any>>(
 
 export async function supabaseSaveDocument(collectionPath: string, id: string, data: any): Promise<void> {
   if (!id) return;
+  if (isSupabaseSecretKeyConfigured()) {
+    throw new Error(formatSupabaseErrorMessage(new Error('Forbidden use of secret API key in browser')));
+  }
   if (!supabase) throw new Error('Supabase belum dikonfigurasi.');
 
-  // Preserve Firestore merge: true behavior by merging with existing document fields
+  // Preserve Firestore merge: true behavior by merging with existing authoritative document fields
   let existingDoc = getCachedMergedDoc(collectionPath, id);
-  if (!existingDoc) {
-    const { data: remoteRow } = await supabase
-      .from(TABLE_NAME)
-      .select('data')
-      .eq('collection_name', collectionPath)
-      .eq('id', id)
-      .maybeSingle();
-    if (remoteRow?.data && typeof remoteRow.data === 'object') {
-      existingDoc = remoteRow.data;
+  const looksSparse = !existingDoc || Object.keys(existingDoc).length <= 3;
+  if (looksSparse) {
+    try {
+      const { data: remoteRow } = await supabase
+        .from(TABLE_NAME)
+        .select('data')
+        .eq('collection_name', collectionPath)
+        .eq('id', id)
+        .maybeSingle();
+      const parsedRemote = parseRowData(remoteRow?.data);
+      if (parsedRemote) {
+        existingDoc = { ...parsedRemote, ...(existingDoc || {}) };
+      }
+    } catch {
+      /* proceed with available doc */
     }
   }
 
+  const nowIso = new Date().toISOString();
   const cleanPayload = sanitizeForStorage({
     ...(existingDoc || {}),
     ...data,
     id,
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowIso,
   });
-
-  // Update in-memory + localStorage immediately
-  let map = collectionCache.get(collectionPath);
-  if (!map) {
-    map = new Map();
-    collectionCache.set(collectionPath, map);
-  }
-  map.set(id, cleanPayload);
-  if (collectionPath !== 'settings') {
-    safeLocalStorageSet(`siakad_${collectionPath}`, JSON.stringify(Array.from(map.values())));
-  }
 
   const startTime = performance.now();
   const { error } = await supabase
@@ -507,14 +627,23 @@ export async function supabaseSaveDocument(collectionPath: string, id: string, d
         collection_name: collectionPath,
         id,
         data: cleanPayload,
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
       },
       { onConflict: 'collection_name,id' }
     );
 
   if (error) {
-    throw error;
+    throw new Error(formatSupabaseErrorMessage(error));
   }
+
+  // Only commit to in-memory cache, recent-write guard, and localStorage AFTER DB upsert succeeds
+  markRecentLocalWrite(collectionPath, id);
+  let map = collectionCache.get(collectionPath);
+  if (!map) {
+    map = new Map();
+    collectionCache.set(collectionPath, map);
+  }
+  map.set(id, cleanPayload);
 
   statusNotifier('online', Math.round(performance.now() - startTime));
   notifyCollectionSubscribers(collectionPath);
@@ -522,10 +651,10 @@ export async function supabaseSaveDocument(collectionPath: string, id: string, d
 
 export async function supabaseDeleteDocument(collectionPath: string, id: string): Promise<void> {
   if (!id) return;
+  if (isSupabaseSecretKeyConfigured()) {
+    throw new Error(formatSupabaseErrorMessage(new Error('Forbidden use of secret API key in browser')));
+  }
   if (!supabase) throw new Error('Supabase belum dikonfigurasi.');
-
-  const map = collectionCache.get(collectionPath);
-  if (map) map.delete(id);
 
   const { error } = await supabase
     .from(TABLE_NAME)
@@ -533,7 +662,11 @@ export async function supabaseDeleteDocument(collectionPath: string, id: string)
     .eq('collection_name', collectionPath)
     .eq('id', id);
 
-  if (error) throw error;
+  if (error) throw new Error(formatSupabaseErrorMessage(error));
+
+  markRecentLocalWrite(collectionPath, id);
+  const map = collectionCache.get(collectionPath);
+  if (map) map.delete(id);
 
   statusNotifier('online');
   notifyCollectionSubscribers(collectionPath);
@@ -541,6 +674,9 @@ export async function supabaseDeleteDocument(collectionPath: string, id: string)
 
 export async function supabaseSaveDocumentsBatch(collectionPath: string, items: any[]): Promise<void> {
   if (!items || items.length === 0) return;
+  if (isSupabaseSecretKeyConfigured()) {
+    throw new Error(formatSupabaseErrorMessage(new Error('Forbidden use of secret API key in browser')));
+  }
   if (!supabase) throw new Error('Supabase belum dikonfigurasi.');
 
   let map = collectionCache.get(collectionPath);
@@ -550,6 +686,7 @@ export async function supabaseSaveDocumentsBatch(collectionPath: string, items: 
   }
 
   const nowIso = new Date().toISOString();
+  const stagedDocs: Array<{ id: string; merged: any }> = [];
   const rowsToUpsert = items
     .filter((item) => item && item.id)
     .map((item) => {
@@ -560,7 +697,7 @@ export async function supabaseSaveDocumentsBatch(collectionPath: string, items: 
         id: item.id,
         updatedAt: nowIso,
       });
-      map!.set(item.id, merged);
+      stagedDocs.push({ id: item.id, merged });
       return {
         collection_name: collectionPath,
         id: item.id,
@@ -569,17 +706,19 @@ export async function supabaseSaveDocumentsBatch(collectionPath: string, items: 
       };
     });
 
-  if (collectionPath !== 'settings') {
-    safeLocalStorageSet(`siakad_${collectionPath}`, JSON.stringify(Array.from(map.values())));
-  }
-
   const chunkSize = 250;
   for (let i = 0; i < rowsToUpsert.length; i += chunkSize) {
     const chunk = rowsToUpsert.slice(i, i + chunkSize);
     const { error } = await supabase
       .from(TABLE_NAME)
       .upsert(chunk, { onConflict: 'collection_name,id' });
-    if (error) throw error;
+    if (error) throw new Error(formatSupabaseErrorMessage(error));
+  }
+
+  // Commit staged docs to memory & subscribers after DB batch upsert succeeds
+  for (const { id, merged } of stagedDocs) {
+    markRecentLocalWrite(collectionPath, id);
+    map.set(id, merged);
   }
 
   statusNotifier('online');
@@ -588,15 +727,13 @@ export async function supabaseSaveDocumentsBatch(collectionPath: string, items: 
 
 export async function supabaseDeleteDocumentsBatch(collectionPath: string, ids: string[]): Promise<void> {
   if (!ids || ids.length === 0) return;
+  if (isSupabaseSecretKeyConfigured()) {
+    throw new Error(formatSupabaseErrorMessage(new Error('Forbidden use of secret API key in browser')));
+  }
   if (!supabase) throw new Error('Supabase belum dikonfigurasi.');
 
   const validIds = ids.filter(Boolean);
   if (validIds.length === 0) return;
-
-  const map = collectionCache.get(collectionPath);
-  if (map) {
-    validIds.forEach((id) => map.delete(id));
-  }
 
   const chunkSize = 250;
   for (let i = 0; i < validIds.length; i += chunkSize) {
@@ -606,7 +743,15 @@ export async function supabaseDeleteDocumentsBatch(collectionPath: string, ids: 
       .delete()
       .eq('collection_name', collectionPath)
       .in('id', chunk);
-    if (error) throw error;
+    if (error) throw new Error(formatSupabaseErrorMessage(error));
+  }
+
+  const map = collectionCache.get(collectionPath);
+  if (map) {
+    validIds.forEach((id) => {
+      markRecentLocalWrite(collectionPath, id);
+      map.delete(id);
+    });
   }
 
   statusNotifier('online');
