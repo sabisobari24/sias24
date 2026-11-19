@@ -1326,6 +1326,32 @@ export default function App({ initialMode }: AppProps = {}) {
     };
   }, []);
 
+  // Keep browser tab favicon aligned with official school logo (and never mistakenly use headmaster portrait)
+  useEffect(() => {
+    const rawLogo = (webHomeContent?.schoolLogo || '').trim();
+    const headImg = (webHomeContent?.headImage || '').trim();
+    const isCustomLogo =
+      rawLogo !== '' &&
+      rawLogo !== '/logo.png' &&
+      rawLogo !== headImg &&
+      !rawLogo.includes('1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj');
+
+    const dynamicLinkId = 'dynamic-school-favicon';
+    let dynamicLink = document.getElementById(dynamicLinkId) as HTMLLinkElement | null;
+
+    if (isCustomLogo) {
+      if (!dynamicLink) {
+        dynamicLink = document.createElement('link');
+        dynamicLink.id = dynamicLinkId;
+        dynamicLink.rel = 'icon';
+        document.head.appendChild(dynamicLink);
+      }
+      dynamicLink.href = rawLogo;
+    } else if (dynamicLink) {
+      dynamicLink.remove();
+    }
+  }, [webHomeContent?.schoolLogo, webHomeContent?.headImage]);
+
   // 2. Pending Registrations Listener (Only active on Portal/Register/Admin view, saves public landing reads)
   useEffect(() => {
     const shouldSyncRegistrations = pageMode === 'portal' || isRegisterModalOpen || activeRole === 'admin';
@@ -3517,11 +3543,17 @@ export default function App({ initialMode }: AppProps = {}) {
                   className="flex items-center gap-3 hover:opacity-90 transition-opacity text-left cursor-pointer bg-transparent border-0 p-0"
                 >
                   <div className="w-12 h-12 rounded-xl bg-white shadow-xs border border-slate-200/90 flex items-center justify-center shrink-0 overflow-hidden">
-                    {webHomeContent?.schoolLogo ? (
-                      <img src={webHomeContent.schoolLogo} alt="Logo Sekolah" className="w-full h-full object-cover" />
-                    ) : (
-                      <School className="w-6 h-6 text-blue-900" />
-                    )}
+                    <img
+                      src={webHomeContent?.schoolLogo || '/logo.png'}
+                      alt="Logo SMPN 50 Jakarta"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.src.endsWith('/logo.png')) {
+                          target.src = '/logo.png';
+                        }
+                      }}
+                    />
                   </div>
                   <div className="flex flex-col justify-center text-left">
                     <h1 className="text-xs md:text-sm font-black text-slate-800 tracking-tight leading-none uppercase">SMP NEGERI 50 JAKARTA</h1>
@@ -3741,11 +3773,17 @@ export default function App({ initialMode }: AppProps = {}) {
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.08),transparent_50%)]" />
                         <div className="flex items-center gap-4 md:gap-5 relative z-10">
                           <div className="w-14 h-14 md:w-16 md:h-16 bg-white rounded-2xl flex items-center justify-center border border-white/40 shadow-md shrink-0 overflow-hidden">
-                            {webHomeContent?.schoolLogo ? (
-                              <img src={webHomeContent.schoolLogo} alt="Logo Sekolah" className="w-full h-full object-cover" />
-                            ) : (
-                              <School className="w-8 md:w-10 md:h-10 text-blue-900" />
-                            )}
+                            <img
+                              src={webHomeContent?.schoolLogo || '/logo.png'}
+                              alt="Logo SMPN 50 Jakarta"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                if (!target.src.endsWith('/logo.png')) {
+                                  target.src = '/logo.png';
+                                }
+                              }}
+                            />
                           </div>
                           <div className="space-y-1.5 text-left">
                             <h1 className="text-xl md:text-2xl lg:text-3xl font-black tracking-tight leading-none">SMP NEGERI 50 JAKARTA</h1>
@@ -4431,11 +4469,17 @@ export default function App({ initialMode }: AppProps = {}) {
                   title="Klik Logo Sekolah untuk Melihat Tampilan Web Sekolah"
                 >
                   <div className="w-9 h-9 bg-white border border-slate-200 group-hover:border-indigo-400 rounded-xl flex items-center justify-center text-slate-800 font-bold shadow-xs shrink-0 overflow-hidden transition-all group-hover:scale-105">
-                    {webHomeContent?.schoolLogo ? (
-                      <img src={webHomeContent.schoolLogo} alt="Logo Sekolah" className="w-full h-full object-cover" />
-                    ) : (
-                      <School className="w-5 h-5 text-indigo-600" />
-                    )}
+                    <img
+                      src={webHomeContent?.schoolLogo || '/logo.png'}
+                      alt="Logo SMPN 50 Jakarta"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.src.endsWith('/logo.png')) {
+                          target.src = '/logo.png';
+                        }
+                      }}
+                    />
                   </div>
                   <div className="flex flex-col">
                     <span className="font-bold text-sm tracking-tight text-slate-800 group-hover:text-indigo-600 transition-colors leading-tight">SMPN 50 JAKARTA</span>
