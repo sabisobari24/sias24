@@ -509,7 +509,7 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
     }
     setIsUploadingRewardPhoto(true);
     try {
-      const compressed = await compressImageFile(file, 640, 640, 0.78);
+      const compressed = await compressImageFile(file, 1280, 1280, 0.90);
       if (compressed) {
         setRewardForm(prev => ({ ...prev, imageUrl: compressed }));
       }
@@ -1925,7 +1925,7 @@ export const AdminEcoTiketPanel: React.FC<AdminEcoTiketPanelProps> = ({
                     onChange={e => {
                       const converted = convertGoogleDriveLink(e.target.value);
                       if (converted.startsWith('data:image/')) {
-                        compressBase64Image(converted, 640, 640, 0.78).then(res =>
+                        compressBase64Image(converted, 1280, 1280, 0.90).then(res =>
                           setRewardForm(prev => ({ ...prev, imageUrl: res }))
                         );
                       } else {

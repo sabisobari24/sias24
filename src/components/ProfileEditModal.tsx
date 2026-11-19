@@ -57,7 +57,7 @@ export default function ProfileEditModal({
     if (!file) return;
     setIsCompressingAvatar(true);
     try {
-      const compressed = await compressImageFile(file, 350, 350, 0.75);
+      const compressed = await compressImageFile(file, 800, 800, 0.90);
       setAvatarUrl(compressed);
     } catch (err) {
       console.warn('Gagal memproses gambar:', err);
@@ -348,7 +348,7 @@ export default function ProfileEditModal({
                     setLinkInputVal(rawVal);
                     const converted = convertGoogleDriveLink(rawVal);
                     if (converted.startsWith('data:image/')) {
-                      compressBase64Image(converted, 350, 350, 0.75).then(res => setAvatarUrl(res));
+                      compressBase64Image(converted, 800, 800, 0.90).then(res => setAvatarUrl(res));
                     } else {
                       setAvatarUrl(converted);
                     }

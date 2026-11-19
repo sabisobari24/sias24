@@ -23,6 +23,7 @@ import { syncCollection } from '../../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../../data/initialWebContent';
 import { WebSectionContent, WebArticle } from '../../types';
 import FormattedText from '../common/FormattedText';
+import { getHighResMediaUrl } from '../../utils/imageHelper';
 
 export default function WebBerita() {
   const [webContent, setWebContent] = useState<WebSectionContent>(() => {
@@ -161,9 +162,10 @@ export default function WebBerita() {
             >
               <div className="h-[220px] sm:h-[260px] md:h-[290px] relative overflow-hidden bg-slate-100">
                 <img 
-                  src={spotlightArticle.image} 
+                  src={getHighResMediaUrl(spotlightArticle.image || '', 1600)} 
                   alt={spotlightArticle.title} 
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  referrerPolicy="no-referrer"
                 />
                 <span className="absolute top-4 left-4 bg-blue-700 text-white font-extrabold text-[11px] tracking-wider uppercase px-3.5 py-1 rounded-full shadow-md">
                   {spotlightArticle.category}
@@ -219,9 +221,10 @@ export default function WebBerita() {
                     <div>
                       <div className="h-40 sm:h-44 relative overflow-hidden bg-slate-100">
                         <img 
-                          src={art.image} 
+                          src={getHighResMediaUrl(art.image || '', 1200)} 
                           alt={art.title} 
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                          referrerPolicy="no-referrer"
                         />
                         <span className="absolute top-3 left-3 bg-slate-900/85 backdrop-blur-xs text-white font-extrabold text-[10px] tracking-wider uppercase px-2.5 py-0.5 rounded-full shadow-sm">
                           {art.category}
@@ -380,7 +383,7 @@ export default function WebBerita() {
                 </div>
 
                 <div className="w-full h-[220px] sm:h-[280px] md:h-[320px] rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
-                  <img src={activeArticle.image} alt={activeArticle.title} className="w-full h-full object-cover" />
+                  <img src={getHighResMediaUrl(activeArticle.image || '', 1600)} alt={activeArticle.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 </div>
 
                 <div className="text-sm md:text-base text-slate-700 leading-relaxed font-medium">

@@ -1504,7 +1504,7 @@ export default function AdminPelatihPanel({
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const compressed = await compressImageFile(file, 800, 600, 0.75);
+                        const compressed = await compressImageFile(file, 1440, 1080, 0.90);
                         setJournalPhoto(compressed);
                       }
                     }}
@@ -1518,7 +1518,7 @@ export default function AdminPelatihPanel({
                     onChange={(e) => {
                       const converted = convertGoogleDriveLink(e.target.value);
                       if (converted.startsWith('data:image/')) {
-                        compressBase64Image(converted, 800, 600, 0.75).then(res => setJournalPhoto(res));
+                        compressBase64Image(converted, 1440, 1080, 0.90).then(res => setJournalPhoto(res));
                       } else {
                         setJournalPhoto(converted);
                       }

@@ -23,6 +23,7 @@ import { INITIAL_WEB_CONTENT } from '../../data/initialWebContent';
 import { WebSectionContent, WebProgram } from '../../types';
 import { WebIcon } from './WebIcon';
 import FormattedText, { stripHtmlToText } from '../common/FormattedText';
+import { getHighResMediaUrl } from '../../utils/imageHelper';
 
 export default function WebSarpras() {
   const [webContent, setWebContent] = useState<WebSectionContent>(() => {
@@ -81,7 +82,7 @@ export default function WebSarpras() {
       <div 
         className="bg-cover bg-center rounded-3xl p-10 text-white relative overflow-hidden border-b-6 border-amber-400"
         style={{ 
-          backgroundImage: `linear-gradient(135deg, rgba(13, 92, 58, 0.9) 0%, rgba(4, 47, 26, 0.8) 100%), url('${webContent.headerBgImage || 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz'}')` 
+          backgroundImage: `linear-gradient(135deg, rgba(13, 92, 58, 0.9) 0%, rgba(4, 47, 26, 0.8) 100%), url('${getHighResMediaUrl(webContent.headerBgImage || 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz', 1920)}')` 
         }}
       >
         <div className="relative z-10 space-y-2">
@@ -117,9 +118,10 @@ export default function WebSarpras() {
               >
                 <div className="w-full h-full rounded-lg bg-slate-100 overflow-hidden">
                   <img 
-                    src={webContent.headImage} 
+                    src={getHighResMediaUrl(webContent.headImage || '', 900)} 
                     alt={webContent.headName}
                     className="w-full h-full object-cover object-top"
+                    referrerPolicy="no-referrer"
                   />
                 </div>
                 <div className="absolute -bottom-1.5 -right-1.5 bg-emerald-700 text-white rounded-lg p-1.5 shadow-md">
@@ -186,9 +188,10 @@ export default function WebSarpras() {
                 >
                   <div className="w-11 h-11 rounded-lg border-2 border-emerald-700 overflow-hidden shrink-0 bg-slate-200">
                     <img 
-                      src={s.image} 
+                      src={getHighResMediaUrl(s.image || '', 800)} 
                       alt={s.name}
                       className="w-full h-full object-cover object-top"
+                      referrerPolicy="no-referrer"
                     />
                   </div>
                   <div>
@@ -282,7 +285,7 @@ export default function WebSarpras() {
               <div 
                 className="absolute inset-0 bg-cover bg-center transition-all duration-700"
                 style={{ 
-                  backgroundImage: `linear-gradient(to top, rgba(13, 92, 58, 0.95) 0%, rgba(0,0,0,0.2) 60%), url(${slides[currentSlide]?.image || 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz'})`
+                  backgroundImage: `linear-gradient(to top, rgba(13, 92, 58, 0.95) 0%, rgba(0,0,0,0.2) 60%), url('${getHighResMediaUrl(slides[currentSlide]?.image || 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz', 1920)}')`
                 }}
               />
               
@@ -381,7 +384,7 @@ export default function WebSarpras() {
               <div className="space-y-4">
                 <div className="flex items-center gap-4 border-b border-white/10 pb-4">
                   <div className="w-16 h-20 rounded-xl border-2 border-amber-400 overflow-hidden shrink-0 bg-slate-200 shadow-md">
-                    <img src={activeStaff.image} alt={activeStaff.name} className="w-full h-full object-cover object-top" />
+                    <img src={getHighResMediaUrl(activeStaff.image || '', 900)} alt={activeStaff.name} className="w-full h-full object-cover object-top" referrerPolicy="no-referrer" />
                   </div>
                   <div>
                     <span className="text-[8px] bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-full uppercase tracking-wider block w-max mb-1">Profil Staff</span>
@@ -514,9 +517,10 @@ export default function WebSarpras() {
 
                       <div className="relative rounded-xl overflow-hidden h-[160px] border border-white/10">
                         <img 
-                          src={facilityImages[validIndex] || facilityImages[0]} 
+                          src={getHighResMediaUrl(facilityImages[validIndex] || facilityImages[0] || '', 1440)} 
                           alt={`Dokumentasi ${activeFacility.name}`}
                           className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
                         />
 
                         {facilityImages.length > 1 && (
@@ -607,9 +611,10 @@ export default function WebSarpras() {
                   <div className="space-y-3">
                     <div className="relative rounded-2xl overflow-hidden h-[240px] sm:h-[340px] border border-white/10 bg-slate-950 group">
                       <img 
-                        src={progImages[validIndex]} 
+                        src={getHighResMediaUrl(progImages[validIndex] || '', 1600)} 
                         alt={`${selectedProgram.title} - Foto ${validIndex + 1}`}
                         className="w-full h-full object-cover transition-all duration-300"
+                        referrerPolicy="no-referrer"
                       />
 
                       {progImages.length > 1 && (

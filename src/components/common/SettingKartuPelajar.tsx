@@ -116,14 +116,14 @@ export default function SettingKartuPelajar({ classes = [] }: { classes?: School
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      setUploadError('Ukuran file maksimal 2 MB.');
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Ukuran file maksimal 5 MB.');
       return;
     }
 
     setUploadError(null);
     try {
-      const compressed = await compressImageFile(file, 320, 320, 0.85);
+      const compressed = await compressImageFile(file, 800, 800, 0.94);
       if (compressed) {
         setLogoUrl(compressed);
       }
@@ -145,7 +145,7 @@ export default function SettingKartuPelajar({ classes = [] }: { classes?: School
 
     setBgUploadError(null);
     try {
-      const compressed = await compressImageFile(file, 640, 400, 0.75);
+      const compressed = await compressImageFile(file, 1600, 1000, 0.92);
       if (compressed) {
         setCustomBgImage(compressed);
         setBgType('custom_image');

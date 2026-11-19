@@ -698,9 +698,10 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
               >
                 <div className="w-full h-full rounded-2xl bg-white overflow-hidden shadow-inner">
                   <img 
-                    src={headImage} 
+                    src={getHighResMediaUrl(headImage || '', 900)} 
                     alt={headName}
                     className="w-full h-full object-cover object-top transition-transform duration-500 group-hover/photo:scale-105"
+                    referrerPolicy="no-referrer"
                     onError={(e) => {
                       const fallback = 'https://lh3.googleusercontent.com/d/1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj';
                       if ((e.currentTarget as HTMLImageElement).src !== fallback) {
@@ -793,9 +794,10 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
                   <div className="flex items-center gap-3.5 sm:gap-4">
                     <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border-2 border-blue-800 overflow-hidden shrink-0 bg-slate-200 shadow-sm">
                       <img 
-                        src={waka.image} 
+                        src={getHighResMediaUrl(waka.image || '', 800)} 
                         alt={waka.name}
                         className="w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
+                        referrerPolicy="no-referrer"
                       />
                     </div>
                     <div>
@@ -1232,7 +1234,7 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
               <div className="space-y-4">
                 <div className="flex items-center gap-4 border-b border-white/10 pb-4">
                   <div className="w-16 h-20 rounded-xl border-2 border-amber-400 overflow-hidden shrink-0 bg-slate-200 shadow-md">
-                    <img src={activeStaff.image} alt={activeStaff.name} className="w-full h-full object-cover object-top" />
+                    <img src={getHighResMediaUrl(activeStaff.image || '', 900)} alt={activeStaff.name} className="w-full h-full object-cover object-top" referrerPolicy="no-referrer" />
                   </div>
                   <div>
                     <span className="text-[8px] bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-full uppercase tracking-wider block w-max mb-1">Manajemen Inti</span>
@@ -1413,7 +1415,7 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
                         <div className={`absolute top-0 inset-x-0 h-2 ${teacherTab === 'guru' ? 'bg-emerald-600' : 'bg-blue-600'}`} />
                         {selectedTeacher.avatarUrl && selectedTeacher.avatarUrl !== '-' ? (
                           <img 
-                            src={selectedTeacher.avatarUrl} 
+                            src={getHighResMediaUrl(selectedTeacher.avatarUrl, 800)} 
                             alt={selectedTeacher.name} 
                             referrerPolicy="no-referrer"
                             className="w-16 h-16 rounded-full mx-auto mb-3 object-cover shadow-md border-2 border-white ring-4 ring-slate-100"

@@ -127,16 +127,16 @@ export default function MediaUploadSelector({
     try {
       let b64 = '';
       if (isAvatar) {
-        // High-clarity, compact portrait photo with facial edge-sharpening (optimized <= 35KB)
-        b64 = await compressAvatarImage(file, 420, 525, 0.78);
-        setStatusMessage('Foto profil berhasil diunggah & dioptimalkan (Jernih & Ringan).');
+        // High-clarity Retina portrait photo
+        b64 = await compressAvatarImage(file, 800, 1000, 0.90);
+        setStatusMessage('Foto profil berhasil diunggah (Kualitas HD Jernih).');
       } else if (isBanner) {
-        // High-definition wide banner with auto-clarity, edge-sharpening, and anti-blur technology
-        b64 = await enhanceAndCompressBannerImage(file, 1600, 900, 0.88);
+        // High-definition wide banner up to Full HD 1920x1080
+        b64 = await enhanceAndCompressBannerImage(file, 1920, 1080, 0.91);
         setStatusMessage('Foto banner berhasil diunggah (Kualitas Full HD).');
       } else {
-        b64 = await fileToBase64(file, 640, 640, 0.80);
-        setStatusMessage('Foto berhasil diunggah dan dioptimalkan.');
+        b64 = await fileToBase64(file, 1440, 1440, 0.91);
+        setStatusMessage('Foto berhasil diunggah dengan kualitas tajam.');
       }
       onChange(b64);
       setTimeout(() => setStatusMessage(null), 5000);
@@ -156,12 +156,14 @@ export default function MediaUploadSelector({
     const rawUrl = e.target.value;
     const converted = convertGoogleDriveLink(rawUrl);
     if (converted.startsWith('data:image/')) {
-      if (isAvatar) {
-        compressAvatarImage(converted, 420, 525, 0.78).then(res => onChange(res));
-      } else if (isBanner) {
-        enhanceAndCompressBannerImage(converted, 1600, 900, 0.88).then(res => onChange(res));
+      if (isAvatar && converted.length > 280 * 1024) {
+        compressAvatarImage(converted, 800, 1000, 0.90).then(res => onChange(res));
+      } else if (isBanner && converted.length > 560 * 1024) {
+        enhanceAndCompressBannerImage(converted, 1920, 1080, 0.91).then(res => onChange(res));
+      } else if (!isAvatar && !isBanner && converted.length > 460 * 1024) {
+        compressBase64Image(converted, 1440, 1440, 0.91).then(res => onChange(res));
       } else {
-        compressBase64Image(converted, 640, 640, 0.80).then(res => onChange(res));
+        onChange(converted);
       }
     } else {
       onChange(converted);

@@ -1019,7 +1019,7 @@ export default function CoachPanel({
     const file = e.target.files?.[0];
     if (file) {
       try {
-        const compressed = await compressImageFile(file, 600, 600, 0.75);
+        const compressed = await compressImageFile(file, 1440, 1080, 0.90);
         if (compressed) {
           setter(compressed);
         }

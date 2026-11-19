@@ -1349,7 +1349,7 @@ export default function SiswaPanel({
                           const file = e.target.files?.[0];
                           if (file && onUpdateStudent) {
                             try {
-                              const compressed = await compressImageFile(file, 480, 480, 0.85);
+                              const compressed = await compressImageFile(file, 800, 800, 0.90);
                               onUpdateStudent({ ...student, avatarUrl: compressed });
                               setPanelAlert({ type: 'success', text: 'Foto profil berhasil diperbarui dari komputer.' });
                             } catch (err) {

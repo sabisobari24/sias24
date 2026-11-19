@@ -300,12 +300,12 @@ export default function WebContentEditor() {
     }
   }, [activeSectionId, contents]);
 
-  // Helpers to compress oversized base64 images so Supabase JSONB rows stay fast & reliable
+  // Helpers to gently optimize only genuinely oversized base64 images so crisp photos stay razor-sharp
   const compressAvatarIfNeeded = async (src: string): Promise<string> => {
     if (!src) return src;
-    if (src.startsWith('data:image/') && src.length > 38 * 1024) {
+    if (src.startsWith('data:image/') && src.length > 280 * 1024) {
       try {
-        return await compressAvatarImage(src, 420, 525, 0.78);
+        return await compressAvatarImage(src, 800, 1000, 0.90);
       } catch {
         return src;
       }
@@ -315,9 +315,9 @@ export default function WebContentEditor() {
 
   const compressBannerIfNeeded = async (src: string): Promise<string> => {
     if (!src) return src;
-    if (src.startsWith('data:image/') && src.length > 100 * 1024) {
+    if (src.startsWith('data:image/') && src.length > 560 * 1024) {
       try {
-        return await enhanceAndCompressBannerImage(src, 1280, 720, 0.78);
+        return await enhanceAndCompressBannerImage(src, 1920, 1080, 0.91);
       } catch {
         return src;
       }

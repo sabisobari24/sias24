@@ -1,5 +1,5 @@
 /**
- * Utility functions for image URL conversions, file uploads, and automatic image enhancement
+ * Utility functions for high-clarity image URL conversions, file uploads, and lossless-priority optimization
  */
 
 /**
@@ -8,7 +8,7 @@
 export function convertGoogleDriveLink(url: string): string {
   if (!url) return '';
   const trimmed = url.trim();
-  
+
   // Pattern 1: /file/d/FILE_ID/view or /file/d/FILE_ID/...
   const fileDMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_\-]+)/);
   if (fileDMatch && fileDMatch[1]) {
@@ -38,14 +38,14 @@ export function convertGoogleDriveLink(url: string): string {
 
 /**
  * Ensures Google Drive (lh3.googleusercontent.com/d/{id}) and stock photo URLs load at high resolution
- * instead of low-resolution default thumbnails, preventing blurry hero banners.
+ * instead of low-resolution default thumbnails, preventing blurry banners or avatars.
  */
 export function getHighResMediaUrl(url: string, width: number = 1920): string {
   if (!url) return '';
   const trimmed = convertGoogleDriveLink(url.trim());
-  if (trimmed.startsWith('data:')) return trimmed;
+  if (trimmed.startsWith('data:') || trimmed.startsWith('/')) return trimmed;
 
-  // Googleusercontent Drive links without explicit width/size suffix default to ~512-800px thumbnails
+  // Googleusercontent Drive links without explicit width/size suffix default to small thumbnails
   if (/^https:\/\/lh3\.googleusercontent\.com\/d\/[a-zA-Z0-9_\-]+$/i.test(trimmed)) {
     return `${trimmed}=w${width}`;
   }
@@ -63,14 +63,82 @@ export function getHighResMediaUrl(url: string, width: number = 1920): string {
 }
 
 /**
- * High-performance edge sharpening & clarity enhancement filter for canvas images.
- * Eliminates softness and blur from phone camera and gallery uploads without halo artifacts.
+ * Multi-step high-quality bicubic downscaling.
+ * Prevents aliasing, moiré, and jagged ("pecah") edges when shrinking large camera photos (> 2x).
+ */
+function renderHighQualityCanvas(
+  img: HTMLImageElement,
+  targetWidth: number,
+  targetHeight: number,
+  preserveAlpha: boolean
+): HTMLCanvasElement | null {
+  const srcW = img.naturalWidth || img.width;
+  const srcH = img.naturalHeight || img.height;
+  if (srcW <= 0 || srcH <= 0) return null;
+
+  let currentCanvas = document.createElement('canvas');
+  let currW = srcW;
+  let currH = srcH;
+
+  // If reducing by more than 2x, step down smoothly in halves first
+  if (srcW > targetWidth * 2 || srcH > targetHeight * 2) {
+    const firstW = Math.max(targetWidth, Math.round(srcW * 0.5));
+    const firstH = Math.max(targetHeight, Math.round(srcH * 0.5));
+    currentCanvas.width = firstW;
+    currentCanvas.height = firstH;
+    const stepCtx = currentCanvas.getContext('2d', { alpha: preserveAlpha });
+    if (!stepCtx) return null;
+    stepCtx.imageSmoothingEnabled = true;
+    stepCtx.imageSmoothingQuality = 'high';
+    stepCtx.drawImage(img, 0, 0, firstW, firstH);
+    currW = firstW;
+    currH = firstH;
+
+    while (currW * 0.5 > targetWidth * 1.4 || currH * 0.5 > targetHeight * 1.4) {
+      const nextW = Math.max(targetWidth, Math.round(currW * 0.5));
+      const nextH = Math.max(targetHeight, Math.round(currH * 0.5));
+      const nextCanvas = document.createElement('canvas');
+      nextCanvas.width = nextW;
+      nextCanvas.height = nextH;
+      const nCtx = nextCanvas.getContext('2d', { alpha: preserveAlpha });
+      if (!nCtx) break;
+      nCtx.imageSmoothingEnabled = true;
+      nCtx.imageSmoothingQuality = 'high';
+      nCtx.drawImage(currentCanvas, 0, 0, currW, currH, 0, 0, nextW, nextH);
+      currentCanvas = nextCanvas;
+      currW = nextW;
+      currH = nextH;
+    }
+
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = targetWidth;
+    finalCanvas.height = targetHeight;
+    const fCtx = finalCanvas.getContext('2d', { alpha: preserveAlpha });
+    if (!fCtx) return currentCanvas;
+    fCtx.imageSmoothingEnabled = true;
+    fCtx.imageSmoothingQuality = 'high';
+    fCtx.drawImage(currentCanvas, 0, 0, currW, currH, 0, 0, targetWidth, targetHeight);
+    return finalCanvas;
+  }
+
+  currentCanvas.width = targetWidth;
+  currentCanvas.height = targetHeight;
+  const ctx = currentCanvas.getContext('2d', { alpha: preserveAlpha });
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+  return currentCanvas;
+}
+
+/**
+ * Gentle edge sharpening filter used only when explicitly requested via autoEnhanceImageBase64.
  */
 function applySharpenAndClarityFilter(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  sharpenStrength: number = 0.14
+  sharpenStrength: number = 0.12
 ): void {
   try {
     if (width <= 2 || height <= 2) return;
@@ -79,66 +147,121 @@ function applySharpenAndClarityFilter(
     const output = new Uint8ClampedArray(data.length);
     output.set(data);
 
-    const k = Math.max(0.05, Math.min(0.35, sharpenStrength));
+    const k = Math.max(0.04, Math.min(0.25, sharpenStrength));
     const centerWeight = 1 + 4 * k;
     const neighborWeight = -k;
-
     const rowBytes = width * 4;
 
-    // Process interior pixels with Laplacian 5-point cross convolution
     for (let y = 1; y < height - 1; y++) {
       const rowOffset = y * rowBytes;
       const prevRowOffset = (y - 1) * rowBytes;
       const nextRowOffset = (y + 1) * rowBytes;
 
       for (let x = 1; x < width - 1; x++) {
-        const idx = rowOffset + (x * 4);
-        const topIdx = prevRowOffset + (x * 4);
-        const btmIdx = nextRowOffset + (x * 4);
-        const lftIdx = rowOffset + ((x - 1) * 4);
-        const rgtIdx = rowOffset + ((x + 1) * 4);
+        const idx = rowOffset + x * 4;
+        const topIdx = prevRowOffset + x * 4;
+        const btmIdx = nextRowOffset + x * 4;
+        const lftIdx = rowOffset + (x - 1) * 4;
+        const rgtIdx = rowOffset + (x + 1) * 4;
 
-        // Red
         output[idx] = Math.min(255, Math.max(0,
-          data[idx] * centerWeight +
-          (data[topIdx] + data[btmIdx] + data[lftIdx] + data[rgtIdx]) * neighborWeight
+          data[idx] * centerWeight + (data[topIdx] + data[btmIdx] + data[lftIdx] + data[rgtIdx]) * neighborWeight
         ));
-
-        // Green
         output[idx + 1] = Math.min(255, Math.max(0,
-          data[idx + 1] * centerWeight +
-          (data[topIdx + 1] + data[btmIdx + 1] + data[lftIdx + 1] + data[rgtIdx + 1]) * neighborWeight
+          data[idx + 1] * centerWeight + (data[topIdx + 1] + data[btmIdx + 1] + data[lftIdx + 1] + data[rgtIdx + 1]) * neighborWeight
         ));
-
-        // Blue
         output[idx + 2] = Math.min(255, Math.max(0,
-          data[idx + 2] * centerWeight +
-          (data[topIdx + 2] + data[btmIdx + 2] + data[lftIdx + 2] + data[rgtIdx + 2]) * neighborWeight
+          data[idx + 2] * centerWeight + (data[topIdx + 2] + data[btmIdx + 2] + data[lftIdx + 2] + data[rgtIdx + 2]) * neighborWeight
         ));
-
-        // Alpha remains untouched
         output[idx + 3] = data[idx + 3];
       }
     }
 
-    const resultImageData = new ImageData(output, width, height);
-    ctx.putImageData(resultImageData, 0, 0);
+    ctx.putImageData(new ImageData(output, width, height), 0, 0);
   } catch (err) {
-    // If getImageData fails due to security restrictions, graceful fallback
     console.warn('Auto-enhancement canvas filter skipped:', err);
   }
 }
 
 /**
- * Automatically enhances and optimizes banner and slide images uploaded from gallery/camera.
- * Delivers razor-sharp widescreen HD resolution (up to 1600x900) with crisp detail preservation
- * and balanced byte size (<= 220KB) so hero banners never appear pixelated or blurry.
+ * Encodes a canvas crisply (WebP high-quality first when beneficial, PNG for transparent graphics, JPEG fallback)
+ * while strictly keeping quality >= minQuality so photos never turn muddy, blurry, or pixelated.
+ */
+function encodeCrispCanvas(
+  canvas: HTMLCanvasElement,
+  hasAlpha: boolean,
+  preferredQuality: number,
+  targetMaxBytes: number,
+  minQuality: number = 0.80
+): string {
+  // For PNG/alpha images, try lossless PNG first if within generous size budget
+  if (hasAlpha) {
+    try {
+      const pngUrl = canvas.toDataURL('image/png');
+      if (pngUrl.length <= targetMaxBytes) {
+        return pngUrl;
+      }
+    } catch (_) {}
+  }
+
+  // Try crisp WebP (supports both alpha & photographic detail with superior clarity per byte)
+  let bestWebp = '';
+  try {
+    let q = preferredQuality;
+    let webp = canvas.toDataURL('image/webp', q);
+    if (webp.startsWith('data:image/webp')) {
+      bestWebp = webp;
+      while (webp.length > targetMaxBytes && q > minQuality) {
+        q = Math.max(minQuality, Number((q - 0.03).toFixed(2)));
+        webp = canvas.toDataURL('image/webp', q);
+        bestWebp = webp;
+        if (q === minQuality) break;
+      }
+      if (bestWebp.length <= targetMaxBytes * 1.35) {
+        return bestWebp;
+      }
+    }
+  } catch (_) {}
+
+  // JPEG fallback (flatten onto clean white canvas if source had alpha)
+  const jpegCanvas = hasAlpha ? (() => {
+    const flat = document.createElement('canvas');
+    flat.width = canvas.width;
+    flat.height = canvas.height;
+    const fCtx = flat.getContext('2d');
+    if (fCtx) {
+      fCtx.fillStyle = '#ffffff';
+      fCtx.fillRect(0, 0, flat.width, flat.height);
+      fCtx.drawImage(canvas, 0, 0);
+      return flat;
+    }
+    return canvas;
+  })() : canvas;
+
+  let q = preferredQuality;
+  let jpeg = jpegCanvas.toDataURL('image/jpeg', q);
+  while (jpeg.length > targetMaxBytes && q > minQuality) {
+    q = Math.max(minQuality, Number((q - 0.03).toFixed(2)));
+    jpeg = jpegCanvas.toDataURL('image/jpeg', q);
+    if (q === minQuality) break;
+  }
+
+  if (bestWebp && bestWebp.length < jpeg.length) {
+    return bestWebp;
+  }
+  return jpeg;
+}
+
+/**
+ * Optimizes banner, slider, gallery, and header photos at crisp Full HD resolution (up to 1920x1080).
+ * Preserves original file/dataURL bytes when already crisp and within bounds to avoid re-encoding blur.
  */
 export function enhanceAndCompressBannerImage(
   source: File | string,
-  maxWidth: number = 1600,
-  maxHeight: number = 900,
-  quality: number = 0.88
+  maxWidth: number = 1920,
+  maxHeight: number = 1080,
+  quality: number = 0.91,
+  forceEnhance: boolean = false
 ): Promise<string> {
   return new Promise((resolve) => {
     if (!source) {
@@ -146,135 +269,112 @@ export function enhanceAndCompressBannerImage(
       return;
     }
 
-    const TARGET_MAX_BYTES = 145 * 1024;
+    const TARGET_MAX_BYTES = 560 * 1024; // ~410KB binary -> razor-sharp Full HD banners
 
-    const processImageElement = (img: HTMLImageElement) => {
+    const processImageElement = (img: HTMLImageElement, rawDataUrl?: string, mimeType?: string) => {
       try {
-        let width = img.naturalWidth || img.width;
-        let height = img.naturalHeight || img.height;
+        const natW = img.naturalWidth || img.width;
+        const natH = img.naturalHeight || img.height;
 
-        if (width <= 0 || height <= 0) {
-          resolve(typeof source === 'string' ? source : '');
+        if (natW <= 0 || natH <= 0) {
+          resolve(rawDataUrl || (typeof source === 'string' ? source : ''));
           return;
         }
 
-        // Maintain aspect ratio while preserving full HD clarity for panoramic banners
+        const withinBounds = natW <= maxWidth && natH <= maxHeight;
+        if (!forceEnhance && rawDataUrl && withinBounds && rawDataUrl.length <= TARGET_MAX_BYTES) {
+          // Zero generation loss: keep original uploaded image verbatim
+          resolve(rawDataUrl);
+          return;
+        }
+
+        let width = natW;
+        let height = natH;
         if (width > maxWidth || height > maxHeight) {
           const ratio = Math.min(maxWidth / width, maxHeight / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
+          width = Math.max(1, Math.round(width * ratio));
+          height = Math.max(1, Math.round(height * ratio));
         }
 
-        width = Math.max(1, width);
-        height = Math.max(1, height);
+        const hasAlpha = Boolean(
+          (mimeType && (mimeType.includes('png') || mimeType.includes('webp'))) ||
+          (rawDataUrl && /^data:image\/(png|webp)/i.test(rawDataUrl))
+        );
 
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext('2d', { alpha: true });
-        if (!ctx) {
-          resolve(typeof source === 'string' ? source : '');
+        const canvas = renderHighQualityCanvas(img, width, height, hasAlpha);
+        if (!canvas) {
+          resolve(rawDataUrl || (typeof source === 'string' ? source : ''));
           return;
         }
 
-        // 1. High quality multi-step bicubic smoothing
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-
-        // 2. Subtle natural clarity & vibrancy boost
-        try {
-          ctx.filter = 'contrast(103%) saturate(104%) brightness(101%)';
-        } catch (_) {}
-
-        // 3. Draw image onto canvas
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // Reset filter
-        try {
-          ctx.filter = 'none';
-        } catch (_) {}
-
-        // 4. Gentle edge sharpening to avoid softness without JPEG haloing
-        applySharpenAndClarityFilter(ctx, width, height, 0.14);
-
-        // 5. Intelligent encoding: Prefer crisp WebP first (<= 145KB), fallback to high-quality JPEG
-        let outputUrl = '';
-        try {
-          let wq = quality;
-          let webp = canvas.toDataURL('image/webp', wq);
-          while (webp.startsWith('data:image/webp') && webp.length > TARGET_MAX_BYTES && wq > 0.66) {
-            wq -= 0.05;
-            webp = canvas.toDataURL('image/webp', wq);
-          }
-          if (webp.startsWith('data:image/webp') && webp.length <= TARGET_MAX_BYTES) {
-            outputUrl = webp;
-          }
-        } catch (_) {}
-
-        if (!outputUrl) {
-          let q = quality;
-          outputUrl = canvas.toDataURL('image/jpeg', q);
-          while (outputUrl.length > TARGET_MAX_BYTES && q > 0.65) {
-            q -= 0.05;
-            outputUrl = canvas.toDataURL('image/jpeg', q);
-          }
-          // Only scale down slightly if still exceptionally large (> 180KB)
-          if (outputUrl.length > 180 * 1024) {
-            const smallerCanvas = document.createElement('canvas');
-            smallerCanvas.width = Math.round(width * 0.85);
-            smallerCanvas.height = Math.round(height * 0.85);
-            const sCtx = smallerCanvas.getContext('2d');
-            if (sCtx) {
-              sCtx.imageSmoothingEnabled = true;
-              sCtx.imageSmoothingQuality = 'high';
-              sCtx.drawImage(canvas, 0, 0, smallerCanvas.width, smallerCanvas.height);
-              outputUrl = smallerCanvas.toDataURL('image/jpeg', 0.76);
-            }
+        if (forceEnhance) {
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            applySharpenAndClarityFilter(ctx, width, height, 0.12);
           }
         }
 
-        resolve(outputUrl);
+        const encoded = encodeCrispCanvas(
+          canvas,
+          hasAlpha,
+          Math.max(quality, 0.90),
+          TARGET_MAX_BYTES,
+          0.82
+        );
+        resolve(encoded);
       } catch (err) {
         console.warn('Failed in enhanceAndCompressBannerImage:', err);
-        resolve(typeof source === 'string' ? source : '');
+        resolve(rawDataUrl || (typeof source === 'string' ? source : ''));
       }
     };
 
     if (source instanceof File) {
+      if (source.type === 'image/svg+xml' && source.size <= 250 * 1024) {
+        const svgReader = new FileReader();
+        svgReader.onload = (e) => resolve((e.target?.result as string) || '');
+        svgReader.onerror = () => resolve('');
+        svgReader.readAsDataURL(source);
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = (e) => {
-        const raw = e.target?.result as string;
+        const raw = (e.target?.result as string) || '';
         if (!raw) {
           resolve('');
           return;
         }
         const img = new Image();
-        img.onload = () => processImageElement(img);
+        img.onload = () => processImageElement(img, raw, source.type);
         img.onerror = () => resolve(raw);
         img.src = raw;
       };
       reader.onerror = () => resolve('');
       reader.readAsDataURL(source);
     } else {
+      const trimmed = source.trim();
+      if (!trimmed.startsWith('data:image/') && !forceEnhance) {
+        resolve(getHighResMediaUrl(trimmed, maxWidth));
+        return;
+      }
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      img.onload = () => processImageElement(img);
+      img.onload = () => processImageElement(img, trimmed.startsWith('data:image/') ? trimmed : undefined);
       img.onerror = () => resolve(source);
-      img.src = source;
+      img.src = trimmed;
     }
   });
 }
 
 /**
- * Converts a file uploaded from local computer into an ultra-compressed, reliable base64 data URL string.
- * Keeps file sizes consistently under 60KB to prevent QuotaExceededError and Firestore payload rejections.
+ * Optimizes general photos, logos, certificates, and document images with HD clarity.
+ * Preserves original bytes verbatim if already within resolution and size thresholds.
  */
 export function compressImageFile(
   file: File,
-  maxWidth: number = 600,
-  maxHeight: number = 600,
-  quality: number = 0.78
+  maxWidth: number = 1440,
+  maxHeight: number = 1440,
+  quality: number = 0.91
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!file) {
@@ -282,16 +382,18 @@ export function compressImageFile(
       return;
     }
 
+    const TARGET_MAX_BYTES = 460 * 1024; // ~335KB binary -> crisp HD images & transparent PNG logos
+
     const reader = new FileReader();
     reader.onload = (event) => {
-      const rawResult = event.target?.result as string;
+      const rawResult = (event.target?.result as string) || '';
       if (!rawResult) {
         resolve('');
         return;
       }
 
-      // If svg and tiny, return directly
-      if (file.type === 'image/svg+xml' && file.size < 40 * 1024) {
+      // Preserve vector SVG verbatim
+      if (file.type === 'image/svg+xml' && file.size <= 250 * 1024) {
         resolve(rawResult);
         return;
       }
@@ -299,92 +401,48 @@ export function compressImageFile(
       const img = new Image();
       img.onload = () => {
         try {
-          let width = img.naturalWidth || img.width;
-          let height = img.naturalHeight || img.height;
+          const natW = img.naturalWidth || img.width;
+          const natH = img.naturalHeight || img.height;
 
-          if (width <= 0 || height <= 0) {
+          if (natW <= 0 || natH <= 0) {
             resolve(rawResult);
             return;
           }
 
-          // Calculate new dimensions preserving aspect ratio
-          if (width > height) {
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
-            }
-          } else {
-            if (height > maxHeight) {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
-            }
-          }
-
-          width = Math.max(1, width);
-          height = Math.max(1, height);
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
+          if (natW <= maxWidth && natH <= maxHeight && rawResult.length <= TARGET_MAX_BYTES) {
             resolve(rawResult);
             return;
           }
 
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
-
-          const isPng = file.type === 'image/png';
-          let outputB64 = '';
-
-          // 1. Try WebP first if PNG for crisp alpha transparency with lossy compression
-          if (isPng) {
-            try {
-              ctx.clearRect(0, 0, width, height);
-              ctx.drawImage(img, 0, 0, width, height);
-              applySharpenAndClarityFilter(ctx, width, height, 0.18);
-              const webp = canvas.toDataURL('image/webp', quality);
-              if (webp.startsWith('data:image/webp') && webp.length <= 80 * 1024) {
-                outputB64 = webp;
-              }
-            } catch (_) {}
-
-            // If WebP is unavailable or large, test PNG if under 55KB
-            if (!outputB64) {
-              try {
-                const pngTest = canvas.toDataURL('image/png');
-                if (pngTest.length <= 55 * 1024) {
-                  outputB64 = pngTest;
-                }
-              } catch (_) {}
-            }
+          let width = natW;
+          let height = natH;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.max(1, Math.round(width * ratio));
+            height = Math.max(1, Math.round(height * ratio));
           }
 
-          // 2. High-efficiency JPEG fallback with white background
-          if (!outputB64) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, width, height);
-            ctx.drawImage(img, 0, 0, width, height);
-            applySharpenAndClarityFilter(ctx, width, height, 0.18);
-            outputB64 = canvas.toDataURL('image/jpeg', quality);
-
-            // If still somehow > 85KB, reduce quality one step
-            if (outputB64.length > 85 * 1024) {
-              outputB64 = canvas.toDataURL('image/jpeg', 0.65);
-            }
+          const hasAlpha = file.type === 'image/png' || file.type === 'image/webp' || /^data:image\/(png|webp)/i.test(rawResult);
+          const canvas = renderHighQualityCanvas(img, width, height, hasAlpha);
+          if (!canvas) {
+            resolve(rawResult);
+            return;
           }
 
-          resolve(outputB64);
+          const encoded = encodeCrispCanvas(
+            canvas,
+            hasAlpha,
+            Math.max(quality, 0.90),
+            TARGET_MAX_BYTES,
+            0.82
+          );
+          resolve(encoded);
         } catch (canvasErr) {
           console.warn('Canvas compression error:', canvasErr);
           resolve(rawResult);
         }
       };
-      img.onerror = () => {
-        resolve(rawResult);
-      };
+      img.onerror = () => resolve(rawResult);
       img.src = rawResult;
     };
     reader.onerror = (err) => reject(err);
@@ -393,13 +451,13 @@ export function compressImageFile(
 }
 
 /**
- * Compresses an existing base64 image data URL string
+ * Optimizes an existing base64 image data URL only when it exceeds HD thresholds.
  */
 export function compressBase64Image(
   dataUrl: string,
-  maxWidth: number = 600,
-  maxHeight: number = 600,
-  quality: number = 0.78
+  maxWidth: number = 1440,
+  maxHeight: number = 1440,
+  quality: number = 0.91
 ): Promise<string> {
   return new Promise((resolve) => {
     if (!dataUrl || !dataUrl.startsWith('data:image/')) {
@@ -407,7 +465,8 @@ export function compressBase64Image(
       return;
     }
 
-    if (dataUrl.length <= 50 * 1024) {
+    const TARGET_MAX_BYTES = 460 * 1024;
+    if (dataUrl.length <= TARGET_MAX_BYTES) {
       resolve(dataUrl);
       return;
     }
@@ -415,44 +474,30 @@ export function compressBase64Image(
     const img = new Image();
     img.onload = () => {
       try {
-        let width = img.naturalWidth || img.width;
-        let height = img.naturalHeight || img.height;
-
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
-        }
-
-        width = Math.max(1, width);
-        height = Math.max(1, height);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
+        const natW = img.naturalWidth || img.width;
+        const natH = img.naturalHeight || img.height;
+        if (natW <= 0 || natH <= 0) {
           resolve(dataUrl);
           return;
         }
 
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-        applySharpenAndClarityFilter(ctx, width, height, 0.18);
+        let width = natW;
+        let height = natH;
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.max(1, Math.round(width * ratio));
+          height = Math.max(1, Math.round(height * ratio));
+        }
 
-        const result = canvas.toDataURL('image/jpeg', quality);
-        resolve(result);
-      } catch (e) {
+        const hasAlpha = /^data:image\/(png|webp)/i.test(dataUrl);
+        const canvas = renderHighQualityCanvas(img, width, height, hasAlpha);
+        if (!canvas) {
+          resolve(dataUrl);
+          return;
+        }
+
+        resolve(encodeCrispCanvas(canvas, hasAlpha, Math.max(quality, 0.90), TARGET_MAX_BYTES, 0.82));
+      } catch {
         resolve(dataUrl);
       }
     };
@@ -462,30 +507,33 @@ export function compressBase64Image(
 }
 
 /**
- * Converts a file uploaded from local computer into a compressed base64 data URL string
+ * Converts an uploaded local image file into a crisp base64 data URL string.
  */
-export function fileToBase64(file: File, maxWidth = 600, maxHeight = 600, quality = 0.78): Promise<string> {
+export function fileToBase64(
+  file: File,
+  maxWidth: number = 1440,
+  maxHeight: number = 1440,
+  quality: number = 0.91
+): Promise<string> {
   return compressImageFile(file, maxWidth, maxHeight, quality);
 }
 
 /**
- * Auto-enhances any existing Base64 or image data URL to eliminate blur and boost sharpness
+ * Enhances clarity on demand when the user explicitly clicks "Perbaiki Kualitas".
  */
 export function autoEnhanceImageBase64(dataUrl: string): Promise<string> {
-  return enhanceAndCompressBannerImage(dataUrl, 1920, 1080, 0.85);
+  return enhanceAndCompressBannerImage(dataUrl, 1920, 1080, 0.92, true);
 }
 
 /**
- * Specifically optimizes and compresses profile photos & Headmaster (Kepala Sekolah) portraits.
- * - Standardizes to clean 4:5 portrait ratio (max 400x500px).
- * - Applies subtle facial clarity & edge sharpening to eliminate camera softness.
- * - Enforces compact base64 output (consistently under 32KB) to guarantee zero Firestore size issues.
+ * Optimizes profile & portrait photos (Kepala Sekolah, Waka, Staf, Guru, Siswa) at crisp Retina resolution (up to 800x1000).
+ * Keeps portrait clarity sharp without blocky 38KB micro-compression.
  */
 export function compressAvatarImage(
   source: File | string,
-  maxWidth: number = 420,
-  maxHeight: number = 525,
-  quality: number = 0.78
+  maxWidth: number = 800,
+  maxHeight: number = 1000,
+  quality: number = 0.90
 ): Promise<string> {
   return new Promise((resolve) => {
     if (!source) {
@@ -493,94 +541,63 @@ export function compressAvatarImage(
       return;
     }
 
-    // If it's an external web URL that is not base64, return as converted URL
     if (typeof source === 'string' && !source.startsWith('data:image/')) {
-      resolve(convertGoogleDriveLink(source));
+      resolve(getHighResMediaUrl(source, Math.max(maxWidth, 900)));
       return;
     }
 
-    const processAvatarElement = (img: HTMLImageElement) => {
-      try {
-        let width = img.naturalWidth || img.width;
-        let height = img.naturalHeight || img.height;
+    const TARGET_MAX_BYTES = 280 * 1024; // ~205KB binary -> crisp Retina portrait photos
 
-        if (width <= 0 || height <= 0) {
-          resolve(typeof source === 'string' ? source : '');
+    const processAvatarElement = (img: HTMLImageElement, rawDataUrl?: string, mimeType?: string) => {
+      try {
+        const natW = img.naturalWidth || img.width;
+        const natH = img.naturalHeight || img.height;
+
+        if (natW <= 0 || natH <= 0) {
+          resolve(rawDataUrl || (typeof source === 'string' ? source : ''));
           return;
         }
 
-        // Maintain portrait ratio
+        if (rawDataUrl && natW <= maxWidth && natH <= maxHeight && rawDataUrl.length <= TARGET_MAX_BYTES) {
+          resolve(rawDataUrl);
+          return;
+        }
+
+        let width = natW;
+        let height = natH;
         if (width > maxWidth || height > maxHeight) {
           const ratio = Math.min(maxWidth / width, maxHeight / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
+          width = Math.max(1, Math.round(width * ratio));
+          height = Math.max(1, Math.round(height * ratio));
         }
 
-        width = Math.max(1, width);
-        height = Math.max(1, height);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext('2d', { alpha: true });
-        if (!ctx) {
-          resolve(typeof source === 'string' ? source : '');
+        const hasAlpha = Boolean(
+          (mimeType && (mimeType.includes('png') || mimeType.includes('webp'))) ||
+          (rawDataUrl && /^data:image\/(png|webp)/i.test(rawDataUrl))
+        );
+        const canvas = renderHighQualityCanvas(img, width, height, hasAlpha);
+        if (!canvas) {
+          resolve(rawDataUrl || (typeof source === 'string' ? source : ''));
           return;
         }
 
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-
-        // Subtle clarity boost
-        try {
-          ctx.filter = 'contrast(104%) saturate(105%) brightness(101%)';
-        } catch (_) {}
-
-        ctx.drawImage(img, 0, 0, width, height);
-
-        try {
-          ctx.filter = 'none';
-        } catch (_) {}
-
-        // Edge sharpening filter for crisp facial portrait
-        applySharpenAndClarityFilter(ctx, width, height, 0.20);
-
-        // Try WebP first
-        let outputUrl = '';
-        try {
-          const webp = canvas.toDataURL('image/webp', quality);
-          if (webp.startsWith('data:image/webp') && webp.length <= 40 * 1024) {
-            outputUrl = webp;
-          }
-        } catch (_) {}
-
-        if (!outputUrl) {
-          let q = quality;
-          outputUrl = canvas.toDataURL('image/jpeg', q);
-          while (outputUrl.length > 38 * 1024 && q > 0.40) {
-            q -= 0.08;
-            outputUrl = canvas.toDataURL('image/jpeg', q);
-          }
-        }
-
-        resolve(outputUrl);
+        resolve(encodeCrispCanvas(canvas, hasAlpha, Math.max(quality, 0.88), TARGET_MAX_BYTES, 0.80));
       } catch (err) {
         console.warn('Failed in compressAvatarImage:', err);
-        resolve(typeof source === 'string' ? source : '');
+        resolve(rawDataUrl || (typeof source === 'string' ? source : ''));
       }
     };
 
     if (source instanceof File) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const raw = e.target?.result as string;
+        const raw = (e.target?.result as string) || '';
         if (!raw) {
           resolve('');
           return;
         }
         const img = new Image();
-        img.onload = () => processAvatarElement(img);
+        img.onload = () => processAvatarElement(img, raw, source.type);
         img.onerror = () => resolve(raw);
         img.src = raw;
       };
@@ -589,10 +606,9 @@ export function compressAvatarImage(
     } else {
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      img.onload = () => processAvatarElement(img);
+      img.onload = () => processAvatarElement(img, source);
       img.onerror = () => resolve(source);
       img.src = source;
     }
   });
 }
-

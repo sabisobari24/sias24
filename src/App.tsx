@@ -1333,6 +1333,7 @@ export default function App({ initialMode }: AppProps = {}) {
     const isCustomLogo =
       rawLogo !== '' &&
       rawLogo !== '/logo.png' &&
+      rawLogo !== '/logo-dki.png' &&
       rawLogo !== headImg &&
       !rawLogo.includes('1SoERM5qadbCj4AeCOUhZcJpDDi0fEVNj');
 
@@ -3479,14 +3480,14 @@ export default function App({ initialMode }: AppProps = {}) {
   ];
 
   if (isLoading) {
-    const activeLogo = webHomeContent?.schoolLogo || localStorage.getItem('siakad_logo_left') || '/logo-dki.png';
+    const activeLogo = webHomeContent?.schoolLogo || '/logo.png';
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center gap-4 p-4">
         <div className="relative flex items-center justify-center">
           <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-ping p-6" />
-          <div className="w-24 h-24 bg-white rounded-2xl shadow-xl border border-slate-200/90 relative z-10 flex items-center justify-center overflow-hidden animate-bounce">
+          <div className="w-24 h-24 bg-white rounded-2xl shadow-xl border border-slate-200/90 relative z-10 flex items-center justify-center overflow-hidden p-1.5 animate-bounce">
             {activeLogo ? (
-              <img src={activeLogo} alt="Logo Sekolah" className="w-full h-full object-cover" />
+              <img src={activeLogo} alt="Logo SMPN 50 Jakarta" className="w-full h-full object-contain" />
             ) : (
               <School className="w-12 h-12 text-blue-600" />
             )}

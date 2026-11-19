@@ -442,7 +442,7 @@ export default function AdminPanel({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const compressed = await compressImageFile(file, 1600, 1200, 0.82);
+      const compressed = await compressImageFile(file, 1920, 1440, 0.92);
       if (target === 'akademik') {
         setCertAcademicBgUrl(compressed);
         safeLocalStorageSet('siakad_cert_academic_bg_url', compressed);
@@ -462,7 +462,7 @@ export default function AdminPanel({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const compressed = await compressImageFile(file, 512, 512, 0.9);
+      const compressed = await compressImageFile(file, 800, 800, 0.94);
       setCertLogoRight(compressed);
       safeLocalStorageSet('siakad_cert_logo_right', compressed);
       // Also update school logo so the whole app stays unified
@@ -3987,7 +3987,7 @@ export default function AdminPanel({
                             const file = e.target.files?.[0];
                             if (file) {
                               try {
-                                const compressed = await compressImageFile(file, 320, 320, 0.85);
+                                const compressed = await compressImageFile(file, 800, 800, 0.94);
                                 setLogoLeftInput(compressed);
                                 safeLocalStorageSet('siakad_logo_left', compressed);
                                 onUpdateHeadmasterName(headmasterName, compressed, undefined, {
@@ -4079,7 +4079,7 @@ export default function AdminPanel({
                             const file = e.target.files?.[0];
                             if (file) {
                               try {
-                                const compressed = await compressImageFile(file, 320, 320, 0.85);
+                                const compressed = await compressImageFile(file, 800, 800, 0.94);
                                 setLogoRightInput(compressed);
                                 safeLocalStorageSet('siakad_logo_right', compressed);
                                 onUpdateHeadmasterName(headmasterName, undefined, compressed, {
@@ -4337,9 +4337,9 @@ export default function AdminPanel({
                       type="button"
                       onClick={async () => {
                         let finalPhoto = headmasterPhotoInput;
-                        if (finalPhoto && finalPhoto.startsWith('data:image/') && finalPhoto.length > 35 * 1024) {
+                        if (finalPhoto && finalPhoto.startsWith('data:image/') && finalPhoto.length > 280 * 1024) {
                           try {
-                            finalPhoto = await compressAvatarImage(finalPhoto, 420, 525, 0.78);
+                            finalPhoto = await compressAvatarImage(finalPhoto, 800, 1000, 0.90);
                             setHeadmasterPhotoInput(finalPhoto);
                           } catch (_) {}
                         }
@@ -5766,7 +5766,7 @@ export default function AdminPanel({
                               const file = e.target.files?.[0];
                               if (!file) return;
                               try {
-                                const compressed = await compressImageFile(file, 512, 512, 0.9);
+                                const compressed = await compressImageFile(file, 800, 800, 0.94);
                                 setCertLogoLeft(compressed);
                                 safeLocalStorageSet('siakad_cert_logo_left', compressed);
                               } catch {
