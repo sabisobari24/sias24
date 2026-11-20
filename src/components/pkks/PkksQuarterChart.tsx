@@ -87,14 +87,17 @@ export default function PkksQuarterChart({
               <BarChart2 className="w-3 h-3" />
               <span>Evaluasi Pengawas Sekolah</span>
             </span>
-            {annualAvg > 0 && (
-              <span
-                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold border ${annualPredicate.badgeClass}`}
-              >
-                <Award className="w-3 h-3" />
-                <span>Rata-rata {activeYear}: {annualAvg} ({annualPredicate.label})</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold border border-slate-200 bg-white text-slate-600">
+                Skala 1–4 (1: Kurang, 2: Cukup, 3: Baik, 4: Sangat Baik)
               </span>
-            )}
+              {annualAvg > 0 && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold border ${annualPredicate.badgeClass}`}
+                >
+                  <Award className="w-3 h-3" />
+                  <span>Rata-rata {activeYear}: {annualAvg}/4 ({annualPredicate.label})</span>
+                </span>
+              )}
           </div>
           <h3 className="text-sm sm:text-base font-extrabold text-slate-800 tracking-tight">{title}</h3>
           <p className="text-xs text-slate-500 leading-relaxed">{subtitle}</p>
@@ -150,7 +153,7 @@ export default function PkksQuarterChart({
           <div className="relative pt-4 pb-2">
             {/* Horizontal grid lines */}
             <div className="relative h-52 sm:h-56 flex flex-col justify-between pointer-events-none select-none">
-              {[100, 75, 50, 25, 0].map((tick) => (
+              {[4, 3, 2, 1, 0].map((tick) => (
                 <div key={tick} className="flex items-center gap-2 w-full">
                   <span className="w-7 text-right text-[10px] font-semibold text-slate-400 tabular-nums shrink-0">
                     {tick}
@@ -163,9 +166,9 @@ export default function PkksQuarterChart({
               <div className="absolute inset-0 left-9 right-1 bottom-2 top-1.5 grid grid-cols-4 gap-3 sm:gap-6 items-end pointer-events-auto">
                 {quarterStats.map((stat) => {
                   const isSelected = stat.quarter === selectedQuarter;
-                  const overallH = Math.max(stat.overallAvg > 0 ? 4 : 0, Math.min(100, stat.overallAvg));
-                  const acadH = Math.max(stat.academicAvg > 0 ? 4 : 0, Math.min(100, stat.academicAvg));
-                  const manajH = Math.max(stat.managerialAvg > 0 ? 4 : 0, Math.min(100, stat.managerialAvg));
+                  const overallH = stat.overallAvg > 0 ? Math.max(6, Math.min(100, (stat.overallAvg / 4) * 100)) : 0;
+                  const acadH = stat.academicAvg > 0 ? Math.max(6, Math.min(100, (stat.academicAvg / 4) * 100)) : 0;
+                  const manajH = stat.managerialAvg > 0 ? Math.max(6, Math.min(100, (stat.managerialAvg / 4) * 100)) : 0;
 
                   return (
                     <button
@@ -286,7 +289,7 @@ export default function PkksQuarterChart({
                 <p className="text-[11px] font-semibold text-slate-500">Nilai Capaian PKKS</p>
                 <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums mt-0.5">
                   {activeQuarterStat.overallAvg > 0 ? activeQuarterStat.overallAvg : '—'}
-                  <span className="text-xs font-semibold text-slate-400 ml-1">/ 100</span>
+                  <span className="text-xs font-semibold text-slate-400 ml-1">/ 4</span>
                 </p>
               </div>
               <div className="text-right">

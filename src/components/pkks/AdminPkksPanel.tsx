@@ -33,8 +33,10 @@ import {
   computePkksQuarterStats,
   getPkksPredicate,
   INITIAL_PKKS_INDICATORS,
+  normalizePkksScore,
   PKKS_QUARTER_LABELS,
   PKKS_QUARTERS,
+  PKKS_SCORE_CRITERIA,
 } from '../../data/initialPkksData';
 import { fileToBase64, convertGoogleDriveLink } from '../../utils/imageHelper';
 import PkksMediaPreviewModal from './PkksMediaPreviewModal';
@@ -100,7 +102,7 @@ export default function AdminPkksPanel({
     subName: '',
     order: effectiveIndicators.length + 1,
     isActive: true,
-    targetScore: 85,
+    targetScore: 4,
   });
   const [isSavingIndicator, setIsSavingIndicator] = useState(false);
   const [isResettingDefaults, setIsResettingDefaults] = useState(false);
@@ -297,7 +299,7 @@ export default function AdminPkksPanel({
       subName: '',
       order: sortedIndicators.length + 1,
       isActive: true,
-      targetScore: 85,
+      targetScore: 4,
     });
     setIsIndicatorModalOpen(true);
   };
@@ -313,7 +315,7 @@ export default function AdminPkksPanel({
       subName: ind.subName,
       order: ind.order,
       isActive: ind.isActive !== false,
-      targetScore: ind.targetScore ?? 85,
+      targetScore: ind.targetScore && ind.targetScore <= 4 ? ind.targetScore : 4,
     });
     setIsIndicatorModalOpen(true);
   };
@@ -337,7 +339,7 @@ export default function AdminPkksPanel({
         subName: indForm.subName.trim(),
         order: Number(indForm.order) || 1,
         isActive: indForm.isActive,
-        targetScore: Number(indForm.targetScore) || 85,
+        targetScore: Math.max(1, Math.min(4, Number(indForm.targetScore) || 4)),
       });
       setIsIndicatorModalOpen(false);
       showToast('success', editingIndicatorId ? 'Indikator PKKS berhasil diperbarui.' : 'Sub-Indikator PKKS baru berhasil ditambahkan.');
@@ -468,6 +470,7 @@ export default function AdminPkksPanel({
             <span className="text-[11px] font-bold uppercase text-slate-400">Nilai Capaian ({selectedQuarter})</span>
             <p className="text-2xl font-black text-slate-800 tabular-nums mt-0.5">
               {activeStat.overallAvg > 0 ? activeStat.overallAvg : '—'}
+              {activeStat.overallAvg > 0 && <span className="text-xs font-bold text-slate-400 ml-0.5">/4</span>}
             </p>
             <span className={`text-[11px] font-bold ${activeStat.predicate.textClass}`}>
               {activeStat.predicate.label}
@@ -611,7 +614,7 @@ export default function AdminPkksPanel({
             filteredIndicators.map((ind) => {
               const items = evidenceMap.get(ind.id) || evidenceMap.get(ind.subCode) || [];
               const scoreObj = assessmentMap.get(ind.id) || assessmentMap.get(ind.subCode);
-              const scoreVal = scoreObj?.score || 0;
+              const scoreVal = normalizePkksScore(scoreObj?.score || 0);
               const pred = getPkksPredicate(scoreVal);
 
               return (
@@ -663,6 +666,7 @@ export default function AdminPkksPanel({
                         </span>
                         <span className="text-lg font-black text-slate-800 tabular-nums">
                           {scoreVal > 0 ? scoreVal : '—'}
+                          {scoreVal > 0 && <span className="text-xs font-bold text-slate-400 ml-0.5">/4</span>}
                         </span>
                         <span
                           className={`block text-[10px] font-bold mt-0.5 px-1.5 py-0.2 rounded border ${pred.badgeClass}`}
@@ -878,6 +882,7 @@ export default function AdminPkksPanel({
                     <div className="text-right">
                       <span className="text-lg font-black text-indigo-700 tabular-nums">
                         {stat.overallAvg > 0 ? stat.overallAvg : '—'}
+                        {stat.overallAvg > 0 && <span className="text-xs font-bold text-slate-400 ml-0.5">/4</span>}
                       </span>
                       <span className={`block text-[10px] font-bold px-2 py-0.5 rounded border ${stat.predicate.badgeClass}`}>
                         {stat.predicate.label}
@@ -1163,15 +1168,18 @@ export default function AdminPkksPanel({
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="font-bold text-slate-600 uppercase text-[10px] block mb-1">Target Skor (0–100)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={indForm.targetScore || 85}
+                  <label className="font-bold text-slate-600 uppercase text-[10px] block mb-1">Target Skor (1–4)</label>
+                  <select
+                    value={indForm.targetScore && indForm.targetScore <= 4 ? indForm.targetScore : 4}
                     onChange={(e) => setIndForm({ ...indForm, targetScore: Number(e.target.value) })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-bold"
-                  />
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-bold cursor-pointer"
+                  >
+                    {PKKS_SCORE_CRITERIA.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.value} — {c.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

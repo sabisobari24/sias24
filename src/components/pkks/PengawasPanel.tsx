@@ -27,8 +27,10 @@ import {
   computePkksQuarterStats,
   getPkksPredicate,
   INITIAL_PKKS_INDICATORS,
+  normalizePkksScore,
   PKKS_QUARTER_LABELS,
   PKKS_QUARTERS,
+  PKKS_SCORE_CRITERIA,
 } from '../../data/initialPkksData';
 import PkksMediaPreviewModal from './PkksMediaPreviewModal';
 import PkksQuarterChart from './PkksQuarterChart';
@@ -104,8 +106,12 @@ export default function PengawasPanel({
           a.recordType !== 'summary' &&
           (a.subIndicatorId === ind.id || a.subCode === ind.subCode)
       );
+      const normalizedExisting =
+        existing && typeof existing.score === 'number' && existing.score > 0
+          ? normalizePkksScore(existing.score)
+          : 0;
       nextDrafts[ind.id] = {
-        score: existing && typeof existing.score === 'number' && existing.score > 0 ? String(existing.score) : '',
+        score: normalizedExisting > 0 ? String(normalizedExisting) : '',
         feedback: existing?.feedback || '',
       };
     });
@@ -160,7 +166,7 @@ export default function PengawasPanel({
   }, [effectiveIndicators, domainFilter, statusFilter, searchQuery, evidenceMap, draftScores]);
 
   const buildAssessmentPayload = (ind: PkksIndicator, scoreNum: number, feedbackText: string): PkksAssessment => {
-    const safeScore = Math.max(0, Math.min(100, Math.round(scoreNum)));
+    const safeScore = Math.max(1, Math.min(4, Math.round(scoreNum)));
     return {
       id: `pkks-score-${selectedYear}-${selectedQuarter.replace(/\s+/g, '')}-${ind.subCode}`,
       recordType: 'score',
@@ -181,8 +187,8 @@ export default function PengawasPanel({
   const handleSaveSingle = async (ind: PkksIndicator) => {
     const draft = draftScores[ind.id] || { score: '', feedback: '' };
     const num = Number(draft.score);
-    if (!draft.score || Number.isNaN(num) || num < 1 || num > 100) {
-      showToast('error', `Masukkan nilai antara 1–100 untuk indikator ${ind.subCode}.`);
+    if (!draft.score || Number.isNaN(num) || num < 1 || num > 4) {
+      showToast('error', `Pilih skor penilaian 1–4 untuk indikator ${ind.subCode}.`);
       return;
     }
 
@@ -203,13 +209,13 @@ export default function PengawasPanel({
       const draft = draftScores[ind.id];
       if (!draft || !draft.score) return;
       const num = Number(draft.score);
-      if (!Number.isNaN(num) && num >= 1 && num <= 100) {
+      if (!Number.isNaN(num) && num >= 1 && num <= 4) {
         itemsToSave.push(buildAssessmentPayload(ind, num, draft.feedback));
       }
     });
 
     if (itemsToSave.length === 0) {
-      showToast('error', 'Belum ada nilai (1–100) yang diisi untuk disimpan.');
+      showToast('error', 'Belum ada skor penilaian (1–4) yang dipilih untuk disimpan.');
       return;
     }
 
@@ -344,6 +350,7 @@ export default function PengawasPanel({
           <div className="flex items-baseline gap-2 mt-1">
             <span className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums">
               {activeStat.overallAvg > 0 ? activeStat.overallAvg : '—'}
+              {activeStat.overallAvg > 0 && <span className="text-xs font-bold text-slate-400 ml-0.5">/4</span>}
             </span>
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${activeStat.predicate.badgeClass}`}>
               {activeStat.predicate.label}
@@ -355,6 +362,7 @@ export default function PengawasPanel({
           <span className="text-[11px] font-bold uppercase text-slate-400 block">Skor Akademik</span>
           <p className="text-2xl sm:text-3xl font-black text-sky-700 tabular-nums mt-1">
             {activeStat.academicAvg > 0 ? activeStat.academicAvg : '—'}
+            {activeStat.academicAvg > 0 && <span className="text-xs font-bold text-slate-400 ml-0.5">/4</span>}
           </p>
         </div>
 
@@ -362,6 +370,7 @@ export default function PengawasPanel({
           <span className="text-[11px] font-bold uppercase text-slate-400 block">Skor Manajerial</span>
           <p className="text-2xl sm:text-3xl font-black text-emerald-700 tabular-nums mt-1">
             {activeStat.managerialAvg > 0 ? activeStat.managerialAvg : '—'}
+            {activeStat.managerialAvg > 0 && <span className="text-xs font-bold text-slate-400 ml-0.5">/4</span>}
           </p>
         </div>
 
@@ -467,6 +476,24 @@ export default function PengawasPanel({
             </div>
           </div>
 
+          {/* Rubric Scale Legend (1-4) */}
+          <div className="bg-sky-50/80 border border-sky-200/80 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+            <span className="font-extrabold text-sky-900 uppercase tracking-wider text-[11px]">
+              Kriteria Skor Penilaian (1–4):
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {PKKS_SCORE_CRITERIA.map((c) => (
+                <span
+                  key={c.value}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-bold text-[11px] tabular-nums ${c.badgeClass}`}
+                >
+                  <span className="font-black">{c.value}</span>
+                  <span>= {c.label}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+
           {/* Indicator Cards */}
           {filteredIndicators.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 text-sm">
@@ -558,51 +585,43 @@ export default function PengawasPanel({
                       <div className="xl:col-span-5 bg-slate-50/70 border border-slate-200/80 rounded-2xl p-4 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <label className="text-[11px] font-extrabold uppercase text-slate-600">
-                            Skor Penilaian (1–100)
+                            Skor Penilaian (1–4)
                           </label>
                           <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold border ${pred.badgeClass}`}>
-                            {pred.label}
+                            {numScore > 0 ? `${numScore} — ${pred.label}` : pred.label}
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={draft.score}
-                            onChange={(e) =>
-                              setDraftScores((prev) => ({
-                                ...prev,
-                                [ind.id]: { ...(prev[ind.id] || { feedback: '' }), score: e.target.value },
-                              }))
-                            }
-                            placeholder="0 - 100"
-                            className="w-24 px-3 py-2 rounded-xl border border-slate-200 bg-white font-black text-base text-slate-900 text-center tabular-nums focus:outline-none focus:border-sky-500"
-                          />
-
-                          {/* Quick score preset chips */}
-                          <div className="flex flex-wrap gap-1 flex-1">
-                            {[95, 88, 78, 65].map((preset) => (
+                        {/* 1–4 Criterion Buttons */}
+                        <div className="grid grid-cols-4 gap-2">
+                          {PKKS_SCORE_CRITERIA.map((criterion) => {
+                            const isSelected = Math.round(numScore) === criterion.value;
+                            return (
                               <button
-                                key={preset}
+                                key={criterion.value}
                                 type="button"
                                 onClick={() =>
                                   setDraftScores((prev) => ({
                                     ...prev,
-                                    [ind.id]: { ...(prev[ind.id] || { feedback: '' }), score: String(preset) },
+                                    [ind.id]: {
+                                      ...(prev[ind.id] || { feedback: '' }),
+                                      score: String(criterion.value),
+                                    },
                                   }))
                                 }
-                                className={`px-2 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer transition-colors tabular-nums ${
-                                  Number(draft.score) === preset
-                                    ? 'bg-sky-600 text-white border-sky-600'
-                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                className={`py-2 px-1.5 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                                  isSelected ? criterion.activeBtnClass : criterion.idleBtnClass
                                 }`}
                               >
-                                {preset}
+                                <span className="text-base font-black leading-none tabular-nums">
+                                  {criterion.value}
+                                </span>
+                                <span className="text-[10px] font-bold leading-tight">
+                                  {criterion.label}
+                                </span>
                               </button>
-                            ))}
-                          </div>
+                            );
+                          })}
                         </div>
 
                         <div>
