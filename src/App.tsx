@@ -51,7 +51,9 @@ import {
   LayoutDashboard,
   Leaf,
   Recycle,
-  DoorOpen
+  DoorOpen,
+  ClipboardCheck,
+  MessageSquareText
 } from 'lucide-react';
 import { useDownload } from './context/DownloadContext';
 import UnifiedDownloadMenu from './components/UnifiedDownloadMenu';
@@ -114,7 +116,10 @@ import {
   EcoRedemption,
   EcoConfig,
   StudentPermitLog,
-  StudentPermitType
+  StudentPermitType,
+  PkksIndicator,
+  PkksEvidenceItem,
+  PkksAssessment
 } from './types';
 
 import {
@@ -149,6 +154,7 @@ import {
   INITIAL_ELEARNING_MATERIALS,
   INITIAL_ELEARNING_PROGRESS
 } from './data/initialELearning';
+import { INITIAL_PKKS_INDICATORS } from './data/initialPkksData';
 
 // Component Imports
 import RoleBadge from './components/RoleBadge';
@@ -162,6 +168,7 @@ import AdminPanel from './components/AdminPanel';
 import GuruWaliPanel from './components/GuruWaliPanel';
 import CoachPanel from './components/CoachPanel';
 import TendikPanel from './components/TendikPanel';
+import PengawasPanel from './components/pkks/PengawasPanel';
 import ProfileEditModal from './components/ProfileEditModal';
 import RegisterModal from './components/RegisterModal';
 import ReturnToWebConfirmModal from './components/common/ReturnToWebConfirmModal';
@@ -684,7 +691,7 @@ export default function App({ initialMode }: AppProps = {}) {
 
   // Active Session State
   const [activeRole, setActiveRole] = useState<UserRole | null>(() => {
-    const validRoles: UserRole[] = ['admin', 'guru', 'wali_kelas', 'bk', 'piket', 'guru_wali', 'pelatih', 'tendik', 'siswa', 'orang_tua'];
+    const validRoles: UserRole[] = ['admin', 'guru', 'wali_kelas', 'bk', 'piket', 'guru_wali', 'pelatih', 'tendik', 'pengawas', 'siswa', 'orang_tua'];
     try {
       const savedRole = localStorage.getItem('siakad_active_role');
       if (savedRole && validRoles.includes(savedRole as UserRole)) {
@@ -817,7 +824,7 @@ export default function App({ initialMode }: AppProps = {}) {
   // Public website tab state
   const [publicTab, setPublicTab] = useState<'beranda' | 'akademik' | 'kesiswaan' | 'sarpras' | 'berita' | 'portal'>('beranda');
 
-  const [adminTabOverride, setAdminTabOverride] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua' | null>(null);
+  const [adminTabOverride, setAdminTabOverride] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua' | 'kelola-pkks' | null>(null);
 
   const [siswaTab, setSiswaTab] = useState<'profil' | 'absensi' | 'cbt-ujian' | 'pelanggaran' | 'catatan' | 'elearning' | 'eco-tiket'>('profil');
   const [orangTuaTab, setOrangTuaTab] = useState<'profil' | 'absensi' | 'pelanggaran' | 'catatan' | 'komunikasi'>('profil');
@@ -827,6 +834,10 @@ export default function App({ initialMode }: AppProps = {}) {
   const [guruWaliTab, setGuruWaliTab] = useState<'beranda' | 'bimbingan' | 'bimbingan-bk' | 'bakat-minat' | 'pesan'>('beranda');
   const [piketTab, setPiketTab] = useState<'pintu-depan' | 'absensi-piket' | 'guru-absen' | 'kejadian-piket' | 'verifikasi-mandiri' | 'izin-siswa' | 'eco-tiket'>('pintu-depan');
   const [tendikTab, setTendikTab] = useState<'ringkasan' | 'pemberkasan' | 'kjp' | 'nomor-surat' | 'inventaris' | 'peminjaman-barang' | 'bos-bop'>('ringkasan');
+  const [pengawasTab, setPengawasTab] = useState<'penilaian' | 'grafik' | 'umpan-balik'>('penilaian');
+  const [pkksIndicators, setPkksIndicators] = useState<PkksIndicator[]>(INITIAL_PKKS_INDICATORS);
+  const [pkksEvidences, setPkksEvidences] = useState<PkksEvidenceItem[]>([]);
+  const [pkksAssessments, setPkksAssessments] = useState<PkksAssessment[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -1567,6 +1578,34 @@ export default function App({ initialMode }: AppProps = {}) {
       safeLocalStorageSet('siakad_student_permits', JSON.stringify(data));
     }, []);
 
+    const unsubPkksIndicators = syncCollection<PkksIndicator>(
+      'pkks_indicators',
+      (data) => {
+        if (data && data.length > 0) {
+          setPkksIndicators(data);
+        } else {
+          setPkksIndicators(INITIAL_PKKS_INDICATORS);
+        }
+      },
+      INITIAL_PKKS_INDICATORS
+    );
+
+    const unsubPkksEvidences = syncCollection<PkksEvidenceItem>(
+      'pkks_evidences',
+      (data) => {
+        setPkksEvidences(data || []);
+      },
+      []
+    );
+
+    const unsubPkksAssessments = syncCollection<PkksAssessment>(
+      'pkks_assessments',
+      (data) => {
+        setPkksAssessments(data || []);
+      },
+      []
+    );
+
     // One-time legacy dummy cleanup executed ONLY when Admin logs in (never on student/parent public loads)
     if (activeRole === 'admin' && typeof window !== 'undefined' && localStorage.getItem('siakad_dummy_purged_v2') !== 'true') {
       safeLocalStorageSet('siakad_dummy_purged_v2', 'true');
@@ -1627,8 +1666,64 @@ export default function App({ initialMode }: AppProps = {}) {
       unsubEcoRedemptions();
       unsubEcoConfig();
       unsubPermits();
+      unsubPkksIndicators();
+      unsubPkksEvidences();
+      unsubPkksAssessments();
     };
   }, [activeRole]);
+
+  // PKKS Handlers (Supabase persisted)
+  const handleSavePkksIndicator = async (ind: PkksIndicator) => {
+    setPkksIndicators((prev) => {
+      const idx = prev.findIndex((x) => x.id === ind.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = ind;
+        return copy;
+      }
+      return [...prev, ind];
+    });
+    await saveDocument('pkks_indicators', ind.id, ind);
+  };
+
+  const handleDeletePkksIndicator = async (id: string) => {
+    setPkksIndicators((prev) => prev.filter((x) => x.id !== id));
+    await deleteDocument('pkks_indicators', id);
+  };
+
+  const handleResetDefaultPkksIndicators = async () => {
+    const existingById = new Map<string, PkksIndicator>();
+    pkksIndicators.forEach((ind) => existingById.set(ind.id, ind));
+    INITIAL_PKKS_INDICATORS.forEach((base) => {
+      existingById.set(base.id, base);
+    });
+    const merged = Array.from(existingById.values()).sort((a, b) => (a.order || 999) - (b.order || 999));
+    setPkksIndicators(merged);
+    await saveDocumentsBatch('pkks_indicators', INITIAL_PKKS_INDICATORS);
+  };
+
+  const handleSavePkksEvidence = async (ev: PkksEvidenceItem) => {
+    setPkksEvidences((prev) => [ev, ...prev.filter((x) => x.id !== ev.id)]);
+    await saveDocument('pkks_evidences', ev.id, ev);
+  };
+
+  const handleDeletePkksEvidence = async (id: string) => {
+    setPkksEvidences((prev) => prev.filter((x) => x.id !== id));
+    await deleteDocument('pkks_evidences', id);
+  };
+
+  const handleSavePkksAssessment = async (item: PkksAssessment) => {
+    setPkksAssessments((prev) => [item, ...prev.filter((x) => x.id !== item.id)]);
+    await saveDocument('pkks_assessments', item.id, item);
+  };
+
+  const handleSavePkksAssessmentsBatch = async (items: PkksAssessment[]) => {
+    const map = new Map<string, PkksAssessment>();
+    pkksAssessments.forEach((a) => map.set(a.id, a));
+    items.forEach((a) => map.set(a.id, a));
+    setPkksAssessments(Array.from(map.values()));
+    await saveDocumentsBatch('pkks_assessments', items);
+  };
 
   // Database preservation: Students and classes are managed strictly by Admin without auto-mutation
 
@@ -3474,6 +3569,7 @@ export default function App({ initialMode }: AppProps = {}) {
   const roleCardConfigs = [
     { role: 'admin', title: 'Administrator', desc: 'Kelola siswa, pendidik, kelas, bobot aturan pelanggaran, jadwal ujian CBT, & rekap sistem.', icon: Shield, color: 'hover:border-purple-400 bg-purple-50/50' },
     { role: 'guru', title: 'Guru / Pendidik', desc: 'Akses semua dashboard peran Anda: Guru Mapel, Wali Kelas, Guru BK, Guru Wali, & Guru Piket.', icon: BookOpen, color: 'hover:border-teal-400 bg-teal-50/50' },
+    { role: 'pengawas', title: 'Pengawas Sekolah', desc: 'Tinjau dokumen bukti dukung PKKS, berikan penilaian kinerja kepala sekolah, serta catatan umpan balik.', icon: ClipboardCheck, color: 'hover:border-sky-400 bg-sky-50/50' },
     { role: 'pelatih', title: 'Pelatih Ekskul', desc: 'Rekap kehadiran ekskul, buat jurnal kegiatan, unggah dokumentasi, dan input prestasi siswa.', icon: Award, color: 'hover:border-indigo-400 bg-indigo-50/50' },
     { role: 'siswa', title: 'Siswa', desc: 'Akses rapor presensi harian, jumlah poin kedisiplinan, catatan wali kelas & bimbingan BK.', icon: User, color: 'hover:border-amber-400 bg-amber-50/50' },
     { role: 'orang_tua', title: 'Orang Tua / Wali', desc: 'Pantau kepatuhan & kedisiplinan anak, setujui catatan sekolah, & kirim pesan koordinasi.', icon: Users, color: 'hover:border-orange-400 bg-orange-50/50' },
@@ -3917,7 +4013,7 @@ export default function App({ initialMode }: AppProps = {}) {
                           </p>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                           {roleCardConfigs.map((config) => {
                             const Icon = config.icon;
                             return (
@@ -4051,7 +4147,7 @@ export default function App({ initialMode }: AppProps = {}) {
                                       return;
                                     }
                                     
-                                    if (loginRole === 'admin' || loginRole === 'guru' || loginRole === 'wali_kelas' || loginRole === 'bk' || loginRole === 'piket' || loginRole === 'guru_wali') {
+                                    if (loginRole === 'admin' || loginRole === 'guru' || loginRole === 'wali_kelas' || loginRole === 'bk' || loginRole === 'piket' || loginRole === 'guru_wali' || loginRole === 'pengawas') {
                                       const match = teachers.find((t) => {
                                         const tNip = String(t.nip || '').trim();
                                         const isIdMatch = tNip === trimmedCode || (t.role === 'admin' && trimmedCode === 'admin');
@@ -4068,9 +4164,13 @@ export default function App({ initialMode }: AppProps = {}) {
                                       });
 
                                       if (match) {
+                                        const userRoles = match.roles && match.roles.length > 0 ? match.roles : [match.role];
+                                        if (loginRole === 'pengawas' && !userRoles.includes('pengawas')) {
+                                          setLoginError('Akun ini belum memiliki hak akses sebagai Pengawas Sekolah. Silakan hubungi Admin untuk mengaktifkan akses Pengawas.');
+                                          return;
+                                        }
                                         resetLoginRateLimit();
                                         setAdminTabOverride(null);
-                                        const userRoles = match.roles || [match.role];
                                         let resolvedRole: UserRole = match.role || userRoles[0] || 'guru';
                                         if (loginRole === 'guru') {
                                           const teacherRole = userRoles.find(r => ['guru', 'wali_kelas', 'bk', 'piket', 'guru_wali'].includes(r));
@@ -4215,7 +4315,7 @@ export default function App({ initialMode }: AppProps = {}) {
                                 >
                                   <div className="space-y-1.5">
                                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide">
-                                      {loginRole === 'siswa' ? 'NISN SISWA (10 DIGIT)' : loginRole === 'orang_tua' ? 'NOMOR HP ORANG TUA' : loginRole === 'pelatih' ? 'NOMOR HP PELATIH' : 'NIP / ID PEGAWAI'}
+                                      {loginRole === 'siswa' ? 'NISN SISWA (10 DIGIT)' : loginRole === 'orang_tua' ? 'NOMOR HP ORANG TUA' : loginRole === 'pelatih' ? 'NOMOR HP PELATIH' : loginRole === 'pengawas' ? 'NIP / ID PENGAWAS' : 'NIP / ID PEGAWAI'}
                                     </label>
                                     <input
                                       type="text"
@@ -4223,7 +4323,7 @@ export default function App({ initialMode }: AppProps = {}) {
                                       disabled={lockoutSeconds > 0}
                                       onChange={(e) => setLoginCode(e.target.value)}
                                       placeholder={
-                                        loginRole === 'siswa' ? 'Masukkan 10 digit NISN' : loginRole === 'orang_tua' ? 'Masukkan Nomor HP Orang Tua' : loginRole === 'pelatih' ? 'Masukkan Nomor HP Pelatih' : 'Masukkan NIP Pegawai'
+                                        loginRole === 'siswa' ? 'Masukkan 10 digit NISN' : loginRole === 'orang_tua' ? 'Masukkan Nomor HP Orang Tua' : loginRole === 'pelatih' ? 'Masukkan Nomor HP Pelatih' : loginRole === 'pengawas' ? 'Masukkan NIP / ID Pengawas' : 'Masukkan NIP Pegawai'
                                       }
                                       className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-600/25 focus:border-indigo-600 focus:bg-white transition-all font-mono disabled:opacity-50 disabled:bg-slate-100"
                                     />
@@ -4530,6 +4630,7 @@ export default function App({ initialMode }: AppProps = {}) {
                                      r === 'wali_kelas' ? 'Wali Kelas' :
                                      r === 'bk' ? 'Guru BK' :
                                      r === 'piket' ? 'Guru Piket' :
+                                     r === 'pengawas' ? 'Pengawas Sekolah' :
                                      r === 'guru' ? 'Guru Mapel' : r.replace('_', ' ')}
                                   </span>
                                   {isActive && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
@@ -4560,7 +4661,7 @@ export default function App({ initialMode }: AppProps = {}) {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between px-1">
                       <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Menu Administrasi</h3>
-                      <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full border border-purple-100">12 Menu</span>
+                      <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full border border-purple-100">15 Menu</span>
                     </div>
                     <div className="max-h-[calc(100vh-280px)] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                       <button
@@ -4743,6 +4844,18 @@ export default function App({ initialMode }: AppProps = {}) {
                             {studentPermits.filter(p => p.status === 'keluar').length} Luar
                           </span>
                         )}
+                      </button>
+
+                      <button
+                        onClick={() => setAdminTabOverride('kelola-pkks')}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          adminTabOverride === 'kelola-pkks'
+                            ? 'bg-sky-600 text-white border-sky-600 shadow-md shadow-sky-100'
+                            : 'bg-transparent text-slate-600 border-transparent hover:bg-slate-50 hover:text-slate-900 cursor-pointer'
+                        }`}
+                      >
+                        <ClipboardCheck className={`w-4 h-4 shrink-0 ${adminTabOverride === 'kelola-pkks' ? 'text-white' : 'text-sky-600'}`} />
+                        <span className="truncate">Kelola PKKS</span>
                       </button>
                     </div>
                   </div>
@@ -5001,6 +5114,35 @@ export default function App({ initialMode }: AppProps = {}) {
                   </div>
                 )}
 
+                {activeRole === 'pengawas' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Menu Pengawas (PKKS)</h3>
+                      <span className="text-[9px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded-full border border-sky-200">3 Menu</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {[
+                        { id: 'penilaian', label: 'Penilaian & Bukti Dukung', icon: ClipboardCheck },
+                        { id: 'umpan-balik', label: 'Umpan Balik Triwulan', icon: MessageSquareText },
+                        { id: 'grafik', label: 'Grafik Capaian TW', icon: BarChart2 }
+                      ].map(tab => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setPengawasTab(tab.id as any)}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                            pengawasTab === tab.id
+                              ? 'bg-sky-600 text-white border-sky-600 shadow-md shadow-sky-100'
+                              : 'bg-transparent text-slate-600 border-transparent hover:bg-slate-50 hover:text-slate-900 cursor-pointer'
+                          }`}
+                        >
+                          <tab.icon className="w-4 h-4 shrink-0" />
+                          <span className="truncate">{tab.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <h3 className="px-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status Sinkronisasi</h3>
                   <div className={`px-3 py-2.5 border rounded-xl text-xs space-y-1.5 transition-all ${
@@ -5117,7 +5259,13 @@ export default function App({ initialMode }: AppProps = {}) {
                         adminTabOverride === 'setting-kartu-pelajar' ? 'Pengaturan Kartu Pelajar' :
                         adminTabOverride === 'eco-tiket' ? 'ECo-Tiket & Sampah' :
                         adminTabOverride === 'izin-siswa' ? 'Izin Siswa & Toilet' :
+                        adminTabOverride === 'kelola-pkks' ? 'Kelola PKKS (Penilaian Kinerja Kepala Sekolah)' :
                         'Panel Kontrol Administrator'
+                      )}
+                      {activeRole === 'pengawas' && (
+                        pengawasTab === 'umpan-balik' ? 'Umpan Balik & Rekomendasi PKKS' :
+                        pengawasTab === 'grafik' ? 'Grafik Capaian PKKS Per Triwulan' :
+                        'Dashboard Pengawas Sekolah (PKKS)'
                       )}
                       {activeRole === 'guru' && (
                         guruTab === 'izin-siswa' ? 'Izin Siswa & Toilet' :
@@ -5166,6 +5314,7 @@ export default function App({ initialMode }: AppProps = {}) {
                     <p className="text-[11px] text-slate-400 mt-0.5 hidden md:block truncate">
                       SMPN 50 JAKARTA &bull; {
                         activeRole === 'admin' ? (
+                          adminTabOverride === 'kelola-pkks' ? 'Pengaturan Indikator Kepmendikdasmen No. 63/2026 & Unggah Bukti Dukung PKKS' :
                           adminTabOverride === 'izin-siswa' ? 'Pusat Monitoring Izin Keluar, Toilet & Track Record Siswa' :
                           adminTabOverride === 'eco-tiket' ? 'Pusat Setor Sampah, Tabungan & Poin Lingkungan' :
                           adminTabOverride === 'setting-kartu-pelajar' ? 'Pusat Desain & Cetak Massal QR Kartu Pelajar' :
@@ -5178,6 +5327,8 @@ export default function App({ initialMode }: AppProps = {}) {
                           adminTabOverride === 'guru' ? 'Master Data Tenaga Pendidik & Akses SIAS' :
                           adminTabOverride === 'siswa' ? 'Master Data Siswa & Distribusi Kelas' :
                           'Basis data sinkron terpadu'
+                        ) : activeRole === 'pengawas' ? (
+                          'Evaluasi Kinerja Kepala Sekolah, Tinjauan Bukti Dukung & Umpan Balik Triwulan'
                         ) : activeRole === 'guru' ? (
                           guruTab === 'izin-siswa' ? 'Pusat Monitoring Izin Keluar, Toilet & Track Record Siswa di Kelas' :
                           guruTab === 'eco-tiket' ? 'Pusat Setor Sampah, Tabungan & Poin Lingkungan Siswa' :
@@ -5459,6 +5610,15 @@ export default function App({ initialMode }: AppProps = {}) {
                         onDeletePermit={handleDeleteStudentPermit}
                         onAddViolation={handleAddViolation}
                         onDeleteViolation={handleDeleteViolation}
+                        adminName={activeUser?.name || 'Administrator'}
+                        pkksIndicators={pkksIndicators}
+                        pkksEvidences={pkksEvidences}
+                        pkksAssessments={pkksAssessments}
+                        onSavePkksIndicator={handleSavePkksIndicator}
+                        onDeletePkksIndicator={handleDeletePkksIndicator}
+                        onResetDefaultPkksIndicators={handleResetDefaultPkksIndicators}
+                        onSavePkksEvidence={handleSavePkksEvidence}
+                        onDeletePkksEvidence={handleDeletePkksEvidence}
                       />
                     ) : (
                       <>
@@ -5774,6 +5934,15 @@ export default function App({ initialMode }: AppProps = {}) {
                             onDeletePermit={handleDeleteStudentPermit}
                             onAddViolation={handleAddViolation}
                             onDeleteViolation={handleDeleteViolation}
+                            adminName={activeUser?.name || 'Administrator'}
+                            pkksIndicators={pkksIndicators}
+                            pkksEvidences={pkksEvidences}
+                            pkksAssessments={pkksAssessments}
+                            onSavePkksIndicator={handleSavePkksIndicator}
+                            onDeletePkksIndicator={handleDeletePkksIndicator}
+                            onResetDefaultPkksIndicators={handleResetDefaultPkksIndicators}
+                            onSavePkksEvidence={handleSavePkksEvidence}
+                            onDeletePkksEvidence={handleDeletePkksEvidence}
                             onSwitchRole={(role, userObj) => {
                               setActiveRole(role as UserRole);
                               if (userObj) {
@@ -5812,6 +5981,20 @@ export default function App({ initialMode }: AppProps = {}) {
                             headmasterName={headmasterName}
                             activeTab={tendikTab}
                             onTabChange={setTendikTab}
+                          />
+                        )}
+
+                        {activeRole === 'pengawas' && activeUser && (
+                          <PengawasPanel
+                            activeTabOverride={pengawasTab}
+                            onTabChange={setPengawasTab}
+                            teacher={activeUser}
+                            headmasterName={headmasterName}
+                            indicators={pkksIndicators}
+                            evidences={pkksEvidences}
+                            assessments={pkksAssessments}
+                            onSaveAssessment={handleSavePkksAssessment}
+                            onSaveAssessmentsBatch={handleSavePkksAssessmentsBatch}
                           />
                         )}
                       </>

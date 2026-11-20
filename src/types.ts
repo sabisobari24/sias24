@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'siswa' | 'orang_tua' | 'guru_wali' | 'pelatih' | 'tendik';
+export type UserRole = 'admin' | 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'siswa' | 'orang_tua' | 'guru_wali' | 'pelatih' | 'tendik' | 'pengawas';
 
 export interface Student {
   id: string;
@@ -26,8 +26,8 @@ export interface Teacher {
   name: string;
   nip: string;
   email: string;
-  role: 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'admin' | 'guru_wali' | 'pelatih' | 'tendik';
-  roles?: Array<'guru' | 'wali_kelas' | 'bk' | 'piket' | 'admin' | 'guru_wali' | 'pelatih' | 'tendik'>;
+  role: 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'admin' | 'guru_wali' | 'pelatih' | 'tendik' | 'pengawas';
+  roles?: Array<'guru' | 'wali_kelas' | 'bk' | 'piket' | 'admin' | 'guru_wali' | 'pelatih' | 'tendik' | 'pengawas'>;
   classId?: string; // If wali_kelas, represents the class they manage
   password?: string; // Kata sandi kustom pendidik/admin
   ekskulId?: string; // ID atau nama Ekskul yang dilatih
@@ -666,5 +666,59 @@ export interface StudentPermitLog {
   flaggedReason?: string;
   timestamp?: number;
   createdAt?: string;
+}
+
+// ==========================================
+// PKKS (Penilaian Kinerja Kepala Sekolah) Types
+// Kepmendikdasmen No. 63 Tahun 2026
+// ==========================================
+export type PkksDomain = 'Akademik' | 'Manajerial';
+export type PkksQuarter = 'TW 1' | 'TW 2' | 'TW 3' | 'TW 4';
+export type PkksEvidenceType = 'dokumen' | 'gambar' | 'video';
+
+export interface PkksIndicator {
+  id: string;
+  domain: PkksDomain;
+  variableName: string;
+  indicatorCode: string;
+  indicatorName: string;
+  subCode: string;
+  subName: string;
+  order: number;
+  isActive: boolean;
+  targetScore?: number;
+}
+
+export interface PkksEvidenceItem {
+  id: string;
+  subIndicatorId: string;
+  subCode: string;
+  year: number;
+  quarter: PkksQuarter;
+  title: string;
+  type: PkksEvidenceType;
+  url: string;
+  fileName?: string;
+  mimeType?: string;
+  description?: string;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface PkksAssessment {
+  id: string;
+  recordType?: 'score' | 'summary';
+  year: number;
+  quarter: PkksQuarter;
+  subIndicatorId?: string;
+  subCode?: string;
+  score?: number;
+  predicate?: string;
+  feedback?: string;
+  recommendation?: string;
+  principalName?: string;
+  assessorId: string;
+  assessorName: string;
+  updatedAt: string;
 }
 

@@ -371,8 +371,8 @@ export function sanitizeData(data: any): any {
     return null;
   }
   if (typeof data === 'string') {
-    // Allow safe raster data URL images directly without expensive regexes
-    if (/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(data)) {
+    // Allow safe raster data URL images, PDF, and video uploads directly without expensive regexes
+    if (/^data:(image\/(png|jpe?g|gif|webp)|application\/pdf|video\/(mp4|webm|ogg));base64,/i.test(data)) {
       return data;
     }
     // Purge dangerous tags, inline event handlers, dangerous URI schemes, and deface URLs

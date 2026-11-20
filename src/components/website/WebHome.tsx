@@ -38,10 +38,12 @@ import {
 } from 'lucide-react';
 import { syncCollection } from '../../lib/firebase';
 import { INITIAL_WEB_CONTENT } from '../../data/initialWebContent';
-import { WebVisionPillar } from '../../types';
+import { INITIAL_PKKS_INDICATORS } from '../../data/initialPkksData';
+import { WebVisionPillar, PkksIndicator, PkksAssessment } from '../../types';
 import FormattedText, { stripHtmlToText } from '../common/FormattedText';
 import { getYouTubeEmbedUrl } from '../../utils/mediaHelper';
 import { getHighResMediaUrl } from '../../utils/imageHelper';
+import PkksQuarterChart from '../pkks/PkksQuarterChart';
 
 function renderPillarIcon(iconName?: string) {
   switch (iconName) {
@@ -255,6 +257,36 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
     return () => {
       window.removeEventListener('siakad_headmaster_updated', handleHeadmasterUpdate);
       window.removeEventListener('siakad_web_content_updated', handleWebContentUpdate);
+    };
+  }, []);
+
+  const [pkksIndicators, setPkksIndicators] = useState<PkksIndicator[]>(INITIAL_PKKS_INDICATORS);
+  const [pkksAssessments, setPkksAssessments] = useState<PkksAssessment[]>([]);
+
+  useEffect(() => {
+    const unsubIndicators = syncCollection<PkksIndicator>(
+      'pkks_indicators',
+      (data) => {
+        if (data && data.length > 0) {
+          setPkksIndicators(data);
+        } else {
+          setPkksIndicators(INITIAL_PKKS_INDICATORS);
+        }
+      },
+      INITIAL_PKKS_INDICATORS
+    );
+
+    const unsubAssessments = syncCollection<PkksAssessment>(
+      'pkks_assessments',
+      (data) => {
+        setPkksAssessments(data || []);
+      },
+      []
+    );
+
+    return () => {
+      unsubIndicators();
+      unsubAssessments();
     };
   }, []);
 
@@ -942,6 +974,16 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
               </div>
             );
           })}
+        </div>
+
+        {/* Grafik Hasil Capaian Kinerja Kepala Sekolah (PKKS) Tiap Triwulan */}
+        <div className="mt-6 pt-6 border-t border-slate-100">
+          <PkksQuarterChart
+            indicators={pkksIndicators}
+            assessments={pkksAssessments}
+            compact
+            showFeedbackPreview
+          />
         </div>
       </div>
 

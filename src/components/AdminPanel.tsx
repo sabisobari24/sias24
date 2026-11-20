@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useId } from 'react';
-import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig, EcoWasteCategory, EcoWasteDeposit, EcoReward, EcoRedemption, EcoConfig, StudentPermitLog, StudentPermitType } from '../types';
+import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig, EcoWasteCategory, EcoWasteDeposit, EcoReward, EcoRedemption, EcoConfig, StudentPermitLog, StudentPermitType, PkksIndicator, PkksEvidenceItem, PkksAssessment } from '../types';
 import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown, Leaf, Recycle, Crown, Printer, DoorOpen } from 'lucide-react';
 import { downloadExcel, parseExcel } from '../utils/excelExport';
 import { printHTML, printTablePDF, printCertificate } from '../utils/printHelper';
@@ -18,6 +18,7 @@ import StudentPermitMonitoringPanel from './common/StudentPermitMonitoringPanel'
 import ExamCardGeneratorModal from './common/ExamCardGeneratorModal';
 import AdminPelatihPanel from './admin/AdminPelatihPanel';
 import AdminOrangTuaPanel from './admin/AdminOrangTuaPanel';
+import AdminPkksPanel from './pkks/AdminPkksPanel';
 import { printBatchStudentCards } from '../utils/qrHelper';
 import {
   syncCollection,
@@ -71,9 +72,9 @@ interface AdminPanelProps {
   headmasterName: string;
   headmasterLogoRight?: string;
   onUpdateHeadmasterName: (name: string, logoLeft?: string, logoRight?: string, extraFields?: any) => void;
-  activeTabOverride?: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua' | null;
-  onTabChange?: (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua') => void;
-  onSwitchRole?: (role: 'admin' | 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'guru_wali' | 'tendik', userObj?: Teacher) => void;
+  activeTabOverride?: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua' | 'kelola-pkks' | null;
+  onTabChange?: (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua' | 'kelola-pkks') => void;
+  onSwitchRole?: (role: 'admin' | 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'guru_wali' | 'tendik' | 'pengawas', userObj?: Teacher) => void;
   studentAchievements?: StudentAchievement[];
   onAddStudentAchievement?: (ach: Omit<StudentAchievement, 'id'>) => void;
   onDeleteStudentAchievement?: (id: string) => void;
@@ -120,6 +121,17 @@ interface AdminPanelProps {
   onDeletePermit?: (permitId: string) => Promise<void> | void;
   onAddViolation?: (v: Omit<StudentViolation, 'id'>) => void;
   onDeleteViolation?: (id: string) => void;
+
+  // PKKS (Penilaian Kinerja Kepala Sekolah) Props
+  adminName?: string;
+  pkksIndicators?: PkksIndicator[];
+  pkksEvidences?: PkksEvidenceItem[];
+  pkksAssessments?: PkksAssessment[];
+  onSavePkksIndicator?: (ind: PkksIndicator) => Promise<void>;
+  onDeletePkksIndicator?: (id: string) => Promise<void>;
+  onResetDefaultPkksIndicators?: () => Promise<void>;
+  onSavePkksEvidence?: (ev: PkksEvidenceItem) => Promise<void>;
+  onDeletePkksEvidence?: (id: string) => Promise<void>;
 }
 
 export default function AdminPanel({
@@ -201,10 +213,19 @@ export default function AdminPanel({
   onDeletePermit,
   onAddViolation,
   onDeleteViolation,
+  adminName = 'Administrator',
+  pkksIndicators = [],
+  pkksEvidences = [],
+  pkksAssessments = [],
+  onSavePkksIndicator,
+  onDeletePkksIndicator,
+  onResetDefaultPkksIndicators,
+  onSavePkksEvidence,
+  onDeletePkksEvidence,
 }: AdminPanelProps) {
-  const [internalActiveTab, setInternalActiveTab] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua'>('ringkasan');
+  const [internalActiveTab, setInternalActiveTab] = useState<'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua' | 'kelola-pkks'>('ringkasan');
   const activeTab = activeTabOverride ? activeTabOverride : internalActiveTab;
-  const setActiveTab = (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua') => {
+  const setActiveTab = (tab: 'ringkasan' | 'siswa' | 'guru' | 'database-settings' | 'setting-cbt' | 'validasi-akun' | 'kelola-web' | 'prestasi' | 'setting-sertifikat' | 'setting-kartu-pelajar' | 'eco-tiket' | 'izin-siswa' | 'pelatih' | 'orang-tua' | 'kelola-pkks') => {
     setInternalActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
@@ -528,9 +549,9 @@ export default function AdminPanel({
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
-  const handleRoleToggle = (roleVal: 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'admin' | 'guru_wali' | 'tendik') => {
+  const handleRoleToggle = (roleVal: 'guru' | 'wali_kelas' | 'bk' | 'piket' | 'admin' | 'guru_wali' | 'tendik' | 'pengawas') => {
     const currentRoles = teacherForm.roles || [teacherForm.role];
-    let newRoles: Array<'guru' | 'wali_kelas' | 'bk' | 'piket' | 'admin' | 'guru_wali' | 'tendik'>;
+    let newRoles: Array<'guru' | 'wali_kelas' | 'bk' | 'piket' | 'admin' | 'guru_wali' | 'tendik' | 'pengawas'>;
     if (currentRoles.includes(roleVal)) {
       if (currentRoles.length === 1) return;
       newRoles = currentRoles.filter(r => r !== roleVal) as any;
@@ -1338,10 +1359,11 @@ export default function AdminPanel({
           r === 'bk' ? 'Guru BK' : 
           r === 'piket' ? 'Guru Piket' : 
           r === 'tendik' ? 'Tendik' :
+          r === 'pengawas' ? 'Pengawas Sekolah' :
           r === 'pelatih' ? 'Pelatih Ekskul' : 'Guru Pengajar'
         ).join(', ');
       } else if (t.role) {
-        roleLabel = t.role === 'admin' ? 'Super Admin' : t.role === 'wali_kelas' ? 'Wali Kelas' : t.role === 'bk' ? 'Guru BK' : t.role === 'piket' ? 'Guru Piket' : t.role === 'pelatih' ? 'Pelatih Ekskul' : 'Guru Pengajar';
+        roleLabel = t.role === 'admin' ? 'Super Admin' : t.role === 'wali_kelas' ? 'Wali Kelas' : t.role === 'bk' ? 'Guru BK' : t.role === 'piket' ? 'Guru Piket' : t.role === 'tendik' ? 'Tendik' : t.role === 'pengawas' ? 'Pengawas Sekolah' : t.role === 'pelatih' ? 'Pelatih Ekskul' : 'Guru Pengajar';
       }
       const homeroomClass = classes.find(c => c.id === t.classId || c.homeroomTeacherId === t.id || c.name.toLowerCase() === (t.classId || '').toLowerCase());
       return [
@@ -2119,7 +2141,7 @@ export default function AdminPanel({
   return (
     <div className="space-y-6">
       {/* Admin Header: Only shown for standard tabs without their own dedicated banner modules */}
-      {!['izin-siswa', 'eco-tiket', 'setting-kartu-pelajar', 'setting-sertifikat', 'kelola-web', 'pelatih', 'orang-tua', 'setting-cbt', 'prestasi', 'validasi-akun'].includes(activeTab) && (
+      {!['izin-siswa', 'eco-tiket', 'setting-kartu-pelajar', 'setting-sertifikat', 'kelola-web', 'pelatih', 'orang-tua', 'setting-cbt', 'prestasi', 'validasi-akun', 'kelola-pkks'].includes(activeTab) && (
         <div className="bg-gradient-to-r from-purple-700 via-indigo-700 to-indigo-800 rounded-3xl p-5 sm:p-6 text-white shadow-md">
           <div className="space-y-1 min-w-0 max-w-3xl">
             <p className="text-purple-200 text-xs font-semibold uppercase tracking-wider">{getTabBannerInfo().badge}</p>
@@ -2330,6 +2352,11 @@ export default function AdminPanel({
                     <optgroup label="Peran Tendik (Tata Usaha)">
                       {teachers.filter(t => t.roles?.includes('tendik') || t.role === 'tendik').map(t => (
                         <option key={`tendik:${t.id}`} value={`tendik:${t.id}`}>Tendik: {t.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Peran Pengawas Sekolah (PKKS)">
+                      {teachers.filter(t => t.roles?.includes('pengawas') || t.role === 'pengawas').map(t => (
+                        <option key={`pengawas:${t.id}`} value={`pengawas:${t.id}`}>Pengawas: {t.name}</option>
                       ))}
                     </optgroup>
                   </select>
@@ -3350,7 +3377,8 @@ export default function AdminPanel({
                         { val: 'piket', label: 'Guru Piket Harian' },
                         { val: 'admin', label: 'Administrator / Kepsek' },
                         { val: 'guru_wali', label: 'Guru Wali (Mentorship)' },
-                        { val: 'tendik', label: 'Tendik (Tenaga Kependidikan / TU)' }
+                        { val: 'tendik', label: 'Tendik (Tenaga Kependidikan / TU)' },
+                        { val: 'pengawas', label: 'Pengawas Sekolah (Penilaian PKKS)' }
                       ].map((rItem) => {
                         const currentRoles = teacherForm.roles || [teacherForm.role];
                         const isChecked = currentRoles.includes(rItem.val as any);
@@ -3455,9 +3483,10 @@ export default function AdminPanel({
                               r === 'bk' ? 'bg-rose-100 text-rose-800 border border-rose-200' :
                               r === 'piket' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
                               r === 'tendik' ? 'bg-cyan-100 text-cyan-800 border border-cyan-200' :
+                              r === 'pengawas' ? 'bg-sky-100 text-sky-800 border border-sky-200' :
                               'bg-slate-100 text-slate-800 border border-slate-200'
                             }`}>
-                              {r === 'guru_wali' ? 'Guru Wali' : r === 'tendik' ? 'Tendik / TU' : r.replace('_', ' ')}
+                              {r === 'guru_wali' ? 'Guru Wali' : r === 'tendik' ? 'Tendik / TU' : r === 'pengawas' ? 'Pengawas Sekolah' : r.replace('_', ' ')}
                             </span>
                           ))}
                         </div>
@@ -6499,6 +6528,32 @@ export default function AdminPanel({
             classes={classes}
             onUpdateStudent={onUpdateStudent}
             headmasterName={headmasterName}
+          />
+        )}
+
+        {/* Tab Kelola PKKS */}
+        {activeTab === 'kelola-pkks' && (
+          <AdminPkksPanel
+            indicators={pkksIndicators}
+            evidences={pkksEvidences}
+            assessments={pkksAssessments}
+            adminName={adminName}
+            headmasterName={headmasterName}
+            onSaveIndicator={async (ind) => {
+              if (onSavePkksIndicator) await onSavePkksIndicator(ind);
+            }}
+            onDeleteIndicator={async (id) => {
+              if (onDeletePkksIndicator) await onDeletePkksIndicator(id);
+            }}
+            onResetDefaultIndicators={async () => {
+              if (onResetDefaultPkksIndicators) await onResetDefaultPkksIndicators();
+            }}
+            onSaveEvidence={async (ev) => {
+              if (onSavePkksEvidence) await onSavePkksEvidence(ev);
+            }}
+            onDeleteEvidence={async (id) => {
+              if (onDeletePkksEvidence) await onDeletePkksEvidence(id);
+            }}
           />
         )}
 

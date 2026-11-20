@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, BookOpen, GraduationCap, Award, Eye, HeartHandshake, User, Users } from 'lucide-react';
+import { Shield, BookOpen, GraduationCap, Award, Eye, HeartHandshake, User, Users, ClipboardCheck, Briefcase } from 'lucide-react';
 import { UserRole } from '../types';
 
 interface RoleBadgeProps {
@@ -51,6 +51,30 @@ export default function RoleBadge({ role, size = 'md' }: RoleBadgeProps) {
           label: 'Orang Tua Wali',
           bg: 'bg-orange-50 text-orange-700 border-orange-200',
           icon: Users,
+        };
+      case 'guru_wali':
+        return {
+          label: 'Guru Wali',
+          bg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+          icon: GraduationCap,
+        };
+      case 'pelatih':
+        return {
+          label: 'Pelatih Ekskul',
+          bg: 'bg-amber-50 text-amber-700 border-amber-200',
+          icon: Award,
+        };
+      case 'tendik':
+        return {
+          label: 'Tendik / Tata Usaha',
+          bg: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+          icon: Briefcase,
+        };
+      case 'pengawas':
+        return {
+          label: 'Pengawas Sekolah',
+          bg: 'bg-sky-50 text-sky-800 border-sky-200',
+          icon: ClipboardCheck,
         };
     }
   };

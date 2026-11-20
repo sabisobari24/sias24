@@ -43,6 +43,9 @@ export const ALL_SIAS_COLLECTIONS = [
   'eco_config',
   'student_permits',
   'ekskul_members',
+  'pkks_indicators',
+  'pkks_evidences',
+  'pkks_assessments',
 ] as const;
 
 type StatusCallback = (status: 'online' | 'offline' | 'high_latency', latency?: number) => void;
@@ -58,7 +61,7 @@ export function sanitizeForStorage(data: any): any {
     return null;
   }
   if (typeof data === 'string') {
-    if (/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(data)) {
+    if (/^data:(image\/(png|jpe?g|gif|webp)|application\/pdf|video\/(mp4|webm|ogg));base64,/i.test(data)) {
       return data;
     }
     return data
