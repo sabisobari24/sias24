@@ -1131,7 +1131,7 @@ export default function CoachPanel({
             className="bg-rose-600/90 hover:bg-rose-700 font-bold text-xs text-white px-3.5 py-1.5 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-md border border-rose-500"
           >
             <LogOut className="w-4 h-4" />
-            <span>Keluar</span>
+            <span>Logout</span>
           </button>
         </div>
       </header>

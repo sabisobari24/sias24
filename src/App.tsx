@@ -5199,7 +5199,7 @@ export default function App({ initialMode }: AppProps = {}) {
                   className="w-full flex items-center justify-center gap-2 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-800 transition-colors shadow-sm cursor-pointer"
                 >
                   <LogOut className="w-4 h-4 shrink-0" />
-                  <span>Keluar Sesi</span>
+                  <span>Logout</span>
                 </button>
               </div>
             </aside>
@@ -5513,7 +5513,7 @@ export default function App({ initialMode }: AppProps = {}) {
                       type="button"
                       onClick={handleLogout}
                       className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all md:hidden cursor-pointer"
-                      title="Keluar Sesi"
+                      title="Logout"
                     >
                       <LogOut className="w-5 h-5 shrink-0" />
                     </button>
