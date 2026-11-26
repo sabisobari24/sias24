@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ClipboardCheck,
   FileText,
@@ -38,8 +38,8 @@ import {
   PKKS_QUARTERS,
   PKKS_SCORE_CRITERIA,
 } from '../../data/initialPkksData';
-import { fileToBase64, convertGoogleDriveLink } from '../../utils/imageHelper';
-import PkksMediaPreviewModal from './PkksMediaPreviewModal';
+import { fileToBase64, convertGoogleDriveLink, getHighResMediaUrl } from '../../utils/imageHelper';
+import PkksMediaPreviewModal, { getYouTubeThumbnailUrl } from './PkksMediaPreviewModal';
 import PkksQuarterChart from './PkksQuarterChart';
 
 interface AdminPkksPanelProps {
@@ -53,6 +53,7 @@ interface AdminPkksPanelProps {
   onResetDefaultIndicators: () => Promise<void>;
   onSaveEvidence: (ev: PkksEvidenceItem) => Promise<void>;
   onDeleteEvidence: (id: string) => Promise<void>;
+  initialSubTab?: 'bukti-dukung' | 'preview' | 'indikator' | 'rekap';
 }
 
 export default function AdminPkksPanel({
@@ -66,19 +67,29 @@ export default function AdminPkksPanel({
   onResetDefaultIndicators,
   onSaveEvidence,
   onDeleteEvidence,
+  initialSubTab,
 }: AdminPkksPanelProps) {
   const effectiveIndicators = indicators.length > 0 ? indicators : INITIAL_PKKS_INDICATORS;
 
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(() => (currentYear >= 2026 ? currentYear : 2026));
   const [selectedQuarter, setSelectedQuarter] = useState<PkksQuarter>('TW 1');
-  const [subTab, setSubTab] = useState<'bukti-dukung' | 'indikator' | 'rekap'>('bukti-dukung');
+  const [subTab, setSubTab] = useState<'bukti-dukung' | 'preview' | 'indikator' | 'rekap'>(initialSubTab || 'bukti-dukung');
   const [domainFilter, setDomainFilter] = useState<'Semua' | PkksDomain>('Semua');
   const [variableFilter, setVariableFilter] = useState<string>('Semua');
+  const [evidenceStatusFilter, setEvidenceStatusFilter] = useState<'Semua' | 'Ada Bukti' | 'Belum Ada Bukti'>('Semua');
+  const [previewTypeFilter, setPreviewTypeFilter] = useState<'Semua' | PkksEvidenceType>('Semua');
+  const [previewPeriodScope, setPreviewPeriodScope] = useState<'triwulan' | 'semua_triwulan'>('triwulan');
   const [searchQuery, setSearchQuery] = useState('');
 
   const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [previewEvidence, setPreviewEvidence] = useState<PkksEvidenceItem | null>(null);
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
 
   // Evidence Upload Modal States
   const [evidenceModalIndicator, setEvidenceModalIndicator] = useState<PkksIndicator | null>(null);
@@ -163,6 +174,55 @@ export default function AdminPkksPanel({
     return map;
   }, [evidences, selectedYear, selectedQuarter]);
 
+  const indicatorByKey = useMemo(() => {
+    const map = new Map<string, PkksIndicator>();
+    sortedIndicators.forEach((ind) => {
+      map.set(ind.id, ind);
+      map.set(ind.subCode, ind);
+    });
+    return map;
+  }, [sortedIndicators]);
+
+  const displayedIndicators = useMemo(() => {
+    if (subTab !== 'bukti-dukung' || evidenceStatusFilter === 'Semua') return filteredIndicators;
+    return filteredIndicators.filter((ind) => {
+      const items = evidenceMap.get(ind.id) || evidenceMap.get(ind.subCode) || [];
+      return evidenceStatusFilter === 'Ada Bukti' ? items.length > 0 : items.length === 0;
+    });
+  }, [filteredIndicators, subTab, evidenceStatusFilter, evidenceMap]);
+
+  const filteredPreviewEvidences = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return evidences
+      .filter((ev) => {
+        if (ev.year !== selectedYear) return false;
+        if (previewPeriodScope === 'triwulan' && ev.quarter !== selectedQuarter) return false;
+        if (previewTypeFilter !== 'Semua' && ev.type !== previewTypeFilter) return false;
+        const ind = indicatorByKey.get(ev.subIndicatorId) || indicatorByKey.get(ev.subCode);
+        if (domainFilter !== 'Semua' && ind && ind.domain !== domainFilter) return false;
+        if (variableFilter !== 'Semua' && ind && ind.variableName !== variableFilter) return false;
+        if (!q) return true;
+        return (
+          ev.title.toLowerCase().includes(q) ||
+          ev.subCode.toLowerCase().includes(q) ||
+          (ev.description || '').toLowerCase().includes(q) ||
+          (ev.fileName || '').toLowerCase().includes(q) ||
+          (ind?.subName || '').toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime());
+  }, [
+    evidences,
+    selectedYear,
+    selectedQuarter,
+    previewPeriodScope,
+    previewTypeFilter,
+    domainFilter,
+    variableFilter,
+    searchQuery,
+    indicatorByKey,
+  ]);
+
   const assessmentMap = useMemo(() => {
     const map = new Map<string, PkksAssessment>();
     assessments
@@ -177,6 +237,11 @@ export default function AdminPkksPanel({
   const totalEvidencesThisQuarter = useMemo(
     () => evidences.filter((ev) => ev.year === selectedYear && ev.quarter === selectedQuarter).length,
     [evidences, selectedYear, selectedQuarter]
+  );
+
+  const totalEvidencesThisYear = useMemo(
+    () => evidences.filter((ev) => ev.year === selectedYear).length,
+    [evidences, selectedYear]
   );
 
   const openEvidenceModal = (ind: PkksIndicator, defaultType: PkksEvidenceType = 'dokumen') => {
@@ -458,7 +523,14 @@ export default function AdminPkksPanel({
           <div>
             <span className="text-[11px] font-bold uppercase text-slate-400">Bukti Dukung ({selectedQuarter})</span>
             <p className="text-2xl font-black text-slate-800 tabular-nums mt-0.5">{totalEvidencesThisQuarter}</p>
-            <span className="text-[11px] text-slate-500">Dokumen, Gambar &amp; Video</span>
+            <button
+              type="button"
+              onClick={() => setSubTab('preview')}
+              className="text-[11px] font-bold text-indigo-600 hover:underline inline-flex items-center gap-1 mt-0.5 cursor-pointer"
+            >
+              <Eye className="w-3 h-3" />
+              <span>Preview Semua ({totalEvidencesThisYear} thn {selectedYear})</span>
+            </button>
           </div>
           <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
             <FolderOpen className="w-5 h-5" />
@@ -500,8 +572,9 @@ export default function AdminPkksPanel({
         <div className="flex flex-wrap items-center gap-1.5">
           {[
             { id: 'bukti-dukung', label: '1. Upload Bukti Dukung & Monitoring', icon: Upload },
-            { id: 'indikator', label: '2. Pengaturan Indikator Penilaian', icon: SlidersHorizontal },
-            { id: 'rekap', label: '3. Grafik Capaian & Umpan Balik Pengawas', icon: BarChart2 },
+            { id: 'preview', label: `2. Preview Bukti Dukung (${totalEvidencesThisQuarter})`, icon: Eye },
+            { id: 'indikator', label: '3. Pengaturan Indikator Penilaian', icon: SlidersHorizontal },
+            { id: 'rekap', label: '4. Grafik Capaian & Umpan Balik Pengawas', icon: BarChart2 },
           ].map((t) => {
             const Icon = t.icon;
             const isActive = subTab === t.id;
@@ -546,10 +619,10 @@ export default function AdminPkksPanel({
         )}
       </div>
 
-      {/* Filters Toolbar (shown on Bukti Dukung & Indikator tabs) */}
+      {/* Filters Toolbar (shown on Bukti Dukung, Preview & Indikator tabs) */}
       {subTab !== 'rekap' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col md:flex-row items-stretch md:items-center gap-3 shadow-2xs">
-          <div className="flex items-center gap-1.5 shrink-0">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col xl:flex-row items-stretch xl:items-center gap-3 shadow-2xs">
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
             {(['Semua', 'Akademik', 'Manajerial'] as const).map((dom) => (
               <button
                 key={dom}
@@ -581,13 +654,53 @@ export default function AdminPkksPanel({
             ))}
           </select>
 
+          {subTab === 'bukti-dukung' && (
+            <select
+              value={evidenceStatusFilter}
+              onChange={(e) => setEvidenceStatusFilter(e.target.value as any)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer"
+            >
+              <option value="Semua">Semua Status Bukti</option>
+              <option value="Ada Bukti">Sudah Ada Bukti Dukung</option>
+              <option value="Belum Ada Bukti">Belum Ada Bukti Dukung</option>
+            </select>
+          )}
+
+          {subTab === 'preview' && (
+            <>
+              <select
+                value={previewTypeFilter}
+                onChange={(e) => setPreviewTypeFilter(e.target.value as any)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="Semua">Semua Format</option>
+                <option value="dokumen">Dokumen (PDF/Link)</option>
+                <option value="gambar">Gambar / Foto</option>
+                <option value="video">Video / YouTube</option>
+              </select>
+
+              <select
+                value={previewPeriodScope}
+                onChange={(e) => setPreviewPeriodScope(e.target.value as any)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="triwulan">Hanya {selectedQuarter} ({selectedYear})</option>
+                <option value="semua_triwulan">Semua Triwulan ({selectedYear})</option>
+              </select>
+            </>
+          )}
+
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari kode (D.1.1, D.4.3, E.3.2) atau uraian indikator..."
+              placeholder={
+                subTab === 'preview'
+                  ? 'Cari judul berkas, kode sub-indikator, atau catatan...'
+                  : 'Cari kode (D.1.1, D.4.3, E.3.2) atau uraian indikator...'
+              }
               className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-8 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white"
             />
             {searchQuery && (
@@ -606,12 +719,12 @@ export default function AdminPkksPanel({
       {/* TAB 1: UPLOAD BUKTI DUKUNG & MONITORING */}
       {subTab === 'bukti-dukung' && (
         <div className="space-y-3">
-          {filteredIndicators.length === 0 ? (
+          {displayedIndicators.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 text-sm">
               Tidak ada indikator aktif yang sesuai dengan filter pencarian.
             </div>
           ) : (
-            filteredIndicators.map((ind) => {
+            displayedIndicators.map((ind) => {
               const items = evidenceMap.get(ind.id) || evidenceMap.get(ind.subCode) || [];
               const scoreObj = assessmentMap.get(ind.id) || assessmentMap.get(ind.subCode);
               const scoreVal = normalizePkksScore(scoreObj?.score || 0);
@@ -716,46 +829,73 @@ export default function AdminPkksPanel({
 
                   {/* Uploaded Evidences List for this Sub-Indicator */}
                   {items.length > 0 && (
-                    <div className="border-t border-slate-100 pt-3 flex flex-wrap gap-2">
-                      {items.map((ev) => (
-                        <div
-                          key={ev.id}
-                          className="inline-flex items-center gap-2 pl-2.5 pr-1.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs group"
-                        >
-                          {ev.type === 'dokumen' && <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
-                          {ev.type === 'gambar' && <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                          {ev.type === 'video' && <Video className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
+                    <div className="border-t border-slate-100 pt-3 space-y-2">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
+                        <span>Bukti Dukung Terunggah ({items.length} berkas):</span>
+                        <span className="text-indigo-600">Klik tombol Preview untuk membuka dokumen/media</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {items.map((ev) => (
+                          <div
+                            key={ev.id}
+                            className="inline-flex items-center gap-2 pl-2 pr-1.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs group hover:border-indigo-300 transition-colors"
+                          >
+                            {ev.type === 'gambar' ? (
+                              <img
+                                src={getHighResMediaUrl(ev.url)}
+                                alt={ev.title}
+                                referrerPolicy="no-referrer"
+                                className="w-7 h-7 rounded-lg object-cover border border-slate-200 shrink-0 bg-white cursor-pointer"
+                                onClick={() => setPreviewEvidence(ev)}
+                              />
+                            ) : (
+                              <div
+                                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                  ev.type === 'dokumen'
+                                    ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                                    : 'bg-rose-50 text-rose-600 border border-rose-200'
+                                }`}
+                              >
+                                {ev.type === 'dokumen' ? (
+                                  <FileText className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Video className="w-3.5 h-3.5" />
+                                )}
+                              </div>
+                            )}
 
-                          <button
-                            type="button"
-                            onClick={() => setPreviewEvidence(ev)}
-                            className="font-semibold text-slate-700 hover:text-indigo-700 truncate max-w-[220px] cursor-pointer text-left"
-                            title="Klik untuk melihat bukti dukung"
-                          >
-                            {ev.title}
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewEvidence(ev)}
+                              className="font-semibold text-slate-700 hover:text-indigo-700 truncate max-w-[210px] cursor-pointer text-left"
+                              title="Klik untuk preview bukti dukung"
+                            >
+                              {ev.title}
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setPreviewEvidence(ev)}
-                            className="p-1 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 cursor-pointer"
-                            title="Pratinjau"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await onDeleteEvidence(ev.id);
-                              showToast('success', `Bukti "${ev.title}" dihapus.`);
-                            }}
-                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-                            title="Hapus Bukti Dukung"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
+                            <button
+                              type="button"
+                              onClick={() => setPreviewEvidence(ev)}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-[11px] font-bold transition-colors cursor-pointer"
+                              title="Preview Bukti Dukung"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>Preview</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await onDeleteEvidence(ev.id);
+                                showToast('success', `Bukti "${ev.title}" dihapus.`);
+                              }}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                              title="Hapus Bukti Dukung"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -765,7 +905,186 @@ export default function AdminPkksPanel({
         </div>
       )}
 
-      {/* TAB 2: PENGATURAN INDIKATOR PENILAIAN */}
+      {/* TAB 2: PREVIEW GALERI & ARSIP BUKTI DUKUNG */}
+      {subTab === 'preview' && (
+        <div className="space-y-4">
+          <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Eye className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-indigo-950">
+                  Preview Bukti Dukung Terunggah ({filteredPreviewEvidences.length} Berkas)
+                </h3>
+                <p className="text-xs text-indigo-700">
+                  Tinjau kembali dokumen PDF/Link, foto dokumentasi, maupun video bukti dukung EKKS yang sudah diupload oleh Admin.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-[11px] font-bold">
+              <span className="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-700 tabular-nums">
+                {filteredPreviewEvidences.filter((e) => e.type === 'dokumen').length} Dokumen
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-white border border-emerald-200 text-emerald-700 tabular-nums">
+                {filteredPreviewEvidences.filter((e) => e.type === 'gambar').length} Gambar
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-white border border-rose-200 text-rose-700 tabular-nums">
+                {filteredPreviewEvidences.filter((e) => e.type === 'video').length} Video
+              </span>
+            </div>
+          </div>
+
+          {filteredPreviewEvidences.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center space-y-3">
+              <FolderOpen className="w-10 h-10 text-slate-300 mx-auto" />
+              <div className="space-y-1">
+                <p className="text-sm font-bold text-slate-600">
+                  Belum ada bukti dukung yang sesuai filter untuk periode ini.
+                </p>
+                <p className="text-xs text-slate-400">
+                  Silakan ubah filter Triwulan/Format atau unggah bukti dukung baru melalui Tab 1.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSubTab('bukti-dukung')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold cursor-pointer"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Buka Menu Upload Bukti Dukung</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredPreviewEvidences.map((ev) => {
+                const ind = indicatorByKey.get(ev.subIndicatorId) || indicatorByKey.get(ev.subCode);
+                const ytThumb = ev.type === 'video' ? getYouTubeThumbnailUrl(ev.url) : null;
+                return (
+                  <div
+                    key={ev.id}
+                    className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs hover:border-indigo-300 hover:shadow-md transition-all flex flex-col justify-between group"
+                  >
+                    {/* Visual Thumbnail / Type Header */}
+                    <button
+                      type="button"
+                      onClick={() => setPreviewEvidence(ev)}
+                      className="relative h-40 w-full bg-slate-100 overflow-hidden cursor-pointer text-left block"
+                    >
+                      {ev.type === 'gambar' ? (
+                        <img
+                          src={getHighResMediaUrl(ev.url)}
+                          alt={ev.title}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : ev.type === 'video' && ytThumb ? (
+                        <img
+                          src={ytThumb}
+                          alt={ev.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div
+                          className={`w-full h-full flex flex-col items-center justify-center gap-2 ${
+                            ev.type === 'dokumen'
+                              ? 'bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-600'
+                              : 'bg-gradient-to-br from-rose-50 to-amber-50 text-rose-600'
+                          }`}
+                        >
+                          {ev.type === 'dokumen' ? (
+                            <FileText className="w-11 h-11 opacity-85" />
+                          ) : (
+                            <Video className="w-11 h-11 opacity-85" />
+                          )}
+                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-white/85 border border-current/15">
+                            {ev.type === 'dokumen' ? (ev.fileName || 'Dokumen PDF / Tautan') : 'Video Bukti Dukung'}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Top Badges Overlay */}
+                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-2">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-slate-900/85 text-white font-mono">
+                          {ev.subCode} &bull; {ev.quarter}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                            ev.type === 'dokumen'
+                              ? 'bg-blue-600 text-white'
+                              : ev.type === 'gambar'
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-rose-600 text-white'
+                          }`}
+                        >
+                          {ev.type}
+                        </span>
+                      </div>
+
+                      {/* Hover Overlay */}
+                      <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-slate-900 text-xs font-extrabold shadow-lg">
+                          <Eye className="w-4 h-4 text-indigo-600" />
+                          <span>Klik untuk Preview</span>
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Body Metadata */}
+                    <div className="p-4 flex-1 flex flex-col justify-between gap-3">
+                      <div className="space-y-1.5">
+                        <h4 className="text-sm font-bold text-slate-800 line-clamp-2 leading-snug">{ev.title}</h4>
+                        {ind && (
+                          <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                            <span className="font-bold text-slate-700">{ind.variableName}:</span> {ind.subName}
+                          </p>
+                        )}
+                        {ev.description && (
+                          <p className="text-[11px] text-slate-500 italic line-clamp-2">"{ev.description}"</p>
+                        )}
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-slate-400 truncate">
+                          {new Date(ev.uploadedAt).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}{' '}
+                          &bull; {ev.uploadedBy}
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewEvidence(ev)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold cursor-pointer transition-colors"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Preview</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await onDeleteEvidence(ev.id);
+                              showToast('success', `Bukti "${ev.title}" dihapus.`);
+                            }}
+                            className="p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 cursor-pointer transition-colors"
+                            title="Hapus Bukti Dukung"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: PENGATURAN INDIKATOR PENILAIAN */}
       {subTab === 'indikator' && (
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
           <div className="overflow-x-auto">
@@ -1033,6 +1352,37 @@ export default function AdminPkksPanel({
                     <Check className="w-3.5 h-3.5" />
                     <span>File terpilih: {evFileName}</span>
                   </p>
+                )}
+
+                {evUrl.trim() && (
+                  <div className="pt-1 flex items-center justify-between gap-2 bg-indigo-50/70 border border-indigo-200/80 rounded-xl px-3 py-2">
+                    <span className="text-[11px] font-semibold text-indigo-800 truncate">
+                      Berkas / tautan siap disimpan
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewEvidence({
+                          id: 'draft-preview',
+                          subIndicatorId: evidenceModalIndicator.id,
+                          subCode: evidenceModalIndicator.subCode,
+                          year: selectedYear,
+                          quarter: selectedQuarter,
+                          title: evTitle.trim() || evFileName || `Pratinjau ${evidenceModalIndicator.subCode}`,
+                          type: evType,
+                          url: evType === 'gambar' ? convertGoogleDriveLink(evUrl.trim()) : evUrl.trim(),
+                          fileName: evFileName || undefined,
+                          description: evDescription.trim() || undefined,
+                          uploadedBy: adminName || 'Administrator',
+                          uploadedAt: new Date().toISOString(),
+                        })
+                      }
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 text-[11px] font-bold transition-colors cursor-pointer shrink-0"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Preview Sebelum Simpan</span>
+                    </button>
+                  </div>
                 )}
               </div>
 

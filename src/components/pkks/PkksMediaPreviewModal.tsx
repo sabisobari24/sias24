@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, FileText, Image as ImageIcon, Video, Download, ExternalLink, Calendar, User } from 'lucide-react';
 import { PkksEvidenceItem } from '../../types';
@@ -11,12 +11,20 @@ interface PkksMediaPreviewModalProps {
 }
 
 export function getGoogleDriveFileId(url: string): string | null {
-  if (!url || !url.includes('drive.google.com')) return null;
+  if (!url) return null;
+  if (!url.includes('drive.google.com') && !url.includes('docs.google.com')) return null;
   const matchD = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if (matchD?.[1]) return matchD[1];
   const matchId = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   if (matchId?.[1]) return matchId[1];
   return null;
+}
+
+export function getYouTubeThumbnailUrl(url: string): string | null {
+  if (!url) return null;
+  const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+  const match = url.match(regExp);
+  return match?.[1] ? `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg` : null;
 }
 
 export function getDocumentPreviewUrl(url: string): string | null {
@@ -25,17 +33,60 @@ export function getDocumentPreviewUrl(url: string): string | null {
   if (trimmed.startsWith('data:application/pdf')) return trimmed;
   const driveId = getGoogleDriveFileId(trimmed);
   if (driveId) return `https://drive.google.com/file/d/${driveId}/preview`;
-  if (/\.pdf(\?.*)?$/i.test(trimmed)) return trimmed;
   if (trimmed.includes('docs.google.com')) {
-    return trimmed.replace(/\/edit(\?.*)?$/i, '/preview');
+    return trimmed.replace(/\/(edit|view)(\?.*)?$/i, '/preview');
+  }
+  if (/\.pdf(\?.*)?$/i.test(trimmed)) return trimmed;
+  if (/\.(docx?|xlsx?|pptx?)(\?.*)?$/i.test(trimmed) && /^https?:\/\//i.test(trimmed)) {
+    return `https://docs.google.com/gview?url=${encodeURIComponent(trimmed)}&embedded=true`;
   }
   return null;
 }
 
+function dataUriToBlobUrl(dataUri: string): string | null {
+  try {
+    const parts = dataUri.split(',');
+    if (parts.length < 2) return null;
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    const blob = new Blob([u8arr], { type: mime });
+    return URL.createObjectURL(blob);
+  } catch {
+    return null;
+  }
+}
+
 export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPreviewModalProps) {
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!item?.url || !item.url.startsWith('data:application/pdf')) {
+      setPdfBlobUrl(null);
+      return;
+    }
+    const created = dataUriToBlobUrl(item.url);
+    setPdfBlobUrl(created);
+    return () => {
+      if (created) URL.revokeObjectURL(created);
+    };
+  }, [item?.url]);
+
   if (!item) return null;
 
-  const isPdfOrDocPreview = item.type === 'dokumen' ? getDocumentPreviewUrl(item.url) : null;
+  const looksLikeImage =
+    item.type === 'gambar' ||
+    item.url.startsWith('data:image/') ||
+    /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(item.url);
+
+  const rawDocPreview = item.type === 'dokumen' && !looksLikeImage ? getDocumentPreviewUrl(item.url) : null;
+  const resolvedDocPreviewUrl = item.url.startsWith('data:application/pdf') ? pdfBlobUrl || rawDocPreview : rawDocPreview;
+
   const youtubeUrl = item.type === 'video' ? getYouTubeEmbedUrl(item.url) : null;
   const driveVideoId = item.type === 'video' ? getGoogleDriveFileId(item.url) : null;
   const isDirectVideo = item.type === 'video' && isDirectVideoUrl(item.url);
@@ -93,7 +144,7 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
 
         {/* Media Viewer Stage */}
         <div className="flex-1 overflow-auto bg-slate-100 p-4 sm:p-6 flex items-center justify-center min-h-[340px]">
-          {item.type === 'gambar' && (
+          {looksLikeImage && (
             <img
               src={getHighResMediaUrl(item.url)}
               alt={item.title}
@@ -102,7 +153,7 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
             />
           )}
 
-          {item.type === 'video' && (
+          {item.type === 'video' && !looksLikeImage && (
             <div className="w-full max-w-3xl aspect-video bg-black rounded-2xl overflow-hidden shadow-lg">
               {youtubeUrl ? (
                 <iframe
@@ -141,14 +192,20 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
             </div>
           )}
 
-          {item.type === 'dokumen' && (
+          {item.type === 'dokumen' && !looksLikeImage && (
             <div className="w-full h-full flex flex-col items-center justify-center">
-              {isPdfOrDocPreview ? (
-                <iframe
-                  src={isPdfOrDocPreview}
-                  title={item.title}
-                  className="w-full h-[64vh] bg-white rounded-2xl border border-slate-200 shadow-sm"
-                />
+              {resolvedDocPreviewUrl ? (
+                <div className="w-full space-y-2">
+                  <iframe
+                    src={resolvedDocPreviewUrl}
+                    title={item.title}
+                    className="w-full h-[62vh] bg-white rounded-2xl border border-slate-200 shadow-sm"
+                  />
+                  <p className="text-[11px] text-slate-500 text-center">
+                    Jika pratinjau dokumen tidak tampil di browser Anda, gunakan tombol{' '}
+                    <strong>{item.url.startsWith('data:') ? 'Unduh File' : 'Buka Sumber Asli'}</strong> di bagian bawah.
+                  </p>
+                </div>
               ) : (
                 <div className="bg-white border border-slate-200 rounded-2xl p-8 max-w-md w-full text-center space-y-4 shadow-sm">
                   <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto border border-blue-100">

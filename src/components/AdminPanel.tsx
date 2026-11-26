@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useId } from 'react';
 import { Student, Teacher, SchoolClass, ViolationType, StudentViolation, Attendance, CounselorNote, HomeroomNote, ParentMessage, ExamSchedule, ExamGrade, TeachingJournal, PendingRegistration, QuestionBank, StudentAchievement, StudentExamSubmission, SchoolTimeConfig, EcoWasteCategory, EcoWasteDeposit, EcoReward, EcoRedemption, EcoConfig, StudentPermitLog, StudentPermitType, PkksIndicator, PkksEvidenceItem, PkksAssessment } from '../types';
-import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown, Leaf, Recycle, Crown, Printer, DoorOpen } from 'lucide-react';
+import { Users, Shield, Plus, Edit2, Trash2, RefreshCw, BarChart2, BookOpen, AlertTriangle, FileText, Check, CheckCircle2, Award, Calendar, Link, Clock, Download, FileSpreadsheet, Upload, FileDown, Search, Database, Wifi, WifiOff, Save, ShieldCheck, Sliders, TrendingUp, UserCheck, Globe, FileCheck, Filter, X, GraduationCap, CreditCard, QrCode, Zap, ChevronDown, Leaf, Recycle, Crown, Printer, DoorOpen, Eye, Image as ImageIcon, Video, ClipboardCheck } from 'lucide-react';
 import { downloadExcel, parseExcel } from '../utils/excelExport';
 import { printHTML, printTablePDF, printCertificate } from '../utils/printHelper';
 import { downloadDocx } from '../utils/docxExport';
@@ -19,6 +19,7 @@ import ExamCardGeneratorModal from './common/ExamCardGeneratorModal';
 import AdminPelatihPanel from './admin/AdminPelatihPanel';
 import AdminOrangTuaPanel from './admin/AdminOrangTuaPanel';
 import AdminPkksPanel from './pkks/AdminPkksPanel';
+import PkksMediaPreviewModal, { getYouTubeThumbnailUrl } from './pkks/PkksMediaPreviewModal';
 import { printBatchStudentCards } from '../utils/qrHelper';
 import {
   syncCollection,
@@ -28,7 +29,7 @@ import {
   isSupabaseConfigured
 } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
-import { compressImageFile, compressAvatarImage, convertGoogleDriveLink } from '../utils/imageHelper';
+import { compressImageFile, compressAvatarImage, convertGoogleDriveLink, getHighResMediaUrl } from '../utils/imageHelper';
 import MediaUploadSelector from './MediaUploadSelector';
 import { getEffectiveSchoolLogo, getEffectiveRegionalLogo, saveSchoolCardLogo } from '../utils/schoolLogoHelper';
 import {
@@ -244,6 +245,8 @@ export default function AdminPanel({
   const [isRefreshingReg, setIsRefreshingReg] = useState(false);
   const [processingRegId, setProcessingRegId] = useState<string | null>(null);
   const [isApprovingAll, setIsApprovingAll] = useState(false);
+  const [dashboardPreviewEvidence, setDashboardPreviewEvidence] = useState<PkksEvidenceItem | null>(null);
+  const [pkksTargetSubTab, setPkksTargetSubTab] = useState<'bukti-dukung' | 'preview' | 'indikator' | 'rekap'>('bukti-dukung');
 
   // Database Backend States
   const activeDbBackend = getActiveDbBackend();
@@ -2498,6 +2501,139 @@ export default function AdminPanel({
                   })}
                 </div>
               </div>
+            </div>
+
+            {/* Preview Bukti Dukung EKKS Terbaru di Dashboard Admin */}
+            <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/90 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 border border-sky-200 flex items-center justify-center shrink-0">
+                    <ClipboardCheck className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                      <span>Preview Bukti Dukung EKKS</span>
+                      <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 tabular-nums">
+                        {pkksEvidences.length} Berkas
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Lihat kembali dokumen, gambar, atau video bukti dukung Evaluasi Kinerja Kepala Sekolah (EKKS) yang sudah diunggah.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPkksTargetSubTab('preview');
+                      setActiveTab('kelola-pkks');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-colors"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Lihat Semua Preview</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPkksTargetSubTab('bukti-dukung');
+                      setActiveTab('kelola-pkks');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition-colors"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Baru</span>
+                  </button>
+                </div>
+              </div>
+
+              {pkksEvidences.length === 0 ? (
+                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-6 text-center space-y-2">
+                  <p className="text-xs font-semibold text-slate-500">
+                    Belum ada dokumen atau media bukti dukung EKKS yang diunggah.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPkksTargetSubTab('bukti-dukung');
+                      setActiveTab('kelola-pkks');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-indigo-300 text-indigo-600 text-xs font-bold cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Unggah Bukti Dukung Pertama</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {[...pkksEvidences]
+                    .sort((a, b) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime())
+                    .slice(0, 6)
+                    .map((ev) => {
+                      const ytThumb = ev.type === 'video' ? getYouTubeThumbnailUrl(ev.url) : null;
+                      return (
+                        <div
+                          key={ev.id}
+                          className="border border-slate-200/90 rounded-xl p-3 bg-slate-50/50 hover:bg-white hover:border-indigo-300 transition-all flex items-center gap-3 group"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setDashboardPreviewEvidence(ev)}
+                            className="w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-slate-200 bg-white flex items-center justify-center cursor-pointer"
+                            title="Klik untuk Preview"
+                          >
+                            {ev.type === 'gambar' ? (
+                              <img
+                                src={getHighResMediaUrl(ev.url)}
+                                alt={ev.title}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : ev.type === 'video' && ytThumb ? (
+                              <img src={ytThumb} alt={ev.title} className="w-full h-full object-cover" />
+                            ) : ev.type === 'dokumen' ? (
+                              <FileText className="w-6 h-6 text-blue-600" />
+                            ) : (
+                              <Video className="w-6 h-6 text-rose-600" />
+                            )}
+                          </button>
+
+                          <div className="min-w-0 flex-1 text-left">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-900 text-white font-mono">
+                                {ev.subCode}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-500">
+                                {ev.quarter} &bull; {ev.year}
+                              </span>
+                            </div>
+                            <p className="text-xs font-bold text-slate-800 truncate">{ev.title}</p>
+                            <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                              {ev.type === 'dokumen' ? 'Dokumen' : ev.type === 'gambar' ? 'Gambar' : 'Video'} &bull;{' '}
+                              {new Date(ev.uploadedAt).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setDashboardPreviewEvidence(ev)}
+                            className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 text-[11px] font-bold flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                            title="Preview Bukti Dukung"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Preview</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
 
             {/* Download & Export Section */}
@@ -6539,6 +6675,7 @@ export default function AdminPanel({
             assessments={pkksAssessments}
             adminName={adminName}
             headmasterName={headmasterName}
+            initialSubTab={pkksTargetSubTab}
             onSaveIndicator={async (ind) => {
               if (onSavePkksIndicator) await onSavePkksIndicator(ind);
             }}
@@ -6621,6 +6758,11 @@ export default function AdminPanel({
         confirmText={confirmModal.confirmText}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
+
+      <PkksMediaPreviewModal
+        item={dashboardPreviewEvidence}
+        onClose={() => setDashboardPreviewEvidence(null)}
       />
     </div>
   );
