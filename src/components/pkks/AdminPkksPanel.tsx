@@ -39,7 +39,10 @@ import {
   PKKS_SCORE_CRITERIA,
 } from '../../data/initialPkksData';
 import { fileToBase64, convertGoogleDriveLink, getHighResMediaUrl } from '../../utils/imageHelper';
-import PkksMediaPreviewModal, { getYouTubeThumbnailUrl } from './PkksMediaPreviewModal';
+import PkksMediaPreviewModal, {
+  getYouTubeThumbnailUrl,
+  sanitizeExternalMediaUrl,
+} from './PkksMediaPreviewModal';
 import PkksQuarterChart from './PkksQuarterChart';
 
 interface AdminPkksPanelProps {
@@ -278,7 +281,11 @@ export default function AdminPkksPanel({
         }
         const reader = new FileReader();
         reader.onload = () => {
-          setEvUrl(String(reader.result || ''));
+          let resultStr = String(reader.result || '');
+          if (file.name.toLowerCase().endsWith('.pdf') && !resultStr.startsWith('data:application/pdf')) {
+            resultStr = resultStr.replace(/^data:[^;]*;base64,/i, 'data:application/pdf;base64,');
+          }
+          setEvUrl(resultStr);
           setEvFileName(file.name);
           if (!evTitle) setEvTitle(file.name.replace(/\.[^.]+$/, ''));
           showToast('success', `Dokumen "${file.name}" berhasil dimuat.`);
@@ -327,8 +334,9 @@ export default function AdminPkksPanel({
 
     setIsSavingEvidence(true);
     try {
+      const cleanedUrl = sanitizeExternalMediaUrl(evUrl.trim());
       const normalizedUrl =
-        evType === 'gambar' ? convertGoogleDriveLink(evUrl.trim()) : evUrl.trim();
+        evType === 'gambar' ? convertGoogleDriveLink(cleanedUrl) : cleanedUrl;
       const newEv: PkksEvidenceItem = {
         id: `pkks-ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         subIndicatorId: evidenceModalIndicator.id,
@@ -1354,6 +1362,13 @@ export default function AdminPkksPanel({
                   </p>
                 )}
 
+                {(evType === 'dokumen' || evUrl.includes('drive.google.com') || evUrl.includes('docs.google.com')) && (
+                  <p className="text-[11px] text-slate-500 leading-relaxed bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2">
+                    Tips: File <strong>.PDF</strong> yang diunggah langsung akan ditampilkan langsung di dalam pratinjau. Jika menempelkan link file atau folder <strong>Google Drive</strong>, pastikan izin aksesnya diset ke{' '}
+                    <strong className="text-slate-700">&ldquo;Siapa saja yang memiliki link&rdquo;</strong>.
+                  </p>
+                )}
+
                 {evUrl.trim() && (
                   <div className="pt-1 flex items-center justify-between gap-2 bg-indigo-50/70 border border-indigo-200/80 rounded-xl px-3 py-2">
                     <span className="text-[11px] font-semibold text-indigo-800 truncate">
@@ -1361,7 +1376,8 @@ export default function AdminPkksPanel({
                     </span>
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        const cleanedPreviewUrl = sanitizeExternalMediaUrl(evUrl.trim());
                         setPreviewEvidence({
                           id: 'draft-preview',
                           subIndicatorId: evidenceModalIndicator.id,
@@ -1370,13 +1386,16 @@ export default function AdminPkksPanel({
                           quarter: selectedQuarter,
                           title: evTitle.trim() || evFileName || `Pratinjau ${evidenceModalIndicator.subCode}`,
                           type: evType,
-                          url: evType === 'gambar' ? convertGoogleDriveLink(evUrl.trim()) : evUrl.trim(),
+                          url:
+                            evType === 'gambar'
+                              ? convertGoogleDriveLink(cleanedPreviewUrl)
+                              : cleanedPreviewUrl,
                           fileName: evFileName || undefined,
                           description: evDescription.trim() || undefined,
                           uploadedBy: adminName || 'Administrator',
                           uploadedAt: new Date().toISOString(),
-                        })
-                      }
+                        });
+                      }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 text-[11px] font-bold transition-colors cursor-pointer shrink-0"
                     >
                       <Eye className="w-3.5 h-3.5" />

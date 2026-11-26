@@ -1,22 +1,85 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, FileText, Image as ImageIcon, Video, Download, ExternalLink, Calendar, User } from 'lucide-react';
+import { X, FileText, Image as ImageIcon, Video, Download, ExternalLink, Calendar, User, FolderOpen } from 'lucide-react';
 import { PkksEvidenceItem } from '../../types';
 import { getYouTubeEmbedUrl, isDirectVideoUrl } from '../../utils/mediaHelper';
 import { getHighResMediaUrl } from '../../utils/imageHelper';
+import PdfCanvasPreview from './PdfCanvasPreview';
 
 interface PkksMediaPreviewModalProps {
   item: PkksEvidenceItem | null;
   onClose: () => void;
 }
 
+function cleanDriveId(rawId: string): string {
+  return rawId.replace(/(%20|\s)+/gi, '').replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+/**
+ * Normalizes Google Drive / Google Docs / YouTube links and strips accidental spaces or %20 inside IDs
+ * that cause Google 400 Bad Request errors.
+ */
+export function sanitizeExternalMediaUrl(url: string): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('data:')) return trimmed;
+
+  // Google Drive Folder: /drive/folders/ID or /drive/u/0/folders/ID
+  const folderMatch = trimmed.match(/drive\.google\.com\/(?:drive\/(?:u\/\d+\/)?)?folders\/([a-zA-Z0-9_% -]+)/i);
+  if (folderMatch?.[1]) {
+    const cleanId = cleanDriveId(folderMatch[1]);
+    if (cleanId) return `https://drive.google.com/drive/folders/${cleanId}?usp=sharing`;
+  }
+
+  // Google Drive File: /file/d/ID
+  const fileMatch = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_% -]+)/i);
+  if (fileMatch?.[1]) {
+    const cleanId = cleanDriveId(fileMatch[1]);
+    if (cleanId) return `https://drive.google.com/file/d/${cleanId}/view?usp=sharing`;
+  }
+
+  // Google Drive open?id= or uc?id=
+  if (trimmed.includes('drive.google.com')) {
+    const idMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_% -]+)/i);
+    if (idMatch?.[1]) {
+      const cleanId = cleanDriveId(idMatch[1]);
+      if (cleanId) return `https://drive.google.com/file/d/${cleanId}/view?usp=sharing`;
+    }
+  }
+
+  // Google Docs / Sheets / Slides / Forms
+  const docsMatch = trimmed.match(/docs\.google\.com\/(document|spreadsheets|presentation|forms|file)\/d\/([a-zA-Z0-9_% -]+)/i);
+  if (docsMatch?.[1] && docsMatch?.[2]) {
+    const kind = docsMatch[1].toLowerCase();
+    const cleanId = cleanDriveId(docsMatch[2]);
+    if (cleanId) {
+      return kind === 'forms'
+        ? `https://docs.google.com/forms/d/${cleanId}/viewform`
+        : `https://docs.google.com/${kind}/d/${cleanId}/view`;
+    }
+  }
+
+  return trimmed;
+}
+
+export function getGoogleDriveFolderId(url: string): string | null {
+  if (!url || !url.includes('drive.google.com')) return null;
+  const match = url.match(/drive\.google\.com\/(?:drive\/(?:u\/\d+\/)?)?folders\/([a-zA-Z0-9_% -]+)/i);
+  if (match?.[1]) {
+    const id = cleanDriveId(match[1]);
+    return id || null;
+  }
+  return null;
+}
+
 export function getGoogleDriveFileId(url: string): string | null {
   if (!url) return null;
   if (!url.includes('drive.google.com') && !url.includes('docs.google.com')) return null;
-  const matchD = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (matchD?.[1]) return matchD[1];
-  const matchId = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (matchId?.[1]) return matchId[1];
+  if (getGoogleDriveFolderId(url)) return null;
+  const matchD = url.match(/\/file\/d\/([a-zA-Z0-9_% -]+)/i);
+  if (matchD?.[1]) return cleanDriveId(matchD[1]);
+  const matchId = url.match(/[?&]id=([a-zA-Z0-9_% -]+)/i);
+  if (matchId?.[1]) return cleanDriveId(matchId[1]);
   return null;
 }
 
@@ -29,67 +92,60 @@ export function getYouTubeThumbnailUrl(url: string): string | null {
 
 export function getDocumentPreviewUrl(url: string): string | null {
   if (!url) return null;
-  const trimmed = url.trim();
-  if (trimmed.startsWith('data:application/pdf')) return trimmed;
-  const driveId = getGoogleDriveFileId(trimmed);
+  const cleanUrl = sanitizeExternalMediaUrl(url);
+
+  const folderId = getGoogleDriveFolderId(cleanUrl);
+  if (folderId) return `https://drive.google.com/embeddedfolderview?id=${folderId}#list`;
+
+  const driveId = getGoogleDriveFileId(cleanUrl);
   if (driveId) return `https://drive.google.com/file/d/${driveId}/preview`;
-  if (trimmed.includes('docs.google.com')) {
-    return trimmed.replace(/\/(edit|view)(\?.*)?$/i, '/preview');
+
+  const docsMatch = cleanUrl.match(/docs\.google\.com\/(document|spreadsheets|presentation)\/d\/([a-zA-Z0-9_-]+)/i);
+  if (docsMatch?.[1] && docsMatch?.[2]) {
+    return `https://docs.google.com/${docsMatch[1].toLowerCase()}/d/${docsMatch[2]}/preview`;
   }
-  if (/\.pdf(\?.*)?$/i.test(trimmed)) return trimmed;
-  if (/\.(docx?|xlsx?|pptx?)(\?.*)?$/i.test(trimmed) && /^https?:\/\//i.test(trimmed)) {
-    return `https://docs.google.com/gview?url=${encodeURIComponent(trimmed)}&embedded=true`;
+
+  if (cleanUrl.includes('docs.google.com/forms')) {
+    return cleanUrl.includes('embedded=true')
+      ? cleanUrl
+      : `${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}embedded=true`;
   }
+
+  if (/\.(docx?|xlsx?|pptx?)(\?.*)?$/i.test(cleanUrl) && /^https?:\/\//i.test(cleanUrl)) {
+    return `https://docs.google.com/gview?url=${encodeURIComponent(cleanUrl)}&embedded=true`;
+  }
+
   return null;
 }
 
-function dataUriToBlobUrl(dataUri: string): string | null {
-  try {
-    const parts = dataUri.split(',');
-    if (parts.length < 2) return null;
-    const mimeMatch = parts[0].match(/:(.*?);/);
-    const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
-    const bstr = atob(parts[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    const blob = new Blob([u8arr], { type: mime });
-    return URL.createObjectURL(blob);
-  } catch {
-    return null;
-  }
-}
-
 export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPreviewModalProps) {
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!item?.url || !item.url.startsWith('data:application/pdf')) {
-      setPdfBlobUrl(null);
-      return;
-    }
-    const created = dataUriToBlobUrl(item.url);
-    setPdfBlobUrl(created);
-    return () => {
-      if (created) URL.revokeObjectURL(created);
-    };
-  }, [item?.url]);
-
   if (!item) return null;
+
+  const cleanSourceUrl = sanitizeExternalMediaUrl(item.url);
 
   const looksLikeImage =
     item.type === 'gambar' ||
-    item.url.startsWith('data:image/') ||
-    /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(item.url);
+    cleanSourceUrl.startsWith('data:image/') ||
+    /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(cleanSourceUrl);
 
-  const rawDocPreview = item.type === 'dokumen' && !looksLikeImage ? getDocumentPreviewUrl(item.url) : null;
-  const resolvedDocPreviewUrl = item.url.startsWith('data:application/pdf') ? pdfBlobUrl || rawDocPreview : rawDocPreview;
+  const isPdfDocument =
+    !looksLikeImage &&
+    (cleanSourceUrl.startsWith('data:application/pdf') ||
+      /\.pdf(\?.*)?$/i.test(cleanSourceUrl) ||
+      (item.fileName || '').toLowerCase().endsWith('.pdf'));
 
-  const youtubeUrl = item.type === 'video' ? getYouTubeEmbedUrl(item.url) : null;
-  const driveVideoId = item.type === 'video' ? getGoogleDriveFileId(item.url) : null;
-  const isDirectVideo = item.type === 'video' && isDirectVideoUrl(item.url);
+  const googleFolderId = getGoogleDriveFolderId(cleanSourceUrl);
+  const isGoogleDriveOrDocs =
+    cleanSourceUrl.includes('drive.google.com') || cleanSourceUrl.includes('docs.google.com');
+
+  const embedDocPreviewUrl =
+    item.type === 'dokumen' && !looksLikeImage && !isPdfDocument
+      ? getDocumentPreviewUrl(cleanSourceUrl)
+      : null;
+
+  const youtubeUrl = item.type === 'video' ? getYouTubeEmbedUrl(cleanSourceUrl) : null;
+  const driveVideoId = item.type === 'video' ? getGoogleDriveFileId(cleanSourceUrl) : null;
+  const isDirectVideo = item.type === 'video' && isDirectVideoUrl(cleanSourceUrl);
 
   const modalContent = (
     <div
@@ -112,9 +168,15 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
                   : 'bg-rose-500/20 text-rose-300 border border-rose-400/30'
               }`}
             >
-              {item.type === 'dokumen' && <FileText className="w-5 h-5" />}
-              {item.type === 'gambar' && <ImageIcon className="w-5 h-5" />}
-              {item.type === 'video' && <Video className="w-5 h-5" />}
+              {googleFolderId ? (
+                <FolderOpen className="w-5 h-5" />
+              ) : item.type === 'dokumen' ? (
+                <FileText className="w-5 h-5" />
+              ) : item.type === 'gambar' ? (
+                <ImageIcon className="w-5 h-5" />
+              ) : (
+                <Video className="w-5 h-5" />
+              )}
             </div>
             <div className="min-w-0 text-left">
               <div className="flex flex-wrap items-center gap-2 mb-0.5">
@@ -122,7 +184,7 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
                   {item.subCode} &bull; {item.quarter} ({item.year})
                 </span>
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-500/30 text-indigo-100">
-                  {item.type}
+                  {googleFolderId ? 'Folder Google Drive' : item.type}
                 </span>
               </div>
               <h3 className="text-sm sm:text-base font-bold text-white truncate">{item.title}</h3>
@@ -146,7 +208,7 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
         <div className="flex-1 overflow-auto bg-slate-100 p-4 sm:p-6 flex items-center justify-center min-h-[340px]">
           {looksLikeImage && (
             <img
-              src={getHighResMediaUrl(item.url)}
+              src={getHighResMediaUrl(cleanSourceUrl)}
               alt={item.title}
               referrerPolicy="no-referrer"
               className="max-w-full max-h-[68vh] object-contain rounded-2xl shadow-lg bg-white"
@@ -172,14 +234,14 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
                   allowFullScreen
                 />
               ) : isDirectVideo ? (
-                <video src={item.url} controls className="w-full h-full object-contain bg-black" />
+                <video src={cleanSourceUrl} controls className="w-full h-full object-contain bg-black" />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-white p-6 text-center space-y-3">
                   <Video className="w-10 h-10 text-slate-400" />
                   <p className="text-sm font-semibold">Tautan Video Eksternal</p>
-                  <p className="text-xs text-slate-400 break-all max-w-md">{item.url}</p>
+                  <p className="text-xs text-slate-400 break-all max-w-md">{cleanSourceUrl}</p>
                   <a
-                    href={item.url}
+                    href={cleanSourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors"
@@ -194,17 +256,36 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
 
           {item.type === 'dokumen' && !looksLikeImage && (
             <div className="w-full h-full flex flex-col items-center justify-center">
-              {resolvedDocPreviewUrl ? (
-                <div className="w-full space-y-2">
+              {isPdfDocument ? (
+                <PdfCanvasPreview
+                  url={cleanSourceUrl}
+                  fileName={item.fileName}
+                  title={item.title}
+                />
+              ) : embedDocPreviewUrl ? (
+                <div className="w-full space-y-2.5">
                   <iframe
-                    src={resolvedDocPreviewUrl}
+                    src={embedDocPreviewUrl}
                     title={item.title}
-                    className="w-full h-[62vh] bg-white rounded-2xl border border-slate-200 shadow-sm"
+                    className="w-full h-[58vh] bg-white rounded-2xl border border-slate-200 shadow-sm"
                   />
-                  <p className="text-[11px] text-slate-500 text-center">
-                    Jika pratinjau dokumen tidak tampil di browser Anda, gunakan tombol{' '}
-                    <strong>{item.url.startsWith('data:') ? 'Unduh File' : 'Buka Sumber Asli'}</strong> di bagian bawah.
-                  </p>
+                  {isGoogleDriveOrDocs && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-blue-900">
+                      <span>
+                        Jika pratinjau Google Drive tidak tampil karena pembatasan akses/login akun Google, pastikan akses berbagi diset ke{' '}
+                        <strong>&ldquo;Siapa saja yang memiliki link&rdquo;</strong> atau buka langsung:
+                      </span>
+                      <a
+                        href={cleanSourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shrink-0"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Buka di Google Drive</span>
+                      </a>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="bg-white border border-slate-200 rounded-2xl p-8 max-w-md w-full text-center space-y-4 shadow-sm">
@@ -218,10 +299,10 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
-                    {item.url.startsWith('data:') ? (
+                    {cleanSourceUrl.startsWith('data:') ? (
                       <a
-                        href={item.url}
-                        download={item.fileName || `${item.subCode}_${item.title}.pdf`}
+                        href={cleanSourceUrl}
+                        download={item.fileName || `${item.subCode}_${item.title}`}
                         className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors"
                       >
                         <Download className="w-4 h-4" />
@@ -229,7 +310,7 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
                       </a>
                     ) : (
                       <a
-                        href={item.url}
+                        href={cleanSourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors"
@@ -259,9 +340,9 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
           </div>
 
           <div className="flex items-center gap-2">
-            {item.url.startsWith('data:') ? (
+            {cleanSourceUrl.startsWith('data:') ? (
               <a
-                href={item.url}
+                href={cleanSourceUrl}
                 download={item.fileName || `${item.subCode}_${item.title}`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition-colors"
               >
@@ -270,7 +351,7 @@ export default function PkksMediaPreviewModal({ item, onClose }: PkksMediaPrevie
               </a>
             ) : (
               <a
-                href={item.url}
+                href={cleanSourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition-colors"
