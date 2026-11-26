@@ -342,9 +342,9 @@ export default function AdminPkksPanel({
         targetScore: Math.max(1, Math.min(4, Number(indForm.targetScore) || 4)),
       });
       setIsIndicatorModalOpen(false);
-      showToast('success', editingIndicatorId ? 'Indikator PKKS berhasil diperbarui.' : 'Sub-Indikator PKKS baru berhasil ditambahkan.');
+      showToast('success', editingIndicatorId ? 'Indikator EKKS berhasil diperbarui.' : 'Sub-Indikator EKKS baru berhasil ditambahkan.');
     } catch (err: any) {
-      showToast('error', err?.message || 'Gagal menyimpan indikator PKKS.');
+      showToast('error', err?.message || 'Gagal menyimpan indikator EKKS.');
     } finally {
       setIsSavingIndicator(false);
     }
@@ -369,14 +369,14 @@ export default function AdminPkksPanel({
         <div className="space-y-1.5 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-amber-400 text-slate-950">
-              Kelola PKKS
+              Kelola EKKS
             </span>
             <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-white/15 text-indigo-100">
               Kepmendikdasmen No. 63 Tahun 2026
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-            Manajemen Penilaian Kinerja Kepala Sekolah (PKKS)
+            Manajemen Evaluasi Kinerja Kepala Sekolah (EKKS)
           </h2>
           <p className="text-xs sm:text-sm text-indigo-100 max-w-2xl leading-relaxed">
             Atur indikator penilaian, unggah bukti dukung (Dokumen, Gambar, Video) per Triwulan untuk Kepala Sekolah{' '}
@@ -1082,7 +1082,7 @@ export default function AdminPkksPanel({
           >
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
               <h3 className="text-base font-bold">
-                {editingIndicatorId ? 'Edit Indikator Penilaian PKKS' : 'Tambah Indikator Penilaian PKKS'}
+                {editingIndicatorId ? 'Edit Indikator Evaluasi EKKS' : 'Tambah Indikator Evaluasi EKKS'}
               </h3>
               <button
                 type="button"

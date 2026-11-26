@@ -2354,7 +2354,7 @@ export default function AdminPanel({
                         <option key={`tendik:${t.id}`} value={`tendik:${t.id}`}>Tendik: {t.name}</option>
                       ))}
                     </optgroup>
-                    <optgroup label="Peran Pengawas Sekolah (PKKS)">
+                    <optgroup label="Peran Pengawas Sekolah (EKKS)">
                       {teachers.filter(t => t.roles?.includes('pengawas') || t.role === 'pengawas').map(t => (
                         <option key={`pengawas:${t.id}`} value={`pengawas:${t.id}`}>Pengawas: {t.name}</option>
                       ))}
@@ -3378,7 +3378,7 @@ export default function AdminPanel({
                         { val: 'admin', label: 'Administrator / Kepsek' },
                         { val: 'guru_wali', label: 'Guru Wali (Mentorship)' },
                         { val: 'tendik', label: 'Tendik (Tenaga Kependidikan / TU)' },
-                        { val: 'pengawas', label: 'Pengawas Sekolah (Penilaian PKKS)' }
+                        { val: 'pengawas', label: 'Pengawas Sekolah (Evaluasi EKKS)' }
                       ].map((rItem) => {
                         const currentRoles = teacherForm.roles || [teacherForm.role];
                         const isChecked = currentRoles.includes(rItem.val as any);

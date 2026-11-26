@@ -222,7 +222,7 @@ export default function PengawasPanel({
     setIsSavingAll(true);
     try {
       await onSaveAssessmentsBatch(itemsToSave);
-      showToast('success', `${itemsToSave.length} penilaian PKKS (${selectedQuarter} ${selectedYear}) berhasil disimpan ke database!`);
+      showToast('success', `${itemsToSave.length} evaluasi EKKS (${selectedQuarter} ${selectedYear}) berhasil disimpan ke database!`);
     } catch (err: any) {
       showToast('error', err?.message || 'Gagal menyimpan seluruh penilaian.');
     } finally {
@@ -270,11 +270,11 @@ export default function PengawasPanel({
               Portal Pengawas Sekolah
             </span>
             <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-white/10 text-sky-100">
-              PKKS Kepmendikdasmen No. 63/2026
+              EKKS Kepmendikdasmen No. 63/2026
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-            Penilaian Kinerja Kepala Sekolah (PKKS)
+            Evaluasi Kinerja Kepala Sekolah (EKKS)
           </h2>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-sky-100">
             <span className="inline-flex items-center gap-1.5">
@@ -679,7 +679,7 @@ export default function PengawasPanel({
               Masukan, Umpan Balik &amp; Rekomendasi Pengawas Sekolah
             </h3>
             <p className="text-xs text-slate-500">
-              Catatan ini akan tampil di dashboard Admin (Kelola PKKS) dan ringkasan capaian Beranda untuk ditindaklanjuti oleh Kepala Sekolah ({headmasterName}).
+              Catatan ini akan tampil di dashboard Admin (Kelola EKKS) dan ringkasan capaian Beranda untuk ditindaklanjuti oleh Kepala Sekolah ({headmasterName}).
             </p>
           </div>
 
@@ -693,7 +693,7 @@ export default function PengawasPanel({
                 required
                 value={summaryFeedback}
                 onChange={(e) => setSummaryFeedback(e.target.value)}
-                placeholder="Tuliskan apresiasi capaian, hasil verifikasi dokumen pendukung, dan hal-hal kunci dari supervisi PKKS pada triwulan ini..."
+                placeholder="Tuliskan apresiasi capaian, hasil verifikasi dokumen pendukung, dan hal-hal kunci dari supervisi EKKS pada triwulan ini..."
                 className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-sky-500 text-slate-800"
               />
             </div>

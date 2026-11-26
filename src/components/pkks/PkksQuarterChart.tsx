@@ -24,7 +24,7 @@ export default function PkksQuarterChart({
   assessments,
   selectedYear: controlledYear,
   onYearChange,
-  title = 'Capaian Kinerja Kepala Sekolah (PKKS) Per Triwulan',
+  title = 'Capaian Evaluasi Kinerja Kepala Sekolah (EKKS) Per Triwulan',
   subtitle = 'Rekapitulasi nilai penilaian Pengawas Sekolah berdasarkan indikator Rapor Pendidikan Kepmendikdasmen No. 63 Tahun 2026',
   compact = false,
   showFeedbackPreview = true,
@@ -286,7 +286,7 @@ export default function PkksQuarterChart({
             {/* Main Score Display */}
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-semibold text-slate-500">Nilai Capaian PKKS</p>
+                <p className="text-[11px] font-semibold text-slate-500">Nilai Capaian EKKS</p>
                 <p className="text-2xl sm:text-3xl font-black text-slate-900 tabular-nums mt-0.5">
                   {activeQuarterStat.overallAvg > 0 ? activeQuarterStat.overallAvg : '—'}
                   <span className="text-xs font-semibold text-slate-400 ml-1">/ 4</span>

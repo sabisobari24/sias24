@@ -3569,7 +3569,7 @@ export default function App({ initialMode }: AppProps = {}) {
   const roleCardConfigs = [
     { role: 'admin', title: 'Administrator', desc: 'Kelola siswa, pendidik, kelas, bobot aturan pelanggaran, jadwal ujian CBT, & rekap sistem.', icon: Shield, color: 'hover:border-purple-400 bg-purple-50/50' },
     { role: 'guru', title: 'Guru / Pendidik', desc: 'Akses semua dashboard peran Anda: Guru Mapel, Wali Kelas, Guru BK, Guru Wali, & Guru Piket.', icon: BookOpen, color: 'hover:border-teal-400 bg-teal-50/50' },
-    { role: 'pengawas', title: 'Pengawas Sekolah', desc: 'Tinjau dokumen bukti dukung PKKS, berikan penilaian kinerja kepala sekolah, serta catatan umpan balik.', icon: ClipboardCheck, color: 'hover:border-sky-400 bg-sky-50/50' },
+    { role: 'pengawas', title: 'Pengawas Sekolah', desc: 'Tinjau dokumen bukti dukung EKKS, berikan evaluasi kinerja kepala sekolah, serta catatan umpan balik.', icon: ClipboardCheck, color: 'hover:border-sky-400 bg-sky-50/50' },
     { role: 'pelatih', title: 'Pelatih Ekskul', desc: 'Rekap kehadiran ekskul, buat jurnal kegiatan, unggah dokumentasi, dan input prestasi siswa.', icon: Award, color: 'hover:border-indigo-400 bg-indigo-50/50' },
     { role: 'siswa', title: 'Siswa', desc: 'Akses rapor presensi harian, jumlah poin kedisiplinan, catatan wali kelas & bimbingan BK.', icon: User, color: 'hover:border-amber-400 bg-amber-50/50' },
     { role: 'orang_tua', title: 'Orang Tua / Wali', desc: 'Pantau kepatuhan & kedisiplinan anak, setujui catatan sekolah, & kirim pesan koordinasi.', icon: Users, color: 'hover:border-orange-400 bg-orange-50/50' },
@@ -4855,7 +4855,7 @@ export default function App({ initialMode }: AppProps = {}) {
                         }`}
                       >
                         <ClipboardCheck className={`w-4 h-4 shrink-0 ${adminTabOverride === 'kelola-pkks' ? 'text-white' : 'text-sky-600'}`} />
-                        <span className="truncate">Kelola PKKS</span>
+                        <span className="truncate">Kelola EKKS</span>
                       </button>
                     </div>
                   </div>
@@ -5117,7 +5117,7 @@ export default function App({ initialMode }: AppProps = {}) {
                 {activeRole === 'pengawas' && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between px-1">
-                      <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Menu Pengawas (PKKS)</h3>
+                      <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Menu Pengawas (EKKS)</h3>
                       <span className="text-[9px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded-full border border-sky-200">3 Menu</span>
                     </div>
                     <div className="space-y-1.5">
@@ -5259,13 +5259,13 @@ export default function App({ initialMode }: AppProps = {}) {
                         adminTabOverride === 'setting-kartu-pelajar' ? 'Pengaturan Kartu Pelajar' :
                         adminTabOverride === 'eco-tiket' ? 'ECo-Tiket & Sampah' :
                         adminTabOverride === 'izin-siswa' ? 'Izin Siswa & Toilet' :
-                        adminTabOverride === 'kelola-pkks' ? 'Kelola PKKS (Penilaian Kinerja Kepala Sekolah)' :
+                        adminTabOverride === 'kelola-pkks' ? 'Kelola EKKS (Evaluasi Kinerja Kepala Sekolah)' :
                         'Panel Kontrol Administrator'
                       )}
                       {activeRole === 'pengawas' && (
-                        pengawasTab === 'umpan-balik' ? 'Umpan Balik & Rekomendasi PKKS' :
-                        pengawasTab === 'grafik' ? 'Grafik Capaian PKKS Per Triwulan' :
-                        'Dashboard Pengawas Sekolah (PKKS)'
+                        pengawasTab === 'umpan-balik' ? 'Umpan Balik & Rekomendasi EKKS' :
+                        pengawasTab === 'grafik' ? 'Grafik Capaian EKKS Per Triwulan' :
+                        'Dashboard Pengawas Sekolah (EKKS)'
                       )}
                       {activeRole === 'guru' && (
                         guruTab === 'izin-siswa' ? 'Izin Siswa & Toilet' :
@@ -5314,7 +5314,7 @@ export default function App({ initialMode }: AppProps = {}) {
                     <p className="text-[11px] text-slate-400 mt-0.5 hidden md:block truncate">
                       SMPN 50 JAKARTA &bull; {
                         activeRole === 'admin' ? (
-                          adminTabOverride === 'kelola-pkks' ? 'Pengaturan Indikator Kepmendikdasmen No. 63/2026 & Unggah Bukti Dukung PKKS' :
+                          adminTabOverride === 'kelola-pkks' ? 'Pengaturan Indikator Kepmendikdasmen No. 63/2026 & Unggah Bukti Dukung EKKS' :
                           adminTabOverride === 'izin-siswa' ? 'Pusat Monitoring Izin Keluar, Toilet & Track Record Siswa' :
                           adminTabOverride === 'eco-tiket' ? 'Pusat Setor Sampah, Tabungan & Poin Lingkungan' :
                           adminTabOverride === 'setting-kartu-pelajar' ? 'Pusat Desain & Cetak Massal QR Kartu Pelajar' :
