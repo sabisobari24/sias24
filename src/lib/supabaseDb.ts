@@ -46,6 +46,7 @@ export const ALL_SIAS_COLLECTIONS = [
   'pkks_indicators',
   'pkks_evidences',
   'pkks_assessments',
+  'cbt_email_verifications',
 ] as const;
 
 type StatusCallback = (status: 'online' | 'offline' | 'high_latency', latency?: number) => void;
@@ -927,4 +928,99 @@ export async function supabaseTestReadWrite(): Promise<{ readMs: number; totalMs
   if (writeErr) throw writeErr;
   const totalMs = Math.round(performance.now() - startTime);
   return { readMs, totalMs };
+}
+
+let cachedSupabaseGoogleEnabled: boolean | null = null;
+
+/**
+ * Checks whether Google OAuth provider is enabled on the user's Supabase Pro project.
+ */
+export async function isSupabaseGoogleOAuthEnabled(): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  if (cachedSupabaseGoogleEnabled !== null) return cachedSupabaseGoogleEnabled;
+
+  const supabaseUrl = ((import.meta.env.VITE_SUPABASE_URL as string) || '').trim();
+  const anonKey = (
+    (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string) ||
+    (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ||
+    ''
+  ).trim();
+  if (!supabaseUrl || !anonKey) return false;
+
+  try {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 3000);
+    const resp = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+      headers: { apikey: anonKey },
+      signal: controller.signal,
+    });
+    window.clearTimeout(timer);
+    if (!resp.ok) {
+      cachedSupabaseGoogleEnabled = false;
+      return false;
+    }
+    const json = await resp.json();
+    cachedSupabaseGoogleEnabled = Boolean(json?.external?.google);
+    return cachedSupabaseGoogleEnabled;
+  } catch {
+    return false;
+  }
+}
+
+export async function getSupabaseVerifiedEmail(): Promise<string> {
+  if (!isSupabaseConfigured() || !supabase) return '';
+  try {
+    const { data } = await supabase.auth.getSession();
+    return String(data?.session?.user?.email || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+export async function signInWithGoogleSupabase(redirectTo?: string): Promise<{ success: boolean; redirected?: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return { success: false, error: 'Supabase belum dikonfigurasi.' };
+  }
+  try {
+    const enabled = await isSupabaseGoogleOAuthEnabled();
+    if (!enabled) {
+      return { success: false, error: 'SUPABASE_GOOGLE_DISABLED' };
+    }
+    const targetRedirect = redirectTo || (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : undefined);
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: targetRedirect,
+        skipBrowserRedirect: true,
+        queryParams: { prompt: 'select_account' },
+      },
+    });
+    if (error || !data?.url) {
+      return { success: false, error: error?.message || 'Gagal memulai autentikasi Google melalui Supabase.' };
+    }
+    window.location.assign(data.url);
+    return { success: true, redirected: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Gagal menghubungkan ke Supabase Auth.' };
+  }
+}
+
+export async function recordCbtEmailVerificationInSupabase(
+  studentId: string,
+  studentName: string,
+  examId: string,
+  email: string
+): Promise<void> {
+  if (!isSupabaseConfigured() || !supabase || !email) return;
+  const safeId = (studentId || studentName || 'siswa').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+  const docId = `cbt-email-${safeId}-${examId}`;
+  await supabaseSaveDocument('cbt_email_verifications', docId, {
+    id: docId,
+    studentId: studentId || safeId,
+    studentName,
+    examId,
+    email: email.trim().toLowerCase(),
+    provider: 'supabase',
+    verifiedAt: new Date().toISOString(),
+  });
 }

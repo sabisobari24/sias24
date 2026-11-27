@@ -2,6 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Shield, AlertTriangle, Play, Lock, Unlock, LogOut, CheckCircle, Volume2, Database, ChevronLeft, ChevronRight, HelpCircle, FileText, Send, Sparkles, Clock, AlertCircle, Mail, RefreshCw, X } from 'lucide-react';
 import { ExamSchedule, QuestionBank, CbtQuestion, StudentExamSubmission } from '../types';
 import { saveDocument, getDocumentById, signInWithGoogle, auth } from '../lib/firebase';
+import { isSupabaseConfigured } from '../lib/supabase';
+import {
+  isSupabaseGoogleOAuthEnabled,
+  signInWithGoogleSupabase,
+  getSupabaseVerifiedEmail,
+  recordCbtEmailVerificationInSupabase
+} from '../lib/supabaseDb';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import FormattedText from './common/FormattedText';
 
@@ -80,6 +87,26 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
 
   // Only pause visibility/blur detection strictly while Google Sign-In popup is actively awaited
   isEmailVerifyingRef.current = isSigningInWithGoogle;
+
+  // Sync verified email from Supabase Pro session if available
+  useEffect(() => {
+    let active = true;
+    getSupabaseVerifiedEmail().then((sbEmail) => {
+      if (!active || !sbEmail) return;
+      setVerifiedEmail((prev) => prev || sbEmail);
+      setEmailInput((prev) => prev || sbEmail);
+      safeLocalStorageSet(emailStorageKey, sbEmail);
+    });
+    return () => {
+      active = false;
+    };
+  }, [emailStorageKey]);
+
+  const formattedRoom = exam.room
+    ? /^ruang\s/i.test(exam.room.trim())
+      ? exam.room.trim()
+      : `Ruang ${exam.room.trim()}`
+    : 'Ruang CBT';
 
   const getEmbeddableGoogleFormUrl = (rawUrl: string): string => {
     const trimmed = rawUrl.trim();
@@ -273,40 +300,54 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   };
 
   const enterFullscreen = () => {
-    // On mobile/touch devices, skip Fullscreen API to avoid automatic screen rotation and dialog glitches
-    if (isMobileOrTouchDevice()) {
+    if (!containerRef.current) return;
+    const el = containerRef.current as any;
+    const req =
+      el.requestFullscreen ||
+      el.webkitRequestFullscreen ||
+      el.mozRequestFullScreen ||
+      el.msRequestFullscreen;
+
+    // Capture current screen orientation before entering fullscreen so we lock to it (never auto-rotate)
+    const currentType =
+      (window.screen as any)?.orientation?.type ||
+      (window.innerHeight >= window.innerWidth ? 'portrait-primary' : 'landscape-primary');
+    const lockMode = String(currentType).startsWith('landscape') ? 'landscape' : 'portrait';
+
+    if (req) {
+      let fsPromise: Promise<void> | undefined;
+      try {
+        fsPromise = req.call(el, { navigationUI: 'hide' });
+      } catch {
+        fsPromise = req.call(el);
+      }
+
+      Promise.resolve(fsPromise)
+        .then(async () => {
+          usedFullscreenRef.current = true;
+          setIsFullscreen(true);
+          setHasStarted(true);
+          setIsLocked(false);
+          try {
+            const orientation = (window.screen as any)?.orientation;
+            if (orientation && typeof orientation.lock === 'function') {
+              await orientation.lock(lockMode);
+            }
+          } catch {
+            // Orientation lock unsupported on this browser/desktop
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to enter fullscreen:', err);
+          usedFullscreenRef.current = false;
+          // Fallback: still start even if fullscreen is blocked by iframe constraints
+          setHasStarted(true);
+          setIsLocked(false);
+        });
+    } else {
       usedFullscreenRef.current = false;
-      setIsFullscreen(false);
       setHasStarted(true);
       setIsLocked(false);
-      return;
-    }
-
-    if (containerRef.current) {
-      const req = containerRef.current.requestFullscreen || 
-                  (containerRef.current as any).mozRequestFullScreen || 
-                  (containerRef.current as any).webkitRequestFullscreen || 
-                  (containerRef.current as any).msRequestFullscreen;
-      if (req) {
-        req.call(containerRef.current)
-          .then(() => {
-            usedFullscreenRef.current = true;
-            setIsFullscreen(true);
-            setHasStarted(true);
-            setIsLocked(false);
-          })
-          .catch((err) => {
-            console.error('Failed to enter fullscreen:', err);
-            usedFullscreenRef.current = false;
-            // Fallback: still start even if fullscreen is blocked by iframe constraints
-            setHasStarted(true);
-            setIsLocked(false);
-          });
-      } else {
-        usedFullscreenRef.current = false;
-        setHasStarted(true);
-        setIsLocked(false);
-      }
     }
   };
 
@@ -374,14 +415,14 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
       }, 450);
     };
 
-    // 3. Fullscreen escape detection (desktop only when fullscreen mode was activated)
+    // 3. Fullscreen escape detection (when fullscreen mode was activated)
     const handleFullscreenChange = () => {
       const currentFS = !!(document.fullscreenElement ||
                            (document as any).webkitFullscreenElement ||
                            (document as any).mozFullScreenElement ||
                            (document as any).msFullscreenElement);
       setIsFullscreen(currentFS);
-      if (isMobileOrTouchDevice() || !usedFullscreenRef.current) return;
+      if (!usedFullscreenRef.current) return;
       if (isEmailVerifyingRef.current || isEmailVerifyModalOpen) return;
       if (!currentFS && hasStarted && !isBlocked && !isLocked && !isCompleted && !isExitPinOpen && Date.now() >= graceUntilRef.current) {
         if (isGoogleFormExam) {
@@ -507,7 +548,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     }
   };
 
-  const handleSaveEmailVerification = (e?: React.FormEvent) => {
+  const handleSaveEmailVerification = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const cleaned = emailInput.trim();
     if (!cleaned || !cleaned.includes('@')) {
@@ -522,15 +563,44 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     iframeLoadCountRef.current = 0;
     setIsFormLoading(true);
     setFormReloadKey((prev) => prev + 1);
+    recordCbtEmailVerificationInSupabase(studentId || '', studentName, exam.id, cleaned).catch(() => {});
   };
 
-  // Sign in via Google OAuth popup so browser returns directly to CBT (never lands on Google Account Profile)
+  // Prefer Supabase Pro Google OAuth (no Firebase limits); safely fallback when Google provider is disabled in Supabase
   const handleGooglePopupVerify = async () => {
     setEmailVerifyNote('');
     setIsSigningInWithGoogle(true);
     isEmailVerifyingRef.current = true;
     graceUntilRef.current = Date.now() + 60000;
     try {
+      // 1. Check active Supabase Pro session first
+      const existingSupabaseEmail = await getSupabaseVerifiedEmail();
+      if (existingSupabaseEmail && hasStarted) {
+        setEmailInput(existingSupabaseEmail);
+        setVerifiedEmail(existingSupabaseEmail);
+        safeLocalStorageSet(emailStorageKey, existingSupabaseEmail);
+        setIsEmailVerifyModalOpen(false);
+        iframeLoadCountRef.current = 0;
+        setIsFormLoading(true);
+        setFormReloadKey((prev) => prev + 1);
+        recordCbtEmailVerificationInSupabase(studentId || '', studentName, exam.id, existingSupabaseEmail).catch(() => {});
+        return;
+      }
+
+      // 2. Before exam starts (!hasStarted), use Supabase Pro Google OAuth redirect cleanly back to this exact CBT exam
+      if (!hasStarted && isSupabaseConfigured()) {
+        const sbEnabled = await isSupabaseGoogleOAuthEnabled();
+        if (sbEnabled) {
+          safeLocalStorageSet(
+            'siakad_cbt_pending_resume',
+            JSON.stringify({ examId: exam.id, studentId: studentId || '', ts: Date.now() })
+          );
+          const sbRes = await signInWithGoogleSupabase(window.location.origin + window.location.pathname);
+          if (sbRes.redirected) return;
+        }
+      }
+
+      // 3. Fallback popup auth when already locked inside fullscreen CBT or Supabase Google OAuth isn't enabled yet
       const res = await signInWithGoogle();
       if (res.success && res.user?.email) {
         const verified = res.user.email.trim();
@@ -538,6 +608,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
         setVerifiedEmail(verified);
         safeLocalStorageSet(emailStorageKey, verified);
         setIsEmailVerifyModalOpen(false);
+        recordCbtEmailVerificationInSupabase(studentId || '', studentName, exam.id, verified).catch(() => {});
         if (hasStarted) {
           iframeLoadCountRef.current = 0;
           setIsFormLoading(true);
@@ -570,6 +641,11 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
         await recordGoogleFormCompletion();
       }
       setIsExitPinOpen(false);
+      try {
+        (window.screen as any)?.orientation?.unlock?.();
+      } catch {
+        /* ignore */
+      }
       if (document.fullscreenElement && document.exitFullscreen) {
         document.exitFullscreen().catch(() => {});
       }
@@ -607,7 +683,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                 <span>Peraturan Keamanan Ujian</span>
               </p>
               <ul className="list-disc pl-5 space-y-1.5 leading-relaxed">
-                <li>Ujian berjalan dalam Mode Terkunci mengikuti orientasi layar perangkat Anda tanpa memutar layar otomatis.</li>
+                <li>Ujian berjalan otomatis dalam <strong>Mode Layar Penuh (Full Page)</strong> tanpa memutar layar perangkat otomatis.</li>
                 <li>Dilarang membuka tab lain, meminimalkan browser, atau berpindah ke aplikasi lain.</li>
                 <li>Dilarang melakukan tangkapan layar atau menggunakan shortcut salin/tempel.</li>
                 <li>Meninggalkan layar ujian sebanyak <strong className="text-rose-600">3 kali</strong> akan memblokir akses ujian sementara hingga dibuka oleh pengawas.</li>
@@ -619,16 +695,16 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-bold text-indigo-900 flex items-center gap-1.5">
                     <Mail className="w-4 h-4 text-indigo-600 shrink-0" />
-                    <span>Verifikasi Email Google (Sebelum Mulai)</span>
+                    <span>Verifikasi Email Peserta</span>
                   </span>
                   {verifiedEmail && (
                     <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                      Siap
+                      Terverifikasi
                     </span>
                   )}
                 </div>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Klik tombol di bawah untuk memverifikasi akun Google perangkat Anda sebelum ujian terkunci dimulai (otomatis kembali ke layar ujian ini).
+                  Verifikasi email Anda sebelum masuk layar penuh agar tidak perlu berpindah halaman saat ujian.
                 </p>
                 <button
                   type="button"
@@ -637,7 +713,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                   className="w-full min-h-[40px] bg-white hover:bg-indigo-100 disabled:opacity-60 text-indigo-800 border border-indigo-300 rounded-xl font-bold text-xs px-4 py-2 flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
                   <Mail className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span>{isSigningInWithGoogle ? 'Menghubungkan Akun Google...' : 'Login / Verifikasi Akun Google Perangkat'}</span>
+                  <span>{isSigningInWithGoogle ? 'Menghubungkan Akun Google...' : 'Verifikasi Akun Google Perangkat'}</span>
                 </button>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
@@ -655,6 +731,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                         setVerifiedEmail(cleaned);
                         safeLocalStorageSet(emailStorageKey, cleaned);
                         setEmailVerifyNote('');
+                        recordCbtEmailVerificationInSupabase(studentId || '', studentName, exam.id, cleaned).catch(() => {});
                       }
                     }}
                     className="min-h-[38px] px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs cursor-pointer whitespace-nowrap"
@@ -782,36 +859,44 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
       {/* 4. MAIN EXAM HEADER & CONTENT AREA */}
       {hasStarted && !isLocked && !isBlocked && (
         <>
-          {/* Exambro Navigation Frame Bar */}
-          <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0 shadow-xs">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4" />
+          {/* Compact Clean Exambro Header Bar */}
+          <header className="bg-white border-b border-slate-200 px-3 sm:px-5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0 shadow-xs">
+            <div className="flex items-center justify-between gap-2.5 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0">
+                  <Shield className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 text-left">
+                  <h2 className="text-sm font-bold text-slate-900 truncate leading-tight">{exam.subject}</h2>
+                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                    {exam.type} <span aria-hidden="true">&middot;</span> {studentName} <span aria-hidden="true">&middot;</span> {formattedRoom}
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0 text-left">
-                <h2 className="text-sm font-bold text-slate-900 truncate">{exam.subject}</h2>
-                <p className="text-xs text-slate-500 truncate">
-                  {exam.type} <span aria-hidden="true">&middot;</span> {studentName} <span aria-hidden="true">&middot;</span> Ruang {exam.room} <span aria-hidden="true">&middot;</span> <span className="font-semibold text-emerald-700 tabular-nums">KKM {exam.kkm ?? 75}</span>
-                </p>
-              </div>
+
+              {/* Discreet Proctor Lock Exit icon visible on top-right for mobile */}
+              <button
+                type="button"
+                onClick={handleExitExamClick}
+                title="Keluar Ujian (PIN Pengawas)"
+                aria-label="Keluar Ujian (PIN Pengawas)"
+                className="sm:hidden w-8 h-8 rounded-lg border border-slate-200 bg-slate-50 hover:bg-rose-50 hover:border-rose-200 text-slate-500 hover:text-rose-600 flex items-center justify-center shrink-0 cursor-pointer transition-colors"
+              >
+                <Lock className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            {/* Clean Structured Status & Action Bar */}
-            <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5 sm:gap-3 shrink-0">
+            {/* Clean Single-Row Action & Status Controls */}
+            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
               {exam.questionBankId && (
-                <div className="flex items-center gap-1.5 bg-amber-50 text-amber-800 px-3 py-1.5 rounded-lg border border-amber-200 text-xs font-mono font-bold tabular-nums whitespace-nowrap shrink-0">
+                <div className="flex items-center gap-1.5 bg-amber-50 text-amber-800 px-2.5 py-1.5 rounded-lg border border-amber-200 text-xs font-mono font-bold tabular-nums whitespace-nowrap shrink-0">
                   <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span>Sisa {formatTimer(timeLeft)}</span>
+                  <span>{formatTimer(timeLeft)}</span>
                 </div>
               )}
 
-              <div className="hidden lg:flex items-center gap-1.5 text-xs font-medium text-emerald-700 px-2 py-1 whitespace-nowrap shrink-0">
-                <Shield className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Pengawasan Aktif</span>
-              </div>
-
               <div
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold tabular-nums whitespace-nowrap shrink-0 ${
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold tabular-nums whitespace-nowrap shrink-0 ${
                   violationsCount === 0
                     ? 'bg-slate-50 text-slate-700 border-slate-200'
                     : violationsCount < 3
@@ -828,16 +913,52 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                       : 'text-rose-600'
                   }`}
                 />
-                <span>Pelanggaran: {violationsCount} / 3</span>
+                <span>Pelanggaran: {violationsCount}/3</span>
               </div>
 
+              {isGoogleFormExam && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmailVerifyNote('');
+                      setIsEmailVerifyModalOpen(true);
+                    }}
+                    className={`min-h-[34px] max-w-[155px] sm:max-w-[200px] px-2.5 py-1.5 rounded-lg border font-semibold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                      verifiedEmail
+                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                        : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                    }`}
+                  >
+                    <Mail className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{verifiedEmail || 'Email'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      iframeLoadCountRef.current = 0;
+                      setIsFormLoading(true);
+                      setFormReloadKey((prev) => prev + 1);
+                    }}
+                    className="min-h-[34px] px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                    title="Muat ulang soal"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                    <span>Muat Ulang</span>
+                  </button>
+                </>
+              )}
+
+              {/* Discreet Proctor Lock Exit icon for desktop */}
               <button
                 type="button"
                 onClick={handleExitExamClick}
-                className="min-h-[40px] bg-slate-900 hover:bg-rose-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer font-bold text-xs whitespace-nowrap shrink-0"
+                title="Keluar Ujian (PIN Pengawas)"
+                aria-label="Keluar Ujian (PIN Pengawas)"
+                className="hidden sm:flex w-8 h-8 rounded-lg border border-slate-200 bg-slate-50 hover:bg-rose-50 hover:border-rose-200 text-slate-500 hover:text-rose-600 items-center justify-center shrink-0 cursor-pointer transition-colors"
               >
-                <LogOut className="w-3.5 h-3.5 shrink-0" />
-                <span>Selesai Ujian</span>
+                <Lock className="w-3.5 h-3.5" />
               </button>
             </div>
           </header>
@@ -934,6 +1055,11 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                 <button
                   type="button"
                   onClick={() => {
+                    try {
+                      (window.screen as any)?.orientation?.unlock?.();
+                    } catch {
+                      /* ignore */
+                    }
                     if (document.fullscreenElement && document.exitFullscreen) {
                       document.exitFullscreen().catch(() => {});
                     }
@@ -1283,57 +1409,8 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
               })()}
             </div>
           ) : exam.googleFormUrl ? (
-            // STANDARD GOOGLE FORM EMBED
+            // STANDARD GOOGLE FORM EMBED (Full-height without redundant prose bars)
             <div className="flex-1 bg-white flex flex-col min-h-0">
-              <div className="bg-slate-50 border-b border-slate-200 px-3 sm:px-4 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600 shrink-0">
-                <span className="text-left leading-relaxed">
-                  {hasFormSubmittedOrNavigated
-                    ? 'Formulir telah dikirim/berpindah halaman. Klik Selesai Ujian dan minta PIN Pengawas untuk menyimpan status Selesai.'
-                    : 'Kerjakan soal di bawah ini. Akses keluar layar ujian dikunci dengan PIN Pengawas.'}
-                </span>
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmailVerifyNote('');
-                      setIsEmailVerifyModalOpen(true);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg border font-semibold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
-                      verifiedEmail
-                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                        : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-                    }`}
-                  >
-                    <Mail className="w-3.5 h-3.5 shrink-0" />
-                    <span>{verifiedEmail ? `Email: ${verifiedEmail}` : 'Verifikasi Akun Google'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      iframeLoadCountRef.current = 0;
-                      setIsFormLoading(true);
-                      setFormReloadKey((prev) => prev + 1);
-                    }}
-                    className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs inline-flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap"
-                    title="Muat ulang lembar Google Form tanpa keluar CBT"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 shrink-0" />
-                    <span>Muat Ulang</span>
-                  </button>
-
-                  {hasFormSubmittedOrNavigated && (
-                    <button
-                      type="button"
-                      onClick={handleExitExamClick}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shadow-xs"
-                    >
-                      <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>Sudah Submit? Selesai Ujian</span>
-                    </button>
-                  )}
-                </div>
-              </div>
               <div className="flex-1 relative bg-white min-h-0">
                 {isFormLoading && (
                   <div className="absolute inset-0 bg-slate-50 flex flex-col items-center justify-center gap-2 z-10">

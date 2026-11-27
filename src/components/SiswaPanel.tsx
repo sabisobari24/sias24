@@ -214,6 +214,28 @@ export default function SiswaPanel({
       return updated;
     });
   };
+
+  useEffect(() => {
+    if (!examSchedules || examSchedules.length === 0) return;
+    try {
+      const raw = localStorage.getItem('siakad_cbt_pending_resume');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      // Valid within 5 minutes
+      if (!parsed?.examId || Date.now() - Number(parsed.ts || 0) > 300000) {
+        localStorage.removeItem('siakad_cbt_pending_resume');
+        return;
+      }
+      const matched = examSchedules.find((ex) => ex.id === parsed.examId);
+      if (matched) {
+        localStorage.removeItem('siakad_cbt_pending_resume');
+        setActiveTab('cbt-ujian');
+        setActiveExamForBrowser(matched);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [examSchedules]);
   const [selectedCertForPreview, setSelectedCertForPreview] = useState<StudentAchievement | null>(null);
   const [selfStatus, setSelfStatus] = useState<'Hadir' | 'Sakit' | 'Izin'>('Hadir');
   const [selfNotes, setSelfNotes] = useState('');
