@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, AlertTriangle, Play, Lock, Unlock, LogOut, CheckCircle, Volume2, Database, ChevronLeft, ChevronRight, HelpCircle, FileText, Send, Sparkles, Clock, AlertCircle, Mail, RefreshCw, X, ExternalLink } from 'lucide-react';
+import { Shield, AlertTriangle, Play, Lock, Unlock, LogOut, CheckCircle, Volume2, Database, ChevronLeft, ChevronRight, HelpCircle, FileText, Send, Sparkles, Clock, AlertCircle, Mail, RefreshCw, X } from 'lucide-react';
 import { ExamSchedule, QuestionBank, CbtQuestion, StudentExamSubmission } from '../types';
-import { saveDocument, getDocumentById } from '../lib/firebase';
+import { saveDocument, getDocumentById, signInWithGoogle, auth } from '../lib/firebase';
 import { safeLocalStorageSet } from '../utils/storageHelper';
 import FormattedText from './common/FormattedText';
 
@@ -60,26 +60,26 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   const emailStorageKey = `siakad_cbt_verified_email_${(studentId || studentName).replace(/\s+/g, '_').toLowerCase()}`;
   const [verifiedEmail, setVerifiedEmail] = useState<string>(() => {
     try {
-      return localStorage.getItem(emailStorageKey) || '';
+      return localStorage.getItem(emailStorageKey) || auth.currentUser?.email || '';
     } catch {
-      return '';
+      return auth.currentUser?.email || '';
     }
   });
   const [emailInput, setEmailInput] = useState<string>(() => {
     try {
-      return localStorage.getItem(emailStorageKey) || '';
+      return localStorage.getItem(emailStorageKey) || auth.currentUser?.email || '';
     } catch {
-      return '';
+      return auth.currentUser?.email || '';
     }
   });
   const [emailVerifyNote, setEmailVerifyNote] = useState('');
   const [isEmailVerifyModalOpen, setIsEmailVerifyModalOpen] = useState(false);
-  const [isVerifyingExternalGoogle, setIsVerifyingExternalGoogle] = useState(false);
+  const [isSigningInWithGoogle, setIsSigningInWithGoogle] = useState(false);
   const [formReloadKey, setFormReloadKey] = useState(0);
-  const [isGoogleFormDoneConfirmOpen, setIsGoogleFormDoneConfirmOpen] = useState(false);
   const [markGoogleFormDoneOnExit, setMarkGoogleFormDoneOnExit] = useState(false);
 
-  isEmailVerifyingRef.current = isEmailVerifyModalOpen || isVerifyingExternalGoogle;
+  // Only pause visibility/blur detection strictly while Google Sign-In popup is actively awaited
+  isEmailVerifyingRef.current = isSigningInWithGoogle;
 
   const getEmbeddableGoogleFormUrl = (rawUrl: string): string => {
     const trimmed = rawUrl.trim();
@@ -338,7 +338,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     // 1. Tab switching or minimizing detection
     const handleVisibilityChange = () => {
       if (isEmailVerifyingRef.current || Date.now() < graceUntilRef.current) return;
-      if (isExitPinOpen || isSubmitConfirmOpen || isEmailVerifyModalOpen || isGoogleFormDoneConfirmOpen) return;
+      if (isExitPinOpen || isSubmitConfirmOpen) return;
       if (document.hidden && !isLocked && !isCompleted) {
         handleViolation('Membuka Tab Lain atau Meminimalkan Browser');
       }
@@ -349,7 +349,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     let fullscreenTimer: number | null = null;
 
     const handleBlur = () => {
-      if (isLocked || isBlocked || isCompleted || isExitPinOpen || isSubmitConfirmOpen || isEmailVerifyModalOpen || isGoogleFormDoneConfirmOpen) return;
+      if (isLocked || isBlocked || isCompleted || isExitPinOpen || isSubmitConfirmOpen || isEmailVerifyModalOpen) return;
       if (isEmailVerifyingRef.current || Date.now() < graceUntilRef.current) return;
 
       // Embedded Google Forms open native browser confirm/alert modals on Submit
@@ -364,7 +364,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
       blurTimer = window.setTimeout(() => {
         if (document.hidden) return;
         if (isEmailVerifyingRef.current || Date.now() < graceUntilRef.current) return;
-        if (isLocked || isBlocked || isCompleted || isExitPinOpen || isSubmitConfirmOpen || isEmailVerifyModalOpen || isGoogleFormDoneConfirmOpen) return;
+        if (isLocked || isBlocked || isCompleted || isExitPinOpen || isSubmitConfirmOpen || isEmailVerifyModalOpen) return;
 
         // Focus is still inside this browser tab or its child iframe
         if (document.hasFocus()) return;
@@ -382,7 +382,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                            (document as any).msFullscreenElement);
       setIsFullscreen(currentFS);
       if (isMobileOrTouchDevice() || !usedFullscreenRef.current) return;
-      if (isEmailVerifyingRef.current || isEmailVerifyModalOpen || isGoogleFormDoneConfirmOpen) return;
+      if (isEmailVerifyingRef.current || isEmailVerifyModalOpen) return;
       if (!currentFS && hasStarted && !isBlocked && !isLocked && !isCompleted && !isExitPinOpen && Date.now() >= graceUntilRef.current) {
         if (isGoogleFormExam) {
           if (fullscreenTimer) window.clearTimeout(fullscreenTimer);
@@ -406,7 +406,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
 
     // 4. Block F5, Ctrl+R, F12, copy, paste, inspect, and other shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isEmailVerifyModalOpen || isExitPinOpen || isGoogleFormDoneConfirmOpen) return;
+      if (isEmailVerifyModalOpen || isExitPinOpen) return;
       const key = e.key.toLowerCase();
 
       if (e.ctrlKey && ['c', 'v', 'x', 'u', 'p', 's', 'a'].includes(key)) {
@@ -424,9 +424,20 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
 
     // 5. Block right click context menu
     const handleContextMenu = (e: MouseEvent) => {
-      if (isEmailVerifyModalOpen || isExitPinOpen || isGoogleFormDoneConfirmOpen) return;
+      if (isEmailVerifyModalOpen || isExitPinOpen) return;
       e.preventDefault();
       handleViolation('Mencoba Klik Kanan (Context Menu)');
+    };
+
+    // 6. Trap browser Back / Android swipe-back & tab reload/close while exam is active
+    window.history.pushState({ cbtExamLock: exam.id }, '', window.location.href);
+    const handlePopState = () => {
+      window.history.pushState({ cbtExamLock: exam.id }, '', window.location.href);
+      handleViolation('Mencoba Menekan Tombol Kembali (Back) / Keluar Layar CBT');
+    };
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -435,6 +446,8 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       if (blurTimer) window.clearTimeout(blurTimer);
@@ -445,8 +458,10 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [hasStarted, isBlocked, isLocked, isCompleted, isExitPinOpen, isSubmitConfirmOpen, isGoogleFormExam, isEmailVerifyModalOpen, isGoogleFormDoneConfirmOpen]);
+  }, [hasStarted, isBlocked, isLocked, isCompleted, isExitPinOpen, isSubmitConfirmOpen, isGoogleFormExam, isEmailVerifyModalOpen, exam.id]);
 
   // Handle Teacher/Admin Unlock PIN
   const handleUnlockPin = (e: React.FormEvent) => {
@@ -502,26 +517,40 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     setVerifiedEmail(cleaned);
     safeLocalStorageSet(emailStorageKey, cleaned);
     setEmailVerifyNote('');
-    setIsVerifyingExternalGoogle(false);
     setIsEmailVerifyModalOpen(false);
-    graceUntilRef.current = Date.now() + 5000;
+    graceUntilRef.current = Date.now() + 4000;
     iframeLoadCountRef.current = 0;
     setIsFormLoading(true);
     setFormReloadKey((prev) => prev + 1);
   };
 
-  const handleResumeAfterExternalGoogle = () => {
-    if (emailInput.trim() && emailInput.includes('@')) {
-      const cleaned = emailInput.trim();
-      setVerifiedEmail(cleaned);
-      safeLocalStorageSet(emailStorageKey, cleaned);
+  // Sign in via Google OAuth popup so browser returns directly to CBT (never lands on Google Account Profile)
+  const handleGooglePopupVerify = async () => {
+    setEmailVerifyNote('');
+    setIsSigningInWithGoogle(true);
+    isEmailVerifyingRef.current = true;
+    graceUntilRef.current = Date.now() + 60000;
+    try {
+      const res = await signInWithGoogle();
+      if (res.success && res.user?.email) {
+        const verified = res.user.email.trim();
+        setEmailInput(verified);
+        setVerifiedEmail(verified);
+        safeLocalStorageSet(emailStorageKey, verified);
+        setIsEmailVerifyModalOpen(false);
+        if (hasStarted) {
+          iframeLoadCountRef.current = 0;
+          setIsFormLoading(true);
+          setFormReloadKey((prev) => prev + 1);
+        }
+      } else if (res.error) {
+        setEmailVerifyNote(res.error);
+      }
+    } finally {
+      setIsSigningInWithGoogle(false);
+      isEmailVerifyingRef.current = false;
+      graceUntilRef.current = Date.now() + 3000;
     }
-    setIsVerifyingExternalGoogle(false);
-    setIsEmailVerifyModalOpen(false);
-    graceUntilRef.current = Date.now() + 5000;
-    iframeLoadCountRef.current = 0;
-    setIsFormLoading(true);
-    setFormReloadKey((prev) => prev + 1);
   };
 
   // Safe Close handler with supervisor password confirmation
@@ -599,14 +628,23 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                   )}
                 </div>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Pastikan akun Google yang aktif di browser sudah sesuai agar tidak perlu berpindah halaman saat ujian dimulai.
+                  Klik tombol di bawah untuk memverifikasi akun Google perangkat Anda sebelum ujian terkunci dimulai (otomatis kembali ke layar ujian ini).
                 </p>
+                <button
+                  type="button"
+                  disabled={isSigningInWithGoogle}
+                  onClick={handleGooglePopupVerify}
+                  className="w-full min-h-[40px] bg-white hover:bg-indigo-100 disabled:opacity-60 text-indigo-800 border border-indigo-300 rounded-xl font-bold text-xs px-4 py-2 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Mail className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>{isSigningInWithGoogle ? 'Menghubungkan Akun Google...' : 'Login / Verifikasi Akun Google Perangkat'}</span>
+                </button>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="email"
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="Contoh: siswa@gmail.com"
+                    placeholder="Atau ketik email aktif: siswa@gmail.com"
                     className="flex-1 min-h-[38px] bg-white border border-indigo-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                   <button
@@ -616,26 +654,19 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                       if (cleaned && cleaned.includes('@')) {
                         setVerifiedEmail(cleaned);
                         safeLocalStorageSet(emailStorageKey, cleaned);
+                        setEmailVerifyNote('');
                       }
                     }}
-                    className="min-h-[38px] px-3 py-1.5 bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-300 rounded-lg font-bold text-xs cursor-pointer whitespace-nowrap"
+                    className="min-h-[38px] px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs cursor-pointer whitespace-nowrap"
                   >
                     Simpan Email
                   </button>
                 </div>
-                <div className="pt-0.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                  <span className="text-slate-500">
-                    {verifiedEmail ? `Email aktif: ${verifiedEmail}` : 'Belum ada email tersimpan.'}
-                  </span>
-                  <a
-                    href="https://accounts.google.com/AccountChooser"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-indigo-700 hover:text-indigo-900 font-semibold inline-flex items-center gap-1 underline"
-                  >
-                    <span>Login / Ganti Akun Google</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+                {emailVerifyNote && (
+                  <p className="text-[11px] text-rose-600 font-semibold">{emailVerifyNote}</p>
+                )}
+                <div className="pt-0.5 text-[11px] text-slate-500">
+                  {verifiedEmail ? `Email aktif tersimpan: ${verifiedEmail}` : 'Belum ada email terverifikasi.'}
                 </div>
               </div>
             )}
@@ -1257,8 +1288,8 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
               <div className="bg-slate-50 border-b border-slate-200 px-3 sm:px-4 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600 shrink-0">
                 <span className="text-left leading-relaxed">
                   {hasFormSubmittedOrNavigated
-                    ? 'Formulir telah dikirim/berpindah halaman. Jika sudah selesai submit, klik tombol Selesai di samping.'
-                    : 'Kerjakan soal di bawah ini. Tautan tab baru otomatis diblokir agar Anda tetap di halaman CBT.'}
+                    ? 'Formulir telah dikirim/berpindah halaman. Klik Selesai Ujian dan minta PIN Pengawas untuk menyimpan status Selesai.'
+                    : 'Kerjakan soal di bawah ini. Akses keluar layar ujian dikunci dengan PIN Pengawas.'}
                 </span>
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
@@ -1274,7 +1305,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                     }`}
                   >
                     <Mail className="w-3.5 h-3.5 shrink-0" />
-                    <span>{verifiedEmail ? `Email: ${verifiedEmail}` : 'Verifikasi Email'}</span>
+                    <span>{verifiedEmail ? `Email: ${verifiedEmail}` : 'Verifikasi Akun Google'}</span>
                   </button>
 
                   <button
@@ -1291,18 +1322,16 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                     <span>Muat Ulang</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setIsGoogleFormDoneConfirmOpen(true)}
-                    className={`px-3 py-1.5 rounded-lg font-bold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
-                      hasFormSubmittedOrNavigated
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                        : 'bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300'
-                    }`}
-                  >
-                    <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>{hasFormSubmittedOrNavigated ? 'Sudah Submit? Tandai Selesai' : 'Tandai Selesai'}</span>
-                  </button>
+                  {hasFormSubmittedOrNavigated && (
+                    <button
+                      type="button"
+                      onClick={handleExitExamClick}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shadow-xs"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Sudah Submit? Selesai Ujian</span>
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="flex-1 relative bg-white min-h-0">
@@ -1319,7 +1348,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                   className="w-full h-full border-0"
                   title="CBT Exam Sheet"
                   referrerPolicy="no-referrer-when-downgrade"
-                  sandbox="allow-scripts allow-forms allow-same-origin allow-modals"
+                  sandbox="allow-scripts allow-forms allow-same-origin allow-modals allow-storage-access-by-user-activation"
                   allow="camera; microphone; geolocation; clipboard-write"
                   onLoad={() => {
                     setIsFormLoading(false);
@@ -1345,7 +1374,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
             </div>
           )}
 
-          {/* IN-CBT EMAIL VERIFICATION MODAL (Prevents leaving page & cheat false-positives) */}
+          {/* IN-CBT EMAIL VERIFICATION MODAL (Authenticates inline via popup and returns directly to CBT exam) */}
           {isEmailVerifyModalOpen && (
             <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 z-[99999]">
               <div className="bg-white border border-slate-200 p-5 sm:p-6 rounded-2xl w-full max-w-md space-y-4 shadow-2xl text-left">
@@ -1355,16 +1384,15 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                       <Mail className="w-4 h-4" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-sm text-slate-900">Verifikasi Email di Halaman CBT</h4>
-                      <p className="text-[11px] text-slate-500">Pengawasan pelanggaran dijeda otomatis selama proses ini.</p>
+                      <h4 className="font-bold text-sm text-slate-900">Verifikasi Akun Google CBT</h4>
+                      <p className="text-[11px] text-slate-500">Pilih akun perangkat lalu otomatis kembali ke lembar soal CBT.</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
-                      setIsVerifyingExternalGoogle(false);
                       setIsEmailVerifyModalOpen(false);
-                      graceUntilRef.current = Date.now() + 3000;
+                      graceUntilRef.current = Date.now() + 2000;
                     }}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
                   >
@@ -1372,10 +1400,25 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                   </button>
                 </div>
 
-                <form onSubmit={handleSaveEmailVerification} className="space-y-3">
+                <div className="space-y-2.5">
+                  <button
+                    type="button"
+                    disabled={isSigningInWithGoogle}
+                    onClick={handleGooglePopupVerify}
+                    className="w-full min-h-[42px] bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold py-2.5 px-4 flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-xs"
+                  >
+                    <Mail className="w-4 h-4 shrink-0" />
+                    <span>{isSigningInWithGoogle ? 'Menghubungkan Akun Google...' : 'Login Akun Google Perangkat (Kembali ke CBT)'}</span>
+                  </button>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Setelah memilih akun Google di perangkat, jendela verifikasi tertutup otomatis dan soal Google Form langsung dimuat ulang tanpa pindah ke halaman profil Google.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSaveEmailVerification} className="space-y-3 border-t border-slate-200 pt-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Alamat Email Google Aktif
+                      Atau Konfirmasi Manual Email Google Aktif
                     </label>
                     <input
                       type="email"
@@ -1395,76 +1438,16 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
 
                   <button
                     type="submit"
-                    className="w-full min-h-[40px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold py-2.5 px-4 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                    className="w-full min-h-[40px] bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold py-2.5 px-4 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Verifikasi &amp; Segarkan Google Form</span>
+                    <span>Simpan &amp; Muat Ulang Google Form</span>
                   </button>
                 </form>
 
-                <div className="border-t border-slate-200 pt-3 space-y-2.5">
-                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                    Jika Google Form masih meminta login akun Google karena sesi Chrome belum masuk, klik tautan verifikasi di bawah (bebas pelanggaran), lalu kembali ke layar ini:
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <a
-                      href="https://accounts.google.com/AccountChooser"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => {
-                        setIsVerifyingExternalGoogle(true);
-                        graceUntilRef.current = Date.now() + 180000;
-                      }}
-                      className="flex-1 min-h-[38px] px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 text-center"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                      <span>Login Akun Google (Aman)</span>
-                    </a>
-                    <button
-                      type="button"
-                      onClick={handleResumeAfterExternalGoogle}
-                      className="flex-1 min-h-[38px] px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>Sudah Login, Muat Ulang</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* CONFIRM GOOGLE FORM COMPLETION MODAL */}
-          {isGoogleFormDoneConfirmOpen && (
-            <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 z-[99999]">
-              <div className="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl text-left">
-                <div className="flex items-center gap-2 text-emerald-600">
-                  <CheckCircle className="w-5 h-5 shrink-0" />
-                  <h4 className="font-bold text-sm text-slate-900">Konfirmasi Selesai Ujian</h4>
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Pastikan Anda sudah menekan tombol <strong>Kirim / Submit</strong> pada lembar Google Form dan muncul keterangan jawaban terkirim. Status ujian Anda akan langsung berubah menjadi <strong>Selesai</strong>.
+                <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3 leading-relaxed">
+                  Catatan: Jika form tetap menampilkan <strong>Sign in to continue</strong>, pastikan cookie pihak ketiga (docs.google.com) tidak diblokir browser, atau minta Guru/Admin menonaktifkan opsi <em>Batasi 1 tanggapan / Email terverifikasi</em> di pengaturan Google Form.
                 </p>
-                <div className="flex gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsGoogleFormDoneConfirmOpen(false)}
-                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                  >
-                    Belum, Kembali
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setIsGoogleFormDoneConfirmOpen(false);
-                      await recordGoogleFormCompletion();
-                      setIsCompleted(true);
-                    }}
-                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                  >
-                    Ya, Tandai Selesai
-                  </button>
-                </div>
               </div>
             </div>
           )}
