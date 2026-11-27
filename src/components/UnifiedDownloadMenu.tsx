@@ -75,21 +75,22 @@ export default function UnifiedDownloadMenu({
         className={
           variant === 'coach'
             ? 'flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs'
-            : 'flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs border cursor-pointer bg-white hover:bg-slate-50 text-slate-800 border-slate-200/90 hover:border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-100 dark:border-slate-700 shrink-0'
+            : 'flex items-center justify-center gap-1.5 w-8 h-8 sm:w-auto sm:h-9 px-0 sm:px-3 rounded-full text-xs font-bold transition-all shadow-xs border cursor-pointer bg-white hover:bg-slate-50 text-slate-800 border-slate-200/90 hover:border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-100 dark:border-slate-700 shrink-0'
         }
         title="Unduh Dokumen (Filter Waktu, Jenis Data & Format .docx / .pdf / .xls)"
+        aria-label="Unduh Dokumen"
       >
-        <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-        <span className="font-bold whitespace-nowrap">Unduh Dokumen</span>
+        <Download className="w-3.5 h-3.5 sm:w-3.5 sm:h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <span className={`${variant === 'navbar' ? 'hidden sm:inline' : ''} font-bold whitespace-nowrap`}>Unduh Dokumen</span>
         <ChevronDown
-          className={`w-3 h-3 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`${variant === 'navbar' ? 'hidden sm:block' : ''} w-3 h-3 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
       {isOpen && (
         <>
           <div className="fixed inset-0 z-[55]" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-2 w-[calc(100vw-1.5rem)] max-w-[340px] sm:w-[340px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-3.5 z-[60] text-slate-800 dark:text-slate-200 text-xs space-y-3">
+          <div className="fixed inset-x-3 top-16 sm:inset-x-auto sm:top-auto sm:absolute sm:right-0 sm:mt-2 w-auto sm:w-[340px] max-w-[360px] mx-auto sm:mx-0 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-3.5 z-[60] text-slate-800 dark:text-slate-200 text-xs space-y-3">
             {/* Header */}
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-700">
               <div className="flex items-center gap-1.5">

@@ -3631,15 +3631,15 @@ export default function App({ initialMode }: AppProps = {}) {
           /* PUBLIC SCHOOL WEBSITE LAYOUT (index.html) */
           <div key="public-site" className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
             {/* Header / Navigation Bar */}
-            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs px-4 sm:px-6 md:px-8 2xl:px-12 py-3.5">
-              <div className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs px-3 sm:px-6 md:px-8 2xl:px-12 py-2.5 sm:py-3.5">
+              <div className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex flex-col md:flex-row items-center justify-between gap-2.5 md:gap-4">
                 
                 {/* Logo / Brand */}
                 <button 
                   onClick={() => setPublicTab('beranda')}
-                  className="flex items-center gap-3 hover:opacity-90 transition-opacity text-left cursor-pointer bg-transparent border-0 p-0"
+                  className="flex items-center gap-2.5 sm:gap-3 hover:opacity-90 transition-opacity text-left cursor-pointer bg-transparent border-0 p-0"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-white shadow-xs border border-slate-200/90 flex items-center justify-center shrink-0 overflow-hidden">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white shadow-xs border border-slate-200/90 dark:border-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
                     <img
                       src={webHomeContent?.schoolLogo || '/logo.png'}
                       alt="Logo SMPN 50 Jakarta"
@@ -3653,7 +3653,7 @@ export default function App({ initialMode }: AppProps = {}) {
                     />
                   </div>
                   <div className="flex flex-col justify-center text-left">
-                    <h1 className="text-xs md:text-sm font-black text-slate-800 tracking-tight leading-none uppercase">SMP NEGERI 50 JAKARTA</h1>
+                    <h1 className="text-xs md:text-sm font-black text-slate-800 dark:text-slate-100 tracking-tight leading-none uppercase">SMP NEGERI 50 JAKARTA</h1>
                     <div className="mt-1">
                       <span className="text-[9px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider block w-max shadow-xs">
                         {webHomeContent?.headerMotto || 'Berpacu dalam Prestasi'}
@@ -3663,7 +3663,7 @@ export default function App({ initialMode }: AppProps = {}) {
                 </button>
 
                 {/* Navigation Menu */}
-                <nav className="flex flex-wrap items-center justify-center gap-1.5 md:gap-2">
+                <nav className="flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 md:gap-2 w-full md:w-auto">
                   {[
                     { id: 'beranda', label: 'Beranda' },
                     { id: 'akademik', label: 'Kurikulum' },
@@ -3674,10 +3674,10 @@ export default function App({ initialMode }: AppProps = {}) {
                     <button
                       key={tab.id}
                       onClick={() => setPublicTab(tab.id as any)}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                         publicTab === tab.id 
                           ? 'bg-blue-900 text-white shadow-sm' 
-                          : 'text-slate-600 hover:text-blue-900 hover:bg-slate-50'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-blue-900 hover:bg-slate-50 dark:hover:bg-slate-800'
                       }`}
                     >
                       {tab.label}
@@ -3829,30 +3829,30 @@ export default function App({ initialMode }: AppProps = {}) {
           /* PORTAL LOGIN SCREEN (login.html) */
           <div key="portal-login-site" className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
             {/* Dedicated Top Navigation for Login Portal */}
-            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs px-4 sm:px-6 md:px-8 2xl:px-12 py-3.5">
-              <div className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex items-center justify-between gap-4">
+            <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs px-3 sm:px-6 md:px-8 2xl:px-12 py-2.5 sm:py-3.5">
+              <div className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex items-center justify-between gap-2 sm:gap-4">
                 <a
                   href="/index.html"
                   onClick={(e) => navigateToLandingPage(e, 'beranda')}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-900 text-xs font-bold rounded-xl border border-slate-200 transition-all cursor-pointer shadow-2xs"
+                  className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 bg-slate-100 hover:bg-blue-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-blue-900 text-[11px] sm:text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs min-w-0"
                   title="Kembali ke Halaman Beranda Utama Sekolah"
                 >
-                  <ChevronLeft className="w-4 h-4 text-blue-900" />
-                  <span>Kembali ke Beranda Sekolah</span>
+                  <ChevronLeft className="w-4 h-4 text-blue-900 dark:text-blue-400 shrink-0" />
+                  <span className="truncate">Kembali ke Beranda Sekolah</span>
                 </a>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   <div className="hidden sm:flex items-center gap-2 text-right">
                     <span className="text-[10px] bg-blue-100 text-blue-800 font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                       PORTAL MASUK SIAS
                     </span>
-                    <span className="text-xs font-black text-slate-800 uppercase">SMPN 50 JAKARTA</span>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase">SMPN 50 JAKARTA</span>
                   </div>
 
                   {/* Dark Mode Toggle Button */}
                   <button
                     onClick={() => setIsDarkMode(!isDarkMode)}
-                    className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800 text-slate-600 dark:text-amber-400 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                    className="w-9 h-9 rounded-xl border border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800 text-slate-600 dark:text-amber-400 transition-all cursor-pointer flex items-center justify-center shrink-0"
                     title={isDarkMode ? "Ganti ke Mode Terang (Light Mode)" : "Ganti ke Mode Gelap (Dark Mode)"}
                     aria-label="Toggle Dark Mode"
                   >
@@ -4549,8 +4549,8 @@ export default function App({ initialMode }: AppProps = {}) {
             <aside 
               onClick={() => setIsMobileMenuOpen(false)}
               className={`
-              w-64 lg:w-72 bg-white border-r border-slate-200 flex flex-col shrink-0 h-screen sticky top-0 transition-all duration-300
-              ${isMobileMenuOpen ? 'fixed left-0 top-0 bottom-0 z-50 flex shadow-2xl' : 'hidden'}
+              w-64 max-w-[85vw] lg:w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-col shrink-0 h-screen transition-all duration-300
+              ${isMobileMenuOpen ? 'fixed left-0 top-0 bottom-0 z-50 flex shadow-2xl' : 'hidden md:sticky md:top-0'}
               ${isSidebarVisible ? 'md:flex' : 'md:hidden'}
             `}>
               {/* Sidebar Header */}
@@ -5207,12 +5207,27 @@ export default function App({ initialMode }: AppProps = {}) {
             {/* Main Content Pane */}
             <main className="flex-1 min-w-0 flex flex-col h-screen overflow-y-auto overflow-x-hidden">
               {/* Top Mobile/Header Nav */}
-              <header className="h-16 sm:h-20 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 md:px-8 2xl:px-12 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-xs gap-3">
-                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+              <header className="h-14 sm:h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2.5 sm:px-6 md:px-8 2xl:px-12 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-xs gap-2 sm:gap-3 w-full max-w-full">
+                {/* Mobile Drawer Toggle Button (Guaranteed fixed slot on small screens, never overlapped) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSidebarVisible(true);
+                    setIsMobileMenuOpen(!isMobileMenuOpen);
+                  }}
+                  className="md:hidden relative z-10 flex w-9 h-9 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer items-center justify-center shrink-0 border border-slate-200/80 dark:border-slate-700 shadow-xs bg-slate-50 dark:bg-slate-800"
+                  title="Menu Navigasi"
+                  aria-label="Menu Navigasi"
+                >
+                  {isMobileMenuOpen ? <X className="w-4 h-4 text-slate-500 dark:text-slate-300" /> : <Menu className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />}
+                </button>
+
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 overflow-hidden">
                   {/* Desktop Hide/Unhide Toggle Button */}
                   <button
+                    type="button"
                     onClick={() => setIsSidebarVisible(!isSidebarVisible)}
-                    className="hidden md:flex p-2 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer items-center justify-center shrink-0 border border-slate-200/80 shadow-xs bg-slate-50 hover:text-indigo-600 transition-all gap-1.5"
+                    className="hidden md:flex p-2 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer items-center justify-center shrink-0 border border-slate-200/80 dark:border-slate-700 shadow-xs bg-slate-50 dark:bg-slate-800 hover:text-indigo-600 transition-all gap-1.5"
                     title={isSidebarVisible ? "Sembunyikan Menu (Hide)" : "Tampilkan Menu (Unhide)"}
                   >
                     {isSidebarVisible ? (
@@ -5228,23 +5243,11 @@ export default function App({ initialMode }: AppProps = {}) {
                     )}
                   </button>
 
-                  {/* Mobile Drawer Toggle Button */}
-                  <button
-                    onClick={() => {
-                      setIsSidebarVisible(true);
-                      setIsMobileMenuOpen(!isMobileMenuOpen);
-                    }}
-                    className="md:hidden flex p-2 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer items-center justify-center shrink-0 border border-slate-200/80 shadow-xs bg-slate-50"
-                    title="Menu Navigasi"
-                  >
-                    {isMobileMenuOpen ? <X className="w-4 h-4 text-slate-500" /> : <Menu className="w-4 h-4 text-indigo-600" />}
-                  </button>
-
                   {/* Divider */}
-                  <div className="h-6 w-px bg-slate-200 hidden md:block shrink-0" />
+                  <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden md:block shrink-0" />
 
                   <div className="min-w-0 flex-1">
-                    <h1 className="text-sm sm:text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight truncate">
+                    <h1 className="text-xs sm:text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-tight truncate">
                       {activeRole === 'admin' && (
                         adminTabOverride === 'siswa' ? 'Data Siswa & Rombel' :
                         adminTabOverride === 'guru' ? 'Data Guru & Tenaga Kependidikan' :
@@ -5344,21 +5347,24 @@ export default function App({ initialMode }: AppProps = {}) {
                   </div>
                 </div>
 
-                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                 <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
                   {/* Dark Mode Quick Toggle */}
                   <button
+                    type="button"
                     onClick={() => setIsDarkMode(!isDarkMode)}
-                    className="p-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-amber-400 transition-all cursor-pointer shadow-xs flex items-center justify-center shrink-0"
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-amber-400 transition-all cursor-pointer shadow-xs flex items-center justify-center shrink-0"
                     title={isDarkMode ? "Ganti ke Mode Terang" : "Ganti ke Mode Gelap"}
+                    aria-label={isDarkMode ? "Ganti ke Mode Terang" : "Ganti ke Mode Gelap"}
                   >
-                    {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+                    {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600 dark:text-slate-300" />}
                   </button>
 
                   {/* Connection Monitor Widget */}
-                  <div className="relative">
+                  <div className="relative shrink-0">
                     <button
+                      type="button"
                       onClick={() => setIsMonitorOpen(!isMonitorOpen)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs border cursor-pointer ${
+                      className={`flex items-center justify-center gap-1.5 sm:gap-2 w-8 h-8 sm:w-auto sm:h-9 sm:px-3 rounded-full text-xs font-bold transition-all shadow-xs border cursor-pointer shrink-0 ${
                         dbStatus === 'online'
                           ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
                           : dbStatus === 'high_latency'
@@ -5366,8 +5372,9 @@ export default function App({ initialMode }: AppProps = {}) {
                           : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
                       }`}
                       title={`Klik untuk melihat status koneksi database ${getActiveDbBackend() === 'supabase' ? 'Supabase Pro' : 'Firebase'}`}
+                      aria-label="Status Koneksi Database"
                     >
-                      <span className="relative flex h-2 w-2">
+                      <span className="relative flex h-2 w-2 shrink-0">
                         <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
                           dbStatus === 'online' ? 'bg-emerald-400' : dbStatus === 'high_latency' ? 'bg-amber-400' : 'bg-rose-400'
                         }`}></span>
@@ -5375,13 +5382,13 @@ export default function App({ initialMode }: AppProps = {}) {
                           dbStatus === 'online' ? 'bg-emerald-500' : dbStatus === 'high_latency' ? 'bg-amber-500' : 'bg-rose-500'
                         }`}></span>
                       </span>
-                      <span className="hidden sm:inline font-bold">
+                      <span className="hidden sm:inline font-bold whitespace-nowrap">
                         {dbStatus === 'online' && 'Connected'}
                         {dbStatus === 'high_latency' && 'Latency Tinggi'}
                         {dbStatus === 'offline' && 'Offline'}
                       </span>
                       {dbLatency > 0 && dbStatus !== 'offline' && (
-                        <span className="font-mono text-[10px] text-slate-500 px-1.5 py-0.5 bg-white/60 border border-slate-100 rounded-md">
+                        <span className="hidden sm:inline font-mono text-[10px] text-slate-500 px-1.5 py-0.5 bg-white/60 border border-slate-100 rounded-md whitespace-nowrap">
                           {dbLatency}ms
                         </span>
                       )}
@@ -5397,10 +5404,10 @@ export default function App({ initialMode }: AppProps = {}) {
                             initial={{ opacity: 0, y: 10, scale: 0.95 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                            className="absolute right-0 mt-2 w-72 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 z-50 space-y-3.5"
+                            className="fixed inset-x-3 top-16 sm:inset-x-auto sm:top-auto sm:absolute sm:right-0 sm:mt-2 w-auto sm:w-72 max-w-[340px] mx-auto sm:mx-0 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl p-4 z-50 space-y-3.5"
                           >
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                              <h3 className="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-2.5">
+                              <h3 className="font-bold text-xs text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
                                 <Activity className="w-4 h-4 text-indigo-500 shrink-0 animate-pulse" />
                                 <span>{getActiveDbBackend() === 'supabase' ? 'Supabase Pro Monitor' : 'Firebase Monitor'}</span>
                               </h3>
@@ -5408,8 +5415,8 @@ export default function App({ initialMode }: AppProps = {}) {
                             </div>
 
                             <div className="space-y-2 text-xs">
-                              <div className="flex justify-between items-center bg-slate-50 p-2 rounded-xl">
-                                <span className="text-slate-500 font-medium">Status Database:</span>
+                              <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-900 p-2 rounded-xl">
+                                <span className="text-slate-500 dark:text-slate-400 font-medium">Status Database:</span>
                                 <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
                                   dbStatus === 'online'
                                     ? 'bg-emerald-100 text-emerald-800'
@@ -5423,16 +5430,16 @@ export default function App({ initialMode }: AppProps = {}) {
                                 </span>
                               </div>
 
-                              <div className="flex justify-between items-center bg-slate-50 p-2 rounded-xl">
-                                <span className="text-slate-500 font-medium">Latency Respon:</span>
-                                <span className="font-mono font-bold text-slate-700">
+                              <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-900 p-2 rounded-xl">
+                                <span className="text-slate-500 dark:text-slate-400 font-medium">Latency Respon:</span>
+                                <span className="font-mono font-bold text-slate-700 dark:text-slate-200">
                                   {dbStatus === 'offline' ? 'N/A' : `${dbLatency} ms`}
                                 </span>
                               </div>
 
-                              <div className="flex justify-between items-center bg-slate-50 p-2 rounded-xl">
-                                <span className="text-slate-500 font-medium">Terakhir Sinkron:</span>
-                                <span className="font-mono text-slate-600 font-semibold">
+                              <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-900 p-2 rounded-xl">
+                                <span className="text-slate-500 dark:text-slate-400 font-medium">Terakhir Sinkron:</span>
+                                <span className="font-mono text-slate-600 dark:text-slate-300 font-semibold">
                                   {Math.round((Date.now() - lastSyncTime) / 1000)} detik lalu
                                 </span>
                               </div>
@@ -5451,20 +5458,20 @@ export default function App({ initialMode }: AppProps = {}) {
                             </button>
 
                             {/* DIAGNOSTIC WIDGET */}
-                            <div className="border-t border-slate-100 pt-3.5 space-y-2 text-left">
+                            <div className="border-t border-slate-100 dark:border-slate-700 pt-3.5 space-y-2 text-left">
                               <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                                 <Activity className="w-3 h-3 text-indigo-500 shrink-0" />
                                 <span>Deteksi Gangguan (Diagnostics)</span>
                               </h4>
                               {diagnosticResult && (
-                                <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-mono leading-relaxed text-slate-600 max-h-24 overflow-y-auto break-all">
+                                <div className="p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded-xl text-[10px] font-mono leading-relaxed text-slate-600 dark:text-slate-300 max-h-24 overflow-y-auto break-all">
                                   {diagnosticResult}
                                 </div>
                               )}
                               <button
                                 onClick={runDbDiagnostics}
                                 disabled={isRunningDiagnostic}
-                                className="w-full flex items-center justify-center gap-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-60"
+                                className="w-full flex items-center justify-center gap-2 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-60"
                               >
                                 <Activity className={`w-3 h-3 ${isRunningDiagnostic ? 'animate-pulse text-indigo-500' : ''}`} />
                                 <span>{isRunningDiagnostic ? 'Mendiagnosa...' : 'Jalankan Diagnosa Mandiri'}</span>
@@ -5484,7 +5491,7 @@ export default function App({ initialMode }: AppProps = {}) {
                   />
 
                   {/* Profile info & Mobile Logout */}
-                  <div className="flex items-center gap-3 border-l border-slate-100 pl-3">
+                  <div className="flex items-center gap-1 sm:gap-2.5 border-l border-slate-200/80 dark:border-slate-700 pl-1.5 sm:pl-3 shrink-0">
                     <button
                       type="button"
                       onClick={() => setIsProfileModalOpen(true)}
@@ -5497,25 +5504,25 @@ export default function App({ initialMode }: AppProps = {}) {
                       <p className="text-[10px] text-slate-400 capitalize mt-0.5 truncate">{activeRole?.replace('_', ' ')}</p>
                     </button>
 
-
-
-                    {/* Compact profile button for mobile/tablet */}
+                    {/* Compact profile button for mobile */}
                     <button
                       type="button"
                       onClick={() => setIsProfileModalOpen(true)}
-                      className="sm:hidden p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition-all cursor-pointer"
+                      className="sm:hidden w-8 h-8 flex items-center justify-center text-slate-500 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer shrink-0"
                       title="Edit Profil & Kata Sandi"
+                      aria-label="Edit Profil & Kata Sandi"
                     >
-                      <User className="w-5 h-5 shrink-0" />
+                      <User className="w-4 h-4 shrink-0" />
                     </button>
 
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all md:hidden cursor-pointer"
+                      className="w-8 h-8 flex items-center justify-center text-slate-500 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition-all md:hidden cursor-pointer shrink-0"
                       title="Logout"
+                      aria-label="Logout"
                     >
-                      <LogOut className="w-5 h-5 shrink-0" />
+                      <LogOut className="w-4 h-4 shrink-0" />
                     </button>
                   </div>
                 </div>

@@ -38,10 +38,12 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   // Track latest answers & Google Form embed transition state
   const selectedAnswersRef = useRef(selectedAnswers);
   selectedAnswersRef.current = selectedAnswers;
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const iframeLoadCountRef = useRef(0);
   const graceUntilRef = useRef(0);
   const lastViolationAtRef = useRef(0);
-  const [isFormLoading, setIsFormLoading] = useState(Boolean(!exam.questionBankId && exam.googleFormUrl));
+  const isGoogleFormExam = Boolean(!exam.questionBankId && exam.googleFormUrl);
+  const [isFormLoading, setIsFormLoading] = useState(isGoogleFormExam);
   const [hasFormSubmittedOrNavigated, setHasFormSubmittedOrNavigated] = useState(false);
 
   const getEmbeddableGoogleFormUrl = (rawUrl: string): string => {
@@ -291,11 +293,21 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
       }
     };
 
-    // 2. Application switching detection (allows embedded Google Form interaction & submit navigation)
+    // 2. Application switching detection (for internal CBT; Google Form embeds trigger native Chrome confirm/autofill blurs while remaining visible)
     let blurTimer: number | null = null;
+    let fullscreenTimer: number | null = null;
+
     const handleBlur = () => {
       if (isLocked || isBlocked || isCompleted || isExitPinOpen || isSubmitConfirmOpen) return;
       if (Date.now() < graceUntilRef.current) return;
+
+      // Embedded Google Forms open native browser confirm/alert modals on Submit
+      // ("Halaman tersemat di docs.google.com menyatakan... Your email address will be recorded...")
+      // which legitimately blur the parent window while the exam tab stays visible (document.hidden === false).
+      // Actual tab/app switches on mobile & desktop are caught immediately by visibilitychange (document.hidden === true).
+      if (isGoogleFormExam && !document.hidden) {
+        return;
+      }
 
       if (blurTimer) window.clearTimeout(blurTimer);
       blurTimer = window.setTimeout(() => {
@@ -303,13 +315,9 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
         if (Date.now() < graceUntilRef.current) return;
         if (isLocked || isBlocked || isCompleted || isExitPinOpen || isSubmitConfirmOpen) return;
 
-        // Focus is still inside this browser tab or its child Google Form iframe (e.g. during form submit)
+        // Focus is still inside this browser tab or its child iframe
         if (document.hasFocus()) return;
-
-        // Fallback: if embedded Google Form is active and iframe holds focus
-        if (document.activeElement && document.activeElement.tagName === 'IFRAME' && Boolean(exam.googleFormUrl)) {
-          return;
-        }
+        if (isGoogleFormExam) return;
 
         handleViolation('Membuka Aplikasi Lain atau Mengklik Luar Layar');
       }, 450);
@@ -323,7 +331,23 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                            (document as any).msFullscreenElement);
       setIsFullscreen(currentFS);
       if (!currentFS && hasStarted && !isBlocked && !isLocked && !isCompleted && !isExitPinOpen && Date.now() >= graceUntilRef.current) {
-        handleViolation('Keluar dari Mode Layar Penuh (Exambro Lock)');
+        if (isGoogleFormExam) {
+          if (fullscreenTimer) window.clearTimeout(fullscreenTimer);
+          fullscreenTimer = window.setTimeout(() => {
+            if (Date.now() < graceUntilRef.current) return;
+            // Ignore fullscreen exit caused by Chrome showing a native Google Form submit/confirm dialog while tab stays visible
+            if (!document.hidden && !document.hasFocus()) return;
+            const stillNotFS = !(document.fullscreenElement ||
+                                 (document as any).webkitFullscreenElement ||
+                                 (document as any).mozFullScreenElement ||
+                                 (document as any).msFullscreenElement);
+            if (stillNotFS && !isBlocked && !isLocked && !isCompleted && !isExitPinOpen) {
+              handleViolation('Keluar dari Mode Layar Penuh (Exambro Lock)');
+            }
+          }, 250);
+        } else {
+          handleViolation('Keluar dari Mode Layar Penuh (Exambro Lock)');
+        }
       }
     };
 
@@ -353,18 +377,21 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
       if (blurTimer) window.clearTimeout(blurTimer);
+      if (fullscreenTimer) window.clearTimeout(fullscreenTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [hasStarted, isBlocked, isLocked, isCompleted, isExitPinOpen, isSubmitConfirmOpen, exam.googleFormUrl]);
+  }, [hasStarted, isBlocked, isLocked, isCompleted, isExitPinOpen, isSubmitConfirmOpen, isGoogleFormExam]);
 
   // Handle Teacher/Admin Unlock PIN
   const handleUnlockPin = (e: React.FormEvent) => {
@@ -1032,8 +1059,8 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
               <div className="bg-slate-50 border-b border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 shrink-0">
                 <span>
                   {hasFormSubmittedOrNavigated
-                    ? 'Halaman formulir telah berpindah/dikirim. Pastikan status jawaban Anda sudah terkirim sebelum menekan Selesai Ujian.'
-                    : 'Kerjakan soal pada lembar Google Form di bawah ini. Saat menekan Kirim (Submit), tetap berada di layar ini.'}
+                    ? 'Formulir telah dikirim/berpindah halaman. Pastikan status jawaban Anda sudah terkirim sebelum menekan Selesai Ujian.'
+                    : 'Kerjakan soal pada Google Form di bawah ini. Jika muncul konfirmasi email saat menekan Kirim (Submit), tekan Oke dan tetap berada di layar ini.'}
                 </span>
                 {hasFormSubmittedOrNavigated && (
                   <button
@@ -1053,6 +1080,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                   </div>
                 )}
                 <iframe
+                  ref={iframeRef}
                   src={getEmbeddableGoogleFormUrl(exam.googleFormUrl)}
                   className="w-full h-full border-0"
                   title="CBT Exam Sheet"
@@ -1061,10 +1089,10 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                   onLoad={() => {
                     setIsFormLoading(false);
                     iframeLoadCountRef.current += 1;
-                    // On submit / multi-page Google Form navigation (2nd+ load), grant a 4s grace window
+                    // On submit / multi-page Google Form navigation (2nd+ load), grant a 6s grace window
                     // so internal frame redirect/dialog focus shifts never trigger cheat detection
                     if (iframeLoadCountRef.current >= 2) {
-                      graceUntilRef.current = Date.now() + 4000;
+                      graceUntilRef.current = Date.now() + 6000;
                       setHasFormSubmittedOrNavigated(true);
                     }
                   }}
