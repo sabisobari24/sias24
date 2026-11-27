@@ -35,6 +35,24 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   const [timeLeft, setTimeLeft] = useState(5400); // 90 minutes default
   const [submitError, setSubmitError] = useState('');
 
+  // Track latest answers & Google Form embed transition state
+  const selectedAnswersRef = useRef(selectedAnswers);
+  selectedAnswersRef.current = selectedAnswers;
+  const iframeLoadCountRef = useRef(0);
+  const graceUntilRef = useRef(0);
+  const lastViolationAtRef = useRef(0);
+  const [isFormLoading, setIsFormLoading] = useState(Boolean(!exam.questionBankId && exam.googleFormUrl));
+  const [hasFormSubmittedOrNavigated, setHasFormSubmittedOrNavigated] = useState(false);
+
+  const getEmbeddableGoogleFormUrl = (rawUrl: string): string => {
+    const trimmed = rawUrl.trim();
+    const withProto = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    if (withProto.includes('docs.google.com/forms') && !withProto.includes('embedded=true')) {
+      return `${withProto}${withProto.includes('?') ? '&' : '?'}embedded=true`;
+    }
+    return withProto;
+  };
+
   // Synchronize the linked Question Bank (one-time fetch from active backend)
   useEffect(() => {
     if (exam.questionBankId) {
@@ -86,7 +104,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   // Handle automatic submit when countdown timer finishes
   const handleAutoSubmit = async () => {
     if (!questionBank) return;
-    await submitAnswers(selectedAnswers);
+    await submitAnswers(selectedAnswersRef.current);
   };
 
   // Submit and Auto-Grade the exam answers
@@ -243,7 +261,11 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   };
 
   const handleViolation = (reason: string) => {
-    if (!hasStarted || isBlocked) return;
+    if (!hasStarted || isBlocked || isLocked || isCompleted) return;
+    const now = Date.now();
+    // Prevent burst double-counting when multiple browser events fire for one action
+    if (now - lastViolationAtRef.current < 1500) return;
+    lastViolationAtRef.current = now;
 
     playWarningBeep();
     setLastViolationReason(reason);
@@ -260,35 +282,47 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
 
   // Event Listeners for Cheat Detection
   useEffect(() => {
-    if (!hasStarted || isBlocked) return;
+    if (!hasStarted || isBlocked || isCompleted) return;
 
-    // 1. Tab switching detection
+    // 1. Tab switching or minimizing detection
     const handleVisibilityChange = () => {
-      if (document.hidden) {
+      if (document.hidden && !isLocked && !isCompleted) {
         handleViolation('Membuka Tab Lain atau Meminimalkan Browser');
       }
     };
 
-    // 2. Application switching or browser loss of focus
+    // 2. Application switching detection (allows embedded Google Form interaction & submit navigation)
+    let blurTimer: number | null = null;
     const handleBlur = () => {
-      // Delay slightly to let document.activeElement update
-      setTimeout(() => {
-        if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
-          // Student is interacting with the embedded Google Form. This is allowed and expected!
+      if (isLocked || isBlocked || isCompleted || isExitPinOpen || isSubmitConfirmOpen) return;
+      if (Date.now() < graceUntilRef.current) return;
+
+      if (blurTimer) window.clearTimeout(blurTimer);
+      blurTimer = window.setTimeout(() => {
+        if (document.hidden) return;
+        if (Date.now() < graceUntilRef.current) return;
+        if (isLocked || isBlocked || isCompleted || isExitPinOpen || isSubmitConfirmOpen) return;
+
+        // Focus is still inside this browser tab or its child Google Form iframe (e.g. during form submit)
+        if (document.hasFocus()) return;
+
+        // Fallback: if embedded Google Form is active and iframe holds focus
+        if (document.activeElement && document.activeElement.tagName === 'IFRAME' && Boolean(exam.googleFormUrl)) {
           return;
         }
+
         handleViolation('Membuka Aplikasi Lain atau Mengklik Luar Layar');
-      }, 250);
+      }, 450);
     };
 
     // 3. Fullscreen escape detection
     const handleFullscreenChange = () => {
-      const currentFS = !!(document.fullscreenElement || 
-                           (document as any).webkitFullscreenElement || 
-                           (document as any).mozFullScreenElement || 
+      const currentFS = !!(document.fullscreenElement ||
+                           (document as any).webkitFullscreenElement ||
+                           (document as any).mozFullScreenElement ||
                            (document as any).msFullscreenElement);
       setIsFullscreen(currentFS);
-      if (!currentFS && hasStarted && !isBlocked && !isLocked) {
+      if (!currentFS && hasStarted && !isBlocked && !isLocked && !isCompleted && !isExitPinOpen && Date.now() >= graceUntilRef.current) {
         handleViolation('Keluar dari Mode Layar Penuh (Exambro Lock)');
       }
     };
@@ -296,8 +330,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     // 4. Block F5, Ctrl+R, F12, copy, paste, inspect, and other shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      
-      // Block common copying, saving, printing and source view shortcut keys
+
       if (e.ctrlKey && ['c', 'v', 'x', 'u', 'p', 's', 'a'].includes(key)) {
         e.preventDefault();
         handleViolation('Menggunakan Shortcut Keyboard Terlarang (Salin/Tempel/Sumber)');
@@ -324,13 +357,14 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     document.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
+      if (blurTimer) window.clearTimeout(blurTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [hasStarted, isBlocked, isLocked]);
+  }, [hasStarted, isBlocked, isLocked, isCompleted, isExitPinOpen, isSubmitConfirmOpen, exam.googleFormUrl]);
 
   // Handle Teacher/Admin Unlock PIN
   const handleUnlockPin = (e: React.FormEvent) => {
@@ -380,42 +414,51 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     >
       {/* 1. START OVERLAY (Before entering lockdown) */}
       {!hasStarted && (
-        <div className="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center p-6 text-center z-50">
-          <div className="max-w-md bg-white rounded-3xl p-8 border border-slate-200 shadow-xl space-y-6">
-            <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto ring-4 ring-indigo-500/10">
-              <Shield className="w-8 h-8" />
-            </div>
-            
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold tracking-tight text-slate-800">Sistem Ujian Terkunci (Exambro)</h3>
-              <p className="text-xs text-slate-600">
-                Ujian untuk mata pelajaran <strong className="text-indigo-600">{exam.subject}</strong> akan dibuka dalam mode terkunci penuh.
-              </p>
+        <div className="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 z-50 overflow-y-auto">
+          <div className="w-full max-w-lg bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-lg space-y-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-xl flex items-center justify-center shrink-0">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-lg font-bold tracking-tight text-slate-900">Sistem Ujian Terkunci (Exambro)</h3>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Mata Pelajaran: <strong className="text-indigo-700">{exam.subject}</strong>
+                </p>
+              </div>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-left space-y-2 text-[11px] text-slate-700 font-mono">
-              <p className="text-amber-600 font-bold flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                PERATURAN KEAMANAN UJIAN:
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-left space-y-2.5 text-xs text-slate-700">
+              <p className="text-amber-700 font-bold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>Peraturan Keamanan Ujian</span>
               </p>
-              <ul className="list-disc pl-4 space-y-1">
-                <li>Aplikasi akan berjalan otomatis di Mode Layar Penuh.</li>
-                <li>DILARANG membuka tab lain, meminimalkan layar, atau membuka program lain.</li>
-                <li>DILARANG melakukan screenshot atau merekam layar.</li>
-                <li>Meninggalkan area ujian sebanyak <span className="text-rose-600 font-bold">3 kali</span> akan memblokir pengerjaan ujian secara permanen.</li>
+              <ul className="list-disc pl-5 space-y-1.5 leading-relaxed">
+                <li>Ujian akan berjalan otomatis dalam Mode Layar Penuh.</li>
+                <li>Dilarang membuka tab lain, meminimalkan browser, atau berpindah ke aplikasi lain.</li>
+                <li>Dilarang melakukan tangkapan layar atau menggunakan shortcut salin/tempel.</li>
+                <li>Meninggalkan layar ujian sebanyak <strong className="text-rose-600">3 kali</strong> akan memblokir akses ujian sementara hingga dibuka oleh pengawas.</li>
               </ul>
             </div>
 
-            <div className="text-xs text-slate-500">
-              Siswa: <span className="text-slate-800 font-bold">{studentName}</span> &bull; KKM/KKTP: <span className="text-emerald-600 font-bold">{exam.kkm ?? 75}</span>
+            <div className="grid grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-left text-xs">
+              <div>
+                <span className="text-slate-500 block">Peserta Ujian</span>
+                <span className="font-bold text-slate-900 truncate block">{studentName}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Target KKM / KKTP</span>
+                <span className="font-bold text-emerald-700 tabular-nums">{exam.kkm ?? 75}</span>
+              </div>
             </div>
 
             <button
+              type="button"
               onClick={enterFullscreen}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-[0.98] cursor-pointer"
+              className="w-full min-h-[44px] bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-colors shadow-sm cursor-pointer"
             >
               <Play className="w-4 h-4 fill-current" />
-              Mulai Ujian Sekarang (Masuk Mode Exambro)
+              <span>Mulai Ujian Sekarang</span>
             </button>
           </div>
         </div>
@@ -423,37 +466,38 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
 
       {/* 2. LOCKED SCREEN OVERLAY (Tab left or minimized warning) */}
       {hasStarted && isLocked && !isBlocked && (
-        <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-40">
-          <div className="max-w-sm bg-white border-2 border-amber-500 rounded-3xl p-8 shadow-2xl space-y-6">
-            <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto animate-bounce">
-              <AlertTriangle className="w-9 h-9" />
+        <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-6 text-center z-40">
+          <div className="w-full max-w-md bg-white border border-amber-300 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-5">
+            <div className="w-14 h-14 bg-amber-50 text-amber-600 border border-amber-200 rounded-2xl flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-7 h-7" />
             </div>
 
-            <div className="space-y-2">
-              <h3 className="text-lg font-bold text-amber-600 uppercase tracking-wider">Peringatan Kecurangan!</h3>
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-bold text-amber-700">Peringatan Keamanan Ujian</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Terdeteksi mencoba meninggalkan halaman ujian! <span className="text-amber-600 font-semibold">{lastViolationReason}</span>.
+                Sistem mendeteksi aktivitas keluar area ujian: <strong className="text-amber-800">{lastViolationReason}</strong>.
               </p>
             </div>
 
-            <div className="py-3 bg-amber-50 rounded-xl border border-amber-200">
-              <p className="text-xs text-slate-500 font-semibold uppercase">Peringatan Terbaca</p>
-              <p className="text-2xl font-black text-amber-600">{violationsCount} / 3 <span className="text-xs font-normal text-slate-500">Kali</span></p>
+            <div className="py-3 px-4 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-between text-xs">
+              <span className="text-amber-900 font-semibold">Total Pelanggaran Tercatat</span>
+              <span className="text-lg font-black text-amber-700 tabular-nums">{violationsCount} / 3</span>
             </div>
 
-            <p className="text-[10px] text-slate-500">
-              Ujian akan diblokir otomatis jika Anda melanggar sebanyak 3 kali. Hubungi pengawas ruangan jika terjadi kesalahan teknis.
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Ujian akan terkunci otomatis jika pelanggaran mencapai 3 kali. Hubungi pengawas jika terjadi kendala teknis.
             </p>
 
             <button
+              type="button"
               onClick={() => {
                 setIsLocked(false);
                 enterFullscreen();
               }}
-              className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+              className="w-full min-h-[44px] bg-amber-600 hover:bg-amber-700 text-white py-3 px-4 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
             >
               <CheckCircle className="w-4 h-4" />
-              Saya Berjanji Tidak Mengulangi & Lanjutkan
+              <span>Lanjutkan Pengerjaan Ujian</span>
             </button>
           </div>
         </div>
@@ -461,98 +505,112 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
 
       {/* 3. BLOCKED SCREEN OVERLAY (Violations limit exceeded, requires admin password to exit or unlock) */}
       {hasStarted && isBlocked && (
-        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-50">
-          <div className="max-w-md bg-white border-2 border-rose-500 rounded-3xl p-8 shadow-2xl space-y-6">
-            <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto animate-pulse">
-              <Lock className="w-8 h-8" />
+        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-6 text-center z-50">
+          <div className="w-full max-w-md bg-white border border-rose-300 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-5">
+            <div className="w-14 h-14 bg-rose-50 text-rose-600 border border-rose-200 rounded-2xl flex items-center justify-center mx-auto">
+              <Lock className="w-7 h-7" />
             </div>
 
-            <div className="space-y-2">
-              <h3 className="text-lg font-bold text-rose-600 uppercase tracking-wider">Ujian Terkunci Permanen!</h3>
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-bold text-rose-700">Ujian Terkunci Sementara</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Anda telah melanggar sistem keamanan ujian sebanyak <span className="font-bold text-rose-600">{violationsCount} kali</span>. Lembar ujian dinonaktifkan demi keadilan akademik.
+                Pelanggaran keamanan telah mencapai batas maksimal (<strong className="text-rose-700 tabular-nums">{violationsCount} / 3</strong>). Mintalah PIN pembuka dari pengawas ujian.
               </p>
             </div>
 
             <form onSubmit={handleUnlockPin} className="space-y-3 text-left">
-              <label className="block text-[10px] uppercase font-bold text-slate-500 tracking-wider">PIN Reset Pengawas / Guru</label>
+              <label className="block text-xs font-bold text-slate-700">PIN Reset Pengawas / Guru</label>
               <div className="flex gap-2">
                 <input
                   type="password"
-                  placeholder="Masukkan PIN bypass guru"
+                  placeholder="Masukkan PIN pengawas"
                   value={adminPin}
                   onChange={(e) => {
                     setAdminPin(e.target.value);
                     setPinError('');
                   }}
-                  className="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-3.5 py-2.5 text-xs text-center font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  className="flex-1 min-h-[42px] bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-center font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
                 <button
                   type="submit"
-                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                  className="min-h-[42px] bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0"
                 >
                   <Unlock className="w-3.5 h-3.5" />
-                  Buka
+                  <span>Buka Kunci</span>
                 </button>
               </div>
-              {pinError && <p className="text-[10px] text-rose-600 font-bold font-mono">{pinError}</p>}
+              {pinError && <p className="text-xs text-rose-600 font-semibold">{pinError}</p>}
             </form>
 
-            <div className="pt-4 border-t border-slate-200 text-center text-[10px] text-slate-500">
-              <p>Mata Pelajaran: <span className="font-semibold text-slate-700">{exam.subject}</span></p>
-              <p className="mt-1 text-[9px] text-rose-600 font-bold">Ujian Terkunci. Hubungi Pengawas Ujian untuk memasukkan PIN Reset.</p>
+            <div className="pt-3 border-t border-slate-200 text-xs text-slate-500">
+              Mata Pelajaran: <span className="font-semibold text-slate-700">{exam.subject}</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* 4. MAIN EXAM HEADER & IFRAME IF RUNNING */}
+      {/* 4. MAIN EXAM HEADER & CONTENT AREA */}
       {hasStarted && !isLocked && !isBlocked && (
         <>
           {/* Exambro Navigation Frame Bar */}
-          <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0 shadow-xs">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0">
+          <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0 shadow-xs">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0">
                 <Shield className="w-4 h-4" />
               </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <h2 className="text-xs font-bold text-slate-800">{exam.subject}</h2>
-                  <span className="text-[8px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1 rounded uppercase tracking-wider">{exam.type}</span>
-                </div>
-                <p className="text-[9px] text-slate-500">Siswa: {studentName} &bull; Server: {exam.room} &bull; <span className="font-bold text-emerald-600">KKM: {exam.kkm ?? 75}</span></p>
+              <div className="min-w-0 text-left">
+                <h2 className="text-sm font-bold text-slate-900 truncate">{exam.subject}</h2>
+                <p className="text-xs text-slate-500 truncate">
+                  {exam.type} <span aria-hidden="true">&middot;</span> {studentName} <span aria-hidden="true">&middot;</span> Ruang {exam.room} <span aria-hidden="true">&middot;</span> <span className="font-semibold text-emerald-700 tabular-nums">KKM {exam.kkm ?? 75}</span>
+                </p>
               </div>
             </div>
 
-            {/* Warning counters / Status indicators */}
-            <div className="flex items-center gap-3 sm:gap-4 text-[10px] font-mono">
+            {/* Clean Structured Status & Action Bar */}
+            <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5 sm:gap-3 shrink-0">
               {exam.questionBankId && (
-                <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full border border-amber-200 font-mono font-bold">
-                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
-                  <span>Sisa: {formatTimer(timeLeft)}</span>
+                <div className="flex items-center gap-1.5 bg-amber-50 text-amber-800 px-3 py-1.5 rounded-lg border border-amber-200 text-xs font-mono font-bold tabular-nums whitespace-nowrap shrink-0">
+                  <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Sisa {formatTimer(timeLeft)}</span>
                 </div>
               )}
 
-              <div className="hidden sm:flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200 font-bold">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                <span>Exambro Safe Active</span>
+              <div className="hidden lg:flex items-center gap-1.5 text-xs font-medium text-emerald-700 px-2 py-1 whitespace-nowrap shrink-0">
+                <Shield className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Pengawasan Aktif</span>
               </div>
-              
-              <div className="flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-full border border-rose-200 font-bold font-mono">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold tabular-nums whitespace-nowrap shrink-0 ${
+                  violationsCount === 0
+                    ? 'bg-slate-50 text-slate-700 border-slate-200'
+                    : violationsCount < 3
+                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                }`}
+              >
+                <AlertTriangle
+                  className={`w-3.5 h-3.5 shrink-0 ${
+                    violationsCount === 0
+                      ? 'text-slate-500'
+                      : violationsCount < 3
+                      ? 'text-amber-600'
+                      : 'text-rose-600'
+                  }`}
+                />
                 <span>Pelanggaran: {violationsCount} / 3</span>
               </div>
 
               <button
                 type="button"
                 onClick={handleExitExamClick}
-                className="bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-rose-200 transition-all flex items-center gap-1 cursor-pointer font-bold shrink-0 text-[10px]"
+                className="min-h-[40px] bg-slate-900 hover:bg-rose-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer font-bold text-xs whitespace-nowrap shrink-0"
               >
-                <LogOut className="w-3 h-3 text-rose-600" />
+                <LogOut className="w-3.5 h-3.5 shrink-0" />
                 <span>Selesai Ujian</span>
               </button>
             </div>
-          </div>
+          </header>
 
           {submitError && (
             <div className="bg-rose-50 border-b border-rose-200 px-4 py-2.5 flex items-center justify-between gap-3 text-rose-800 text-xs font-bold shrink-0">
@@ -970,13 +1028,48 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
             </div>
           ) : exam.googleFormUrl ? (
             // STANDARD GOOGLE FORM EMBED
-            <div className="flex-1 bg-white relative">
-              <iframe 
-                src={exam.googleFormUrl.startsWith('http') ? exam.googleFormUrl : `https://${exam.googleFormUrl}`}
-                className="w-full h-full border-0"
-                title="CBT Exam Sheet"
-                allow="camera; microphone; geolocation"
-              />
+            <div className="flex-1 bg-white flex flex-col min-h-0">
+              <div className="bg-slate-50 border-b border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 shrink-0">
+                <span>
+                  {hasFormSubmittedOrNavigated
+                    ? 'Halaman formulir telah berpindah/dikirim. Pastikan status jawaban Anda sudah terkirim sebelum menekan Selesai Ujian.'
+                    : 'Kerjakan soal pada lembar Google Form di bawah ini. Saat menekan Kirim (Submit), tetap berada di layar ini.'}
+                </span>
+                {hasFormSubmittedOrNavigated && (
+                  <button
+                    type="button"
+                    onClick={handleExitExamClick}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    Sudah Submit? Selesai Ujian
+                  </button>
+                )}
+              </div>
+              <div className="flex-1 relative bg-white min-h-0">
+                {isFormLoading && (
+                  <div className="absolute inset-0 bg-slate-50 flex flex-col items-center justify-center gap-2 z-10">
+                    <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-xs font-medium text-slate-500">Memuat lembar soal Google Form...</p>
+                  </div>
+                )}
+                <iframe
+                  src={getEmbeddableGoogleFormUrl(exam.googleFormUrl)}
+                  className="w-full h-full border-0"
+                  title="CBT Exam Sheet"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  allow="camera; microphone; geolocation; clipboard-write"
+                  onLoad={() => {
+                    setIsFormLoading(false);
+                    iframeLoadCountRef.current += 1;
+                    // On submit / multi-page Google Form navigation (2nd+ load), grant a 4s grace window
+                    // so internal frame redirect/dialog focus shifts never trigger cheat detection
+                    if (iframeLoadCountRef.current >= 2) {
+                      graceUntilRef.current = Date.now() + 4000;
+                      setHasFormSubmittedOrNavigated(true);
+                    }
+                  }}
+                />
+              </div>
             </div>
           ) : (
             // NO QUESTION CONFIGURED FALLBACK

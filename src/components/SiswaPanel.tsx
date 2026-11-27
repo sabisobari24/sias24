@@ -2096,129 +2096,219 @@ export default function SiswaPanel({
         })()}
 
         {/* CBT EXAM TAB */}
-        {activeTab === 'cbt-ujian' && (
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div className="space-y-1">
-                <span className="text-[10px] bg-indigo-600 text-white font-bold px-2 py-0.5 rounded-full uppercase">CBT System</span>
-                <h3 className="text-base font-bold text-slate-800">Jadwal & Hasil Nilai Ujian CBT</h3>
-                <p className="text-xs text-slate-500">Sistem ujian berbasis komputer sinkron otomatis untuk kelas perwalian {getSchoolClassName(student.classId, classes, 'Sekolah')}.</p>
+        {activeTab === 'cbt-ujian' && (() => {
+          const todayIso = new Date().toISOString().split('T')[0];
+          const avgScore =
+            matchedGrades.length > 0
+              ? Math.round(matchedGrades.reduce((sum, g) => sum + (Number(g.score) || 0), 0) / matchedGrades.length)
+              : null;
+
+          return (
+            <div className="space-y-6">
+              {/* Clean Header & Summary Strip */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                <div className="space-y-1 text-left">
+                  <h3 className="text-lg font-bold tracking-tight text-slate-900">
+                    Ujian CBT &amp; Rekap Nilai
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Jadwal ujian berbasis komputer dan hasil evaluasi resmi untuk{' '}
+                    <span className="font-semibold text-slate-700">
+                      {getSchoolClassName(student.classId, classes, 'Kelas Aktif')}
+                    </span>
+                    .
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 sm:gap-6 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 shrink-0 text-left">
+                  <div>
+                    <span className="text-xs text-slate-500 block">Jadwal Aktif</span>
+                    <span className="text-lg font-bold text-slate-900 tabular-nums">
+                      {matchedExams.length}
+                    </span>
+                  </div>
+                  <div className="border-l border-slate-200 pl-4 sm:pl-6">
+                    <span className="text-xs text-slate-500 block">Nilai Masuk</span>
+                    <span className="text-lg font-bold text-slate-900 tabular-nums">
+                      {matchedGrades.length}
+                    </span>
+                  </div>
+                  <div className="border-l border-slate-200 pl-4 sm:pl-6">
+                    <span className="text-xs text-slate-500 block">Rata-Rata</span>
+                    <span className="text-lg font-bold text-indigo-700 tabular-nums">
+                      {avgScore !== null ? avgScore : '—'}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Main CBT Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Exam Schedule Card */}
-              <div className="lg:col-span-6 bg-white rounded-xl p-5 border shadow-sm space-y-4">
-                <h4 className="font-bold text-slate-800 flex items-center gap-2 pb-2 border-b">
-                  <Calendar className="w-5 h-5 text-indigo-600" />
-                  Jadwal Ujian Aktif Perwalian
-                </h4>
+              {/* Main CBT Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Exam Schedule Panel */}
+                <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2">
+                    <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <span>Jadwal Ujian Aktif</span>
+                    </h4>
+                    <span className="text-xs text-slate-500 tabular-nums">
+                      {matchedExams.length} Ujian
+                    </span>
+                  </div>
 
-                <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                  {matchedExams.length === 0 ? (
-                    <div className="py-12 text-center text-slate-400">
-                      <Clock className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                      <p className="text-xs italic">Belum ada jadwal ujian CBT aktif untuk kelasmu.</p>
-                    </div>
-                  ) : (
-                    matchedExams.map((exam) => {
-                      const isToday = exam.date === new Date().toISOString().split('T')[0];
-                      return (
-                        <div
-                          key={exam.id}
-                          className={`p-3.5 border rounded-xl transition-all ${
-                            isToday
-                              ? 'border-indigo-500 bg-indigo-50/40 ring-1 ring-indigo-500/25'
-                              : 'hover:bg-slate-50 bg-slate-50/50'
-                          }`}
-                        >
-                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                            <div className="space-y-1">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <strong className="text-slate-800 text-sm">{exam.subject}</strong>
-                                <span className="text-[9px] bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
-                                  {exam.type}
-                                </span>
+                  <div className="divide-y divide-slate-100 max-h-[460px] overflow-y-auto">
+                    {matchedExams.length === 0 ? (
+                      <div className="py-12 px-6 text-center text-slate-400 space-y-2">
+                        <Clock className="w-8 h-8 mx-auto text-slate-300" />
+                        <p className="text-xs font-medium text-slate-500">
+                          Belum ada jadwal ujian CBT aktif untuk kelas Anda saat ini.
+                        </p>
+                      </div>
+                    ) : (
+                      matchedExams.map((exam) => {
+                        const isToday = exam.date === todayIso;
+                        const modeLabel = exam.questionBankId
+                          ? 'CBT Mandiri'
+                          : exam.googleFormUrl
+                          ? 'Google Form'
+                          : 'Belum Dikonfigurasi';
+
+                        return (
+                          <div
+                            key={exam.id}
+                            className={`p-5 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                              isToday ? 'bg-indigo-50/35' : 'hover:bg-slate-50/70'
+                            }`}
+                          >
+                            <div className="space-y-1.5 min-w-0 text-left">
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                <span className="font-semibold text-indigo-700">{exam.type}</span>
+                                <span aria-hidden="true">&middot;</span>
+                                <span>{modeLabel}</span>
                                 {isToday && (
-                                  <span className="text-[8px] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-bold uppercase animate-pulse shrink-0">
-                                    Hari Ini
-                                  </span>
+                                  <>
+                                    <span aria-hidden="true">&middot;</span>
+                                    <span className="font-bold text-emerald-700">Berlangsung Hari Ini</span>
+                                  </>
                                 )}
                               </div>
-                              <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-1">
-                                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                                <span>{new Date(exam.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                              </p>
-                              <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-0.5">
-                                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                <span>Pukul {exam.time}</span>
-                              </p>
-                              <p className="text-[10px] text-slate-500 mt-1 flex flex-wrap items-center gap-2">
-                                <span>Ruangan: <code className="font-semibold bg-white border px-1 rounded text-slate-700">{exam.room}</code></span>
-                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-bold">
-                                  KKM / KKTP: {exam.kkm ?? 75}
+
+                              <h5 className="text-sm font-bold text-slate-900 leading-snug">
+                                {exam.subject}
+                              </h5>
+
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 pt-0.5 tabular-nums">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span>
+                                    {new Date(exam.date).toLocaleDateString('id-ID', {
+                                      weekday: 'short',
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric',
+                                    })}
+                                  </span>
                                 </span>
-                              </p>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span>{exam.time}</span>
+                                </span>
+                                <span>
+                                  Ruang <strong className="text-slate-800">{exam.room}</strong>
+                                </span>
+                                <span>
+                                  KKM <strong className="text-emerald-700">{exam.kkm ?? 75}</strong>
+                                </span>
+                              </div>
                             </div>
+
                             <button
                               type="button"
                               onClick={() => setActiveExamForBrowser(exam)}
-                              className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-sm hover:shadow hover:scale-[1.02] active:scale-[0.98]"
+                              className="w-full sm:w-auto min-h-[40px] bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap shadow-xs"
                             >
-                              <span>Kerjakan Soal (Exambro)</span>
+                              <span>Kerjakan Soal</span>
                             </button>
                           </div>
-                        </div>
-                      );
-                    })
-                  )}
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Exam Results Card */}
-              <div className="lg:col-span-6 bg-white rounded-xl p-5 border shadow-sm space-y-4">
-                <h4 className="font-bold text-slate-800 flex items-center gap-2 pb-2 border-b">
-                  <Award className="w-5 h-5 text-indigo-600" />
-                  Daftar Rekap Nilai CBT Siswa
-                </h4>
+                {/* Exam Results Panel */}
+                <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2">
+                    <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                      <Award className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <span>Rekap Nilai CBT</span>
+                    </h4>
+                    <span className="text-xs text-slate-500 tabular-nums">
+                      {matchedGrades.length} Hasil
+                    </span>
+                  </div>
 
-                <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                  {matchedGrades.length === 0 ? (
-                    <div className="py-12 text-center text-slate-400">
-                      <Award className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                      <p className="text-xs italic">Belum ada nilai ujian CBT yang diumumkan oleh CBT Admin.</p>
-                    </div>
-                  ) : (
-                    matchedGrades.map((grade) => (
-                      <div key={grade.id} className="p-3.5 border rounded-xl hover:bg-slate-50 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="space-y-1">
-                          <p className="font-bold text-slate-800 text-sm">{grade.subject}</p>
-                          <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{grade.examType} &bull; {new Date(grade.date).toLocaleDateString('id-ID')}</p>
-                        </div>
-
-                        <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto border-t sm:border-t-0 pt-2 sm:pt-0">
-                          <div className="text-left sm:text-right">
-                            <span className="block text-[9px] font-bold text-slate-400 uppercase">Skor CBT</span>
-                            <span className={`text-xl font-black ${grade.score >= 75 ? 'text-emerald-600' : 'text-rose-600'}`}>{grade.score}</span>
-                          </div>
-                          <span
-                            className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-                              grade.status === 'Lulus' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                            }`}
-                          >
-                            {grade.status}
-                          </span>
-                        </div>
+                  <div className="divide-y divide-slate-100 max-h-[460px] overflow-y-auto">
+                    {matchedGrades.length === 0 ? (
+                      <div className="py-12 px-6 text-center text-slate-400 space-y-2">
+                        <Award className="w-8 h-8 mx-auto text-slate-300" />
+                        <p className="text-xs font-medium text-slate-500">
+                          Belum ada nilai ujian CBT yang diterbitkan.
+                        </p>
                       </div>
-                    ))
-                  )}
+                    ) : (
+                      matchedGrades.map((grade) => {
+                        const isPass = grade.status === 'Lulus' || grade.score >= 75;
+                        return (
+                          <div
+                            key={grade.id}
+                            className="p-4 sm:px-5 hover:bg-slate-50/70 transition-colors flex items-center justify-between gap-4"
+                          >
+                            <div className="min-w-0 text-left space-y-0.5">
+                              <p className="font-bold text-slate-900 text-sm truncate">
+                                {grade.subject}
+                              </p>
+                              <p className="text-xs text-slate-500 tabular-nums">
+                                {grade.examType} <span aria-hidden="true">&middot;</span>{' '}
+                                {new Date(grade.date).toLocaleDateString('id-ID', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-3 shrink-0 text-right">
+                              <div>
+                                <span
+                                  className={`text-lg font-bold tabular-nums block leading-none ${
+                                    isPass ? 'text-emerald-700' : 'text-rose-600'
+                                  }`}
+                                >
+                                  {grade.score}
+                                </span>
+                                <span className="text-[11px] font-semibold text-slate-500 flex items-center justify-end gap-1 mt-1">
+                                  {isPass ? (
+                                    <CheckCircle className="w-3 h-3 text-emerald-600" />
+                                  ) : (
+                                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                  )}
+                                  <span className={isPass ? 'text-emerald-700' : 'text-rose-600'}>
+                                    {grade.status}
+                                  </span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* PELANGGARAN TAB */}
         {activeTab === 'pelanggaran' && (
