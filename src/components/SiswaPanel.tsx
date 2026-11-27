@@ -14,7 +14,8 @@ import {
   StudentAchievement,
   PemberkasanSchedule,
   ELearningMaterial,
-  StudentLearningProgress
+  StudentLearningProgress,
+  StudentExamSubmission
 } from '../types';
 import {
   User,
@@ -111,6 +112,7 @@ interface SiswaPanelProps {
   // New props for CBT integration
   examSchedules: ExamSchedule[];
   examGrades: ExamGrade[];
+  studentSubmissions?: StudentExamSubmission[];
   bimbinganSchedules: BimbinganSchedule[];
   studentAchievements?: StudentAchievement[];
   pemberkasanSchedules?: PemberkasanSchedule[];
@@ -149,6 +151,7 @@ export default function SiswaPanel({
   onAddSelfAttendance,
   examSchedules,
   examGrades,
+  studentSubmissions = [],
   bimbinganSchedules,
   studentAchievements = [],
   pemberkasanSchedules = [],
@@ -181,6 +184,36 @@ export default function SiswaPanel({
   };
   const [isEcoCertOpen, setIsEcoCertOpen] = useState(false);
   const [activeExamForBrowser, setActiveExamForBrowser] = useState<ExamSchedule | null>(null);
+  const [completedExamIds, setCompletedExamIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(`siakad_completed_exams_${student.id}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`siakad_completed_exams_${student.id}`);
+      setCompletedExamIds(saved ? JSON.parse(saved) : []);
+    } catch {
+      setCompletedExamIds([]);
+    }
+  }, [student.id]);
+
+  const handleMarkExamCompleted = (examId: string) => {
+    setCompletedExamIds((prev) => {
+      if (prev.includes(examId)) return prev;
+      const updated = [...prev, examId];
+      try {
+        localStorage.setItem(`siakad_completed_exams_${student.id}`, JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Could not persist completed exams locally:', err);
+      }
+      return updated;
+    });
+  };
   const [selectedCertForPreview, setSelectedCertForPreview] = useState<StudentAchievement | null>(null);
   const [selfStatus, setSelfStatus] = useState<'Hadir' | 'Sakit' | 'Izin'>('Hadir');
   const [selfNotes, setSelfNotes] = useState('');
@@ -2172,6 +2205,20 @@ export default function SiswaPanel({
                           : exam.googleFormUrl
                           ? 'Google Form'
                           : 'Belum Dikonfigurasi';
+                        const isExamCompleted =
+                          completedExamIds.includes(exam.id) ||
+                          studentSubmissions.some(
+                            (sub) =>
+                              sub.examScheduleId === exam.id &&
+                              (sub.studentId === student.id ||
+                                (sub.studentName &&
+                                  sub.studentName.trim().toLowerCase() === student.name.trim().toLowerCase()))
+                          ) ||
+                          matchedGrades.some(
+                            (g) =>
+                              g.id.endsWith(`-${exam.id}`) ||
+                              (g.subject === exam.subject && g.date === exam.date && g.examType === exam.type)
+                          );
 
                         return (
                           <div
@@ -2222,13 +2269,20 @@ export default function SiswaPanel({
                               </div>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => setActiveExamForBrowser(exam)}
-                              className="w-full sm:w-auto min-h-[40px] bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap shadow-xs"
-                            >
-                              <span>Kerjakan Soal</span>
-                            </button>
+                            {isExamCompleted ? (
+                              <div className="w-full sm:w-auto min-h-[40px] bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold px-4 py-2 rounded-xl flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap">
+                                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span>Selesai</span>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setActiveExamForBrowser(exam)}
+                                className="w-full sm:w-auto min-h-[40px] bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap shadow-xs"
+                              >
+                                <span>Kerjakan Soal</span>
+                              </button>
+                            )}
                           </div>
                         );
                       })
@@ -2486,6 +2540,7 @@ export default function SiswaPanel({
           studentId={student.id}
           onClose={() => setActiveExamForBrowser(null)}
           cbtBypassPin={cbtBypassPin}
+          onExamCompleted={handleMarkExamCompleted}
         />
       )}
 

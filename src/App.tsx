@@ -5644,6 +5644,7 @@ export default function App({ initialMode }: AppProps = {}) {
                             onAddSelfAttendance={handleStudentSelfAttendance}
                             examSchedules={examSchedules}
                             examGrades={examGrades}
+                            studentSubmissions={studentSubmissions}
                             bimbinganSchedules={bimbinganSchedules}
                             pemberkasanSchedules={pemberkasanSchedules}
                             studentAchievements={studentAchievements}
