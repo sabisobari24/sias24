@@ -138,7 +138,10 @@ export default function WebKesiswaan() {
     <div className="space-y-10 pb-12 font-sans text-left">
       
       {/* BANNER HEADER */}
-      <div 
+      <motion.div 
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
         className="bg-cover bg-center rounded-3xl p-10 text-white relative overflow-hidden border-b-6 border-amber-400"
         style={{ 
           backgroundImage: `linear-gradient(135deg, rgba(30, 58, 138, 0.8) 0%, rgba(15, 23, 42, 0.75) 100%), url('${getHighResMediaUrl(webContent.headerBgImage || 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz', 1920)}')` 
@@ -149,10 +152,16 @@ export default function WebKesiswaan() {
           <h1 className="text-2xl md:text-3xl lg:text-4xl font-black tracking-tight">{webContent.headerTitle || 'Bidang Kesiswaan & Pengembangan Karakter'}</h1>
           <p className="text-xs md:text-sm text-slate-200">{webContent.headerSubtitle || 'Membina Kedisiplinan Positif, Melatih Kepemimpinan, dan Melejitkan Prestasi Non-Akademik.'}</p>
         </div>
-      </div>
+      </motion.div>
 
       {/* TWO COLUMN: WAKA KESISWAAN PROFILE & STAFF / PROGRAM */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+      >
         
         {/* SIDEBAR: HEAD OF KESISWAAN */}
         <aside className="lg:col-span-4 space-y-6">
@@ -384,10 +393,16 @@ export default function WebKesiswaan() {
 
         </section>
 
-      </div>
+      </motion.div>
 
       {/* TEN EXTRA CURRICULAR GRID */}
-      <div className="bg-white border border-slate-200/80 rounded-3xl p-6 md:p-8 shadow-xs space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="bg-white border border-slate-200/80 rounded-3xl p-6 md:p-8 shadow-xs space-y-6"
+      >
         <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
           <Award className="w-5.5 h-5.5 text-blue-700" />
           <span>Ragam 10 Pilihan Ekstrakurikuler (Pengembangan Diri)</span>
@@ -412,7 +427,7 @@ export default function WebKesiswaan() {
             </button>
           ))}
         </div>
-      </div>
+      </motion.div>
 
       {/* POPUP MODALS (PORTAL TO BODY AGAR TIDAK TERTUTUP HEADER / TAMPILAN LAIN) */}
       {typeof document !== 'undefined' && createPortal(

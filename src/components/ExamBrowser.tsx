@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, AlertTriangle, Play, Lock, Unlock, LogOut, CheckCircle, Volume2, Database, ChevronLeft, ChevronRight, HelpCircle, FileText, Send, Sparkles, Clock, AlertCircle, Mail, RefreshCw, X } from 'lucide-react';
+import { ClipboardCheck, AlertTriangle, Play, Lock, Unlock, LogOut, CheckCircle, ChevronLeft, ChevronRight, HelpCircle, Send, Clock, AlertCircle, Mail, RefreshCw, X, EyeOff } from 'lucide-react';
 import { ExamSchedule, QuestionBank, CbtQuestion, StudentExamSubmission } from '../types';
 import { saveDocument, getDocumentById, signInWithGoogle, auth } from '../lib/firebase';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -51,6 +51,9 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   const [timeLeft, setTimeLeft] = useState(5400); // 90 minutes default
   const [submitError, setSubmitError] = useState('');
 
+  const MAX_VIOLATIONS = 5;
+  const STANDBY_LIMIT_MS = 5 * 60 * 1000;
+
   // Track latest answers & Google Form embed transition state
   const selectedAnswersRef = useRef(selectedAnswers);
   selectedAnswersRef.current = selectedAnswers;
@@ -58,11 +61,15 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   const iframeLoadCountRef = useRef(0);
   const graceUntilRef = useRef(0);
   const lastViolationAtRef = useRef(0);
+  const lastTickAtRef = useRef(Date.now());
+  const lastInteractionAtRef = useRef(Date.now());
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const usedFullscreenRef = useRef(false);
   const isEmailVerifyingRef = useRef(false);
   const isGoogleFormExam = Boolean(!exam.questionBankId && exam.googleFormUrl);
   const [isFormLoading, setIsFormLoading] = useState(isGoogleFormExam);
   const [hasFormSubmittedOrNavigated, setHasFormSubmittedOrNavigated] = useState(false);
+  const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState(false);
 
   const emailStorageKey = `siakad_cbt_verified_email_${(studentId || studentName).replace(/\s+/g, '_').toLowerCase()}`;
   const [verifiedEmail, setVerifiedEmail] = useState<string>(() => {
@@ -180,6 +187,12 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     let totalScoreableQuestions = 0;
     let correctCount = 0;
 
+    const extractOptionLetter = (val: string) => {
+      const cleaned = String(val || '').trim();
+      const match = cleaned.match(/^([A-Ea-e])(?:[.):\s]|$)/);
+      return match ? match[1].toUpperCase() : cleaned.toUpperCase();
+    };
+
     questions.forEach((q) => {
       if (q.type !== 'essay') {
         totalScoreableQuestions++;
@@ -187,13 +200,13 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
         const correctAns = q.correctAnswers || [];
 
         if (q.type === 'pilihan_ganda') {
-          if (userAns[0] === correctAns[0]) {
+          if (userAns[0] && correctAns[0] && extractOptionLetter(userAns[0]) === extractOptionLetter(correctAns[0])) {
             correctCount++;
           }
         } else if (q.type === 'pilihan_ganda_kompleks') {
-          const userSet = new Set(userAns);
-          const correctSet = new Set(correctAns);
-          let isAllCorrect = userSet.size === correctSet.size;
+          const userSet = new Set(userAns.map(extractOptionLetter));
+          const correctSet = new Set(correctAns.map(extractOptionLetter));
+          let isAllCorrect = userSet.size > 0 && userSet.size === correctSet.size;
           if (isAllCorrect) {
             for (const item of userSet) {
               if (!correctSet.has(item)) {
@@ -275,32 +288,103 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Play a retro synthesizer warning beep when a violation occurs
+  const unlockAudioContext = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return null;
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new AudioCtx();
+      }
+      if (audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+      return audioCtxRef.current;
+    } catch {
+      return null;
+    }
+  };
+
+  // Play loud multi-cycle emergency siren at full gain when a violation occurs
   const playWarningBeep = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate([350, 120, 350, 120, 500]);
+      }
 
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(220, audioCtx.currentTime); // Low pitch
-      osc.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + 0.4); // Slide to high pitch
+      const audioCtx = unlockAudioContext();
+      if (!audioCtx) return;
 
-      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+      const now = audioCtx.currentTime;
+      const duration = 2.4;
 
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
+      const compressor = audioCtx.createDynamicsCompressor();
+      compressor.threshold.setValueAtTime(-6, now);
+      compressor.knee.setValueAtTime(6, now);
+      compressor.ratio.setValueAtTime(12, now);
+      compressor.attack.setValueAtTime(0.002, now);
+      compressor.release.setValueAtTime(0.15, now);
 
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.4);
+      const masterGain = audioCtx.createGain();
+      masterGain.gain.setValueAtTime(1.0, now);
+      masterGain.gain.setValueAtTime(1.0, now + duration - 0.08);
+      masterGain.gain.linearRampToValueAtTime(0.001, now + duration);
+
+      compressor.connect(masterGain);
+      masterGain.connect(audioCtx.destination);
+
+      const osc1 = audioCtx.createOscillator();
+      const osc2 = audioCtx.createOscillator();
+      osc1.type = 'sawtooth';
+      osc2.type = 'square';
+
+      // 3 rapid high-low emergency siren cycles (680Hz <-> 1280Hz)
+      osc1.frequency.setValueAtTime(680, now);
+      osc2.frequency.setValueAtTime(692, now);
+      for (let i = 0; i < 3; i++) {
+        const start = now + i * 0.8;
+        const peak = start + 0.4;
+        const end = start + 0.8;
+        osc1.frequency.linearRampToValueAtTime(1280, peak);
+        osc1.frequency.linearRampToValueAtTime(680, end);
+        osc2.frequency.linearRampToValueAtTime(1292, peak);
+        osc2.frequency.linearRampToValueAtTime(692, end);
+      }
+
+      osc1.connect(compressor);
+      osc2.connect(compressor);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + duration);
+      osc2.stop(now + duration);
     } catch (e) {
       console.warn('Audio Context blocked or not supported:', e);
     }
   };
 
   const enterFullscreen = () => {
+    unlockAudioContext();
+    lastTickAtRef.current = Date.now();
+    lastInteractionAtRef.current = Date.now();
+    setIsPrivacyShieldActive(false);
+
     if (!containerRef.current) return;
+
+    const alreadyFullscreen = !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement
+    );
+
+    if (alreadyFullscreen) {
+      usedFullscreenRef.current = true;
+      setIsFullscreen(true);
+      setHasStarted(true);
+      setIsLocked(false);
+      return;
+    }
+
     const el = containerRef.current as any;
     const req =
       el.requestFullscreen ||
@@ -363,7 +447,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     setLastViolationReason(reason);
     setViolationsCount((prev) => {
       const updated = prev + 1;
-      if (updated >= 3) {
+      if (updated >= MAX_VIOLATIONS) {
         setIsBlocked(true);
       } else {
         setIsLocked(true);
@@ -372,20 +456,54 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     });
   };
 
-  // Event Listeners for Cheat Detection
+  // Event Listeners for Cheat Detection, Standby 5-Minute Check & Anti-Screenshot
   useEffect(() => {
     if (!hasStarted || isBlocked || isCompleted) return;
 
-    // 1. Tab switching or minimizing detection
+    lastTickAtRef.current = Date.now();
+    lastInteractionAtRef.current = Date.now();
+
+    const recordActivity = () => {
+      lastInteractionAtRef.current = Date.now();
+    };
+
+    // Standby / idle screen detection (triggers violation at >= 5 minutes standby or clock sleep drift)
+    const standbyInterval = window.setInterval(() => {
+      const now = Date.now();
+      const tickGap = now - lastTickAtRef.current;
+      lastTickAtRef.current = now;
+
+      if (isLocked || isBlocked || isCompleted || isEmailVerifyingRef.current || now < graceUntilRef.current) {
+        lastInteractionAtRef.current = now;
+        return;
+      }
+
+      if (tickGap >= STANDBY_LIMIT_MS) {
+        handleViolation('Perangkat Dalam Mode Standby Mencapai 5 Menit');
+        return;
+      }
+
+      if (now - lastInteractionAtRef.current >= STANDBY_LIMIT_MS) {
+        handleViolation('Layar HP Standby / Tidak Ada Aktivitas Mencapai 5 Menit');
+      }
+    }, 1000);
+
+    // 1. Tab switching, screen sleep, or minimizing detection
     const handleVisibilityChange = () => {
       if (isEmailVerifyingRef.current || Date.now() < graceUntilRef.current) return;
       if (isExitPinOpen || isSubmitConfirmOpen) return;
       if (document.hidden && !isLocked && !isCompleted) {
-        handleViolation('Membuka Tab Lain atau Meminimalkan Browser');
+        setIsPrivacyShieldActive(true);
+        handleViolation('Membuka Tab Lain, Mengunci Layar, atau Meminimalkan Browser');
+      } else if (!document.hidden) {
+        const sleepDuration = Date.now() - lastTickAtRef.current;
+        if (sleepDuration >= STANDBY_LIMIT_MS && !isLocked && !isCompleted) {
+          handleViolation('Layar HP Standby / Tidur Mencapai 5 Menit');
+        }
       }
     };
 
-    // 2. Application switching detection (for internal CBT; Google Form embeds trigger native Chrome confirm/autofill blurs while remaining visible)
+    // 2. Application switching & focus loss detection
     let blurTimer: number | null = null;
     let fullscreenTimer: number | null = null;
 
@@ -394,25 +512,32 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
       if (isEmailVerifyingRef.current || Date.now() < graceUntilRef.current) return;
 
       // Embedded Google Forms open native browser confirm/alert modals on Submit
-      // ("Halaman tersemat di docs.google.com menyatakan... Your email address will be recorded...")
-      // which legitimately blur the parent window while the exam tab stays visible (document.hidden === false).
-      // Actual tab/app switches on mobile & desktop are caught immediately by visibilitychange (document.hidden === true).
       if (isGoogleFormExam && !document.hidden) {
         return;
       }
 
+      setIsPrivacyShieldActive(true);
       if (blurTimer) window.clearTimeout(blurTimer);
       blurTimer = window.setTimeout(() => {
         if (document.hidden) return;
         if (isEmailVerifyingRef.current || Date.now() < graceUntilRef.current) return;
         if (isLocked || isBlocked || isCompleted || isExitPinOpen || isSubmitConfirmOpen || isEmailVerifyModalOpen) return;
 
-        // Focus is still inside this browser tab or its child iframe
-        if (document.hasFocus()) return;
+        if (document.hasFocus()) {
+          setIsPrivacyShieldActive(false);
+          return;
+        }
         if (isGoogleFormExam) return;
 
-        handleViolation('Membuka Aplikasi Lain atau Mengklik Luar Layar');
-      }, 450);
+        handleViolation('Membuka Aplikasi Lain atau Keluar dari Fokus Layar CBT');
+      }, 220);
+    };
+
+    const handleFocus = () => {
+      lastInteractionAtRef.current = Date.now();
+      if (!isLocked && !isBlocked) {
+        setIsPrivacyShieldActive(false);
+      }
     };
 
     // 3. Fullscreen escape detection (when fullscreen mode was activated)
@@ -429,7 +554,6 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
           if (fullscreenTimer) window.clearTimeout(fullscreenTimer);
           fullscreenTimer = window.setTimeout(() => {
             if (isEmailVerifyingRef.current || Date.now() < graceUntilRef.current) return;
-            // Ignore fullscreen exit caused by Chrome showing a native Google Form submit/confirm dialog while tab stays visible
             if (!document.hidden && !document.hasFocus()) return;
             const stillNotFS = !(document.fullscreenElement ||
                                  (document as any).webkitFullscreenElement ||
@@ -445,32 +569,89 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
       }
     };
 
-    // 4. Block F5, Ctrl+R, F12, copy, paste, inspect, and other shortcuts
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isEmailVerifyModalOpen || isExitPinOpen) return;
-      const key = e.key.toLowerCase();
+    // 4. Multi-touch 3-finger screenshot gesture blocker
+    const handleMultiTouch = (e: TouchEvent) => {
+      recordActivity();
+      if (isEmailVerifyModalOpen || isExitPinOpen || isBlocked || isLocked || isCompleted) return;
+      if (e.touches && e.touches.length >= 3) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        setIsPrivacyShieldActive(true);
+        handleViolation('Terdeteksi Gesture 3 Jari / Upaya Tangkapan Layar (Screenshot)');
+      }
+    };
 
-      if (e.ctrlKey && ['c', 'v', 'x', 'u', 'p', 's', 'a'].includes(key)) {
-        e.preventDefault();
-        handleViolation('Menggunakan Shortcut Keyboard Terlarang (Salin/Tempel/Sumber)');
+    // 5. Block Screenshot keys, F5, Ctrl+R, F12, copy, paste, inspect, and shortcuts
+    const handleKeyViolationCheck = (e: KeyboardEvent) => {
+      recordActivity();
+      if (isEmailVerifyModalOpen || isExitPinOpen) return;
+      const key = (e.key || '').toLowerCase();
+
+      if (
+        key === 'printscreen' ||
+        e.keyCode === 44 ||
+        (e.metaKey && e.shiftKey && ['3', '4', '5', 's'].includes(key)) ||
+        (e.ctrlKey && e.shiftKey && ['s', 'p'].includes(key))
+      ) {
+        if (e.cancelable) e.preventDefault();
+        setIsPrivacyShieldActive(true);
+        try {
+          navigator.clipboard?.writeText?.('');
+        } catch {
+          /* ignore */
+        }
+        handleViolation('Mencoba Melakukan Tangkapan Layar (Screenshot)');
         return;
       }
 
+      if (e.ctrlKey && ['c', 'v', 'x', 'u', 'p', 's', 'a'].includes(key)) {
+        const tag = (e.target as HTMLElement | null)?.tagName;
+        const isTypingField = tag === 'INPUT' || tag === 'TEXTAREA';
+        if (!(isTypingField && ['a', 'c', 'v', 'x'].includes(key))) {
+          e.preventDefault();
+          handleViolation('Menggunakan Shortcut Keyboard Terlarang (Salin/Tempel/Cetak)');
+          return;
+        }
+      }
+
       const forbiddenKeys = ['f5', 'f11', 'f12'];
-      if (forbiddenKeys.includes(key) || (e.ctrlKey && key === 'r') || (e.metaKey && key === 'r')) {
+      if (
+        forbiddenKeys.includes(key) ||
+        (e.ctrlKey && key === 'r') ||
+        (e.metaKey && key === 'r') ||
+        (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(key))
+      ) {
         e.preventDefault();
         handleViolation('Mencoba Menyegarkan Halaman atau Membuka Alat Pengembang (Developer Tools)');
       }
     };
 
-    // 5. Block right click context menu
+    // 6. Block right click context menu, copy/cut/paste, drag, & text selection
     const handleContextMenu = (e: MouseEvent) => {
       if (isEmailVerifyModalOpen || isExitPinOpen) return;
       e.preventDefault();
       handleViolation('Mencoba Klik Kanan (Context Menu)');
     };
 
-    // 6. Trap browser Back / Android swipe-back & tab reload/close while exam is active
+    const handleClipboardOrDrag = (e: Event) => {
+      if (isEmailVerifyModalOpen || isExitPinOpen) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      e.preventDefault();
+    };
+
+    // 7. Trap browser Back / Android swipe-back & split-screen width shrink
+    const handleResize = () => {
+      if (isLocked || isBlocked || isCompleted || isEmailVerifyModalOpen || isExitPinOpen) return;
+      if (isEmailVerifyingRef.current || Date.now() < graceUntilRef.current) return;
+      if (typeof window.screen?.width === 'number' && window.screen.width > 0) {
+        if (window.innerWidth < window.screen.width * 0.7) {
+          setIsPrivacyShieldActive(true);
+          handleViolation('Terdeteksi Mode Layar Terbagi (Split Screen) / Keluar Fokus CBT');
+        }
+      }
+    };
+
     window.history.pushState({ cbtExamLock: exam.id }, '', window.location.href);
     const handlePopState = () => {
       window.history.pushState({ cbtExamLock: exam.id }, '', window.location.href);
@@ -483,22 +664,45 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('touchstart', handleMultiTouch, { passive: false, capture: true });
+    window.addEventListener('touchmove', handleMultiTouch, { passive: false, capture: true });
+    window.addEventListener('pointerdown', recordActivity, { passive: true });
+    window.addEventListener('scroll', recordActivity, { passive: true, capture: true });
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyViolationCheck);
+    document.addEventListener('keyup', handleKeyViolationCheck);
     document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('copy', handleClipboardOrDrag);
+    document.addEventListener('cut', handleClipboardOrDrag);
+    document.addEventListener('dragstart', handleClipboardOrDrag);
+    document.addEventListener('selectstart', handleClipboardOrDrag);
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
+      window.clearInterval(standbyInterval);
       if (blurTimer) window.clearTimeout(blurTimer);
       if (fullscreenTimer) window.clearTimeout(fullscreenTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('touchstart', handleMultiTouch, { capture: true } as any);
+      window.removeEventListener('touchmove', handleMultiTouch, { capture: true } as any);
+      window.removeEventListener('pointerdown', recordActivity);
+      window.removeEventListener('scroll', recordActivity, { capture: true } as any);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyViolationCheck);
+      document.removeEventListener('keyup', handleKeyViolationCheck);
       document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('copy', handleClipboardOrDrag);
+      document.removeEventListener('cut', handleClipboardOrDrag);
+      document.removeEventListener('dragstart', handleClipboardOrDrag);
+      document.removeEventListener('selectstart', handleClipboardOrDrag);
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
@@ -658,16 +862,16 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   return (
     <div 
       ref={containerRef} 
-      className="fixed inset-0 h-dvh w-screen z-[9999] bg-slate-100 text-slate-800 flex flex-col font-sans select-none"
+      className="fixed inset-0 h-dvh w-screen z-[9999] bg-slate-100 text-slate-800 flex flex-col font-sans select-none overscroll-none [-webkit-touch-callout:none] [-webkit-user-select:none] print:hidden"
       id="exambro-container"
     >
       {/* 1. START OVERLAY (Before entering lockdown) */}
       {!hasStarted && (
         <div className="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 z-50 overflow-y-auto">
-          <div className="w-full max-w-lg bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-lg space-y-5">
+          <div className="w-full max-w-lg bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-lg space-y-5 my-auto">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-xl flex items-center justify-center shrink-0">
-                <Shield className="w-6 h-6" />
+                <ClipboardCheck className="w-6 h-6" />
               </div>
               <div className="text-left">
                 <h3 className="text-lg font-bold tracking-tight text-slate-900">Sistem Ujian Terkunci (Exambro)</h3>
@@ -684,9 +888,9 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
               </p>
               <ul className="list-disc pl-5 space-y-1.5 leading-relaxed">
                 <li>Ujian berjalan otomatis dalam <strong>Mode Layar Penuh (Full Page)</strong> tanpa memutar layar perangkat otomatis.</li>
-                <li>Dilarang membuka tab lain, meminimalkan browser, atau berpindah ke aplikasi lain.</li>
-                <li>Dilarang melakukan tangkapan layar atau menggunakan shortcut salin/tempel.</li>
-                <li>Meninggalkan layar ujian sebanyak <strong className="text-rose-600">3 kali</strong> akan memblokir akses ujian sementara hingga dibuka oleh pengawas.</li>
+                <li>Dilarang membuka tab lain, meminimalkan browser, berpindah aplikasi, atau membiarkan layar standby mencapai 5 menit.</li>
+                <li>Dilarang melakukan tangkapan layar (screenshot / gesture 3 jari) atau menggunakan shortcut salin/tempel.</li>
+                <li>Meninggalkan layar ujian sebanyak <strong className="text-rose-600">{MAX_VIOLATIONS} kali</strong> akan memblokir akses ujian sementara hingga dibuka oleh pengawas.</li>
               </ul>
             </div>
 
@@ -771,63 +975,71 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
         </div>
       )}
 
-      {/* 2. LOCKED SCREEN OVERLAY (Tab left or minimized warning) */}
+      {/* 2. LOCKED SCREEN OVERLAY (Tab left, standby, or screenshot warning) */}
       {hasStarted && isLocked && !isBlocked && (
-        <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-6 text-center z-40">
-          <div className="w-full max-w-md bg-white border border-amber-300 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-5">
-            <div className="w-14 h-14 bg-amber-50 text-amber-600 border border-amber-200 rounded-2xl flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-7 h-7" />
+        <div className="absolute inset-0 bg-slate-900/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 text-center z-40 overflow-y-auto">
+          <div className="w-full max-w-md bg-white border border-amber-300 rounded-2xl p-5 sm:p-7 shadow-2xl space-y-4 my-auto max-h-[90dvh] overflow-y-auto">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-50 text-amber-600 border border-amber-200 rounded-2xl flex items-center justify-center mx-auto shrink-0">
+              <AlertTriangle className="w-6 h-6 sm:w-7 sm:h-7" />
             </div>
 
             <div className="space-y-1.5">
-              <h3 className="text-lg font-bold text-amber-700">Peringatan Keamanan Ujian</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Sistem mendeteksi aktivitas keluar area ujian: <strong className="text-amber-800">{lastViolationReason}</strong>.
+              <h3 className="text-base sm:text-lg font-bold text-amber-700">Peringatan Keamanan Ujian</h3>
+              <p className="text-xs text-slate-600 leading-relaxed break-words">
+                Sistem mendeteksi aktivitas pelanggaran ujian: <strong className="text-amber-800">{lastViolationReason}</strong>.
               </p>
             </div>
 
-            <div className="py-3 px-4 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-between text-xs">
-              <span className="text-amber-900 font-semibold">Total Pelanggaran Tercatat</span>
-              <span className="text-lg font-black text-amber-700 tabular-nums">{violationsCount} / 3</span>
+            <div className="py-3 px-4 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-between gap-3 text-xs">
+              <span className="text-amber-900 font-semibold text-left">Total Pelanggaran Tercatat</span>
+              <span className="text-base sm:text-lg font-black text-amber-700 tabular-nums shrink-0">{violationsCount} / {MAX_VIOLATIONS}</span>
             </div>
 
             <p className="text-xs text-slate-500 leading-relaxed">
-              Ujian akan terkunci otomatis jika pelanggaran mencapai 3 kali. Hubungi pengawas jika terjadi kendala teknis.
+              Ujian akan terkunci otomatis jika pelanggaran mencapai {MAX_VIOLATIONS} kali. Hubungi pengawas jika terjadi kendala teknis.
             </p>
 
             <button
               type="button"
               onClick={() => {
                 setIsLocked(false);
+                setIsPrivacyShieldActive(false);
+                lastInteractionAtRef.current = Date.now();
+                lastTickAtRef.current = Date.now();
                 enterFullscreen();
               }}
               className="w-full min-h-[44px] bg-amber-600 hover:bg-amber-700 text-white py-3 px-4 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
             >
-              <CheckCircle className="w-4 h-4" />
+              <CheckCircle className="w-4 h-4 shrink-0" />
               <span>Lanjutkan Pengerjaan Ujian</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* 3. BLOCKED SCREEN OVERLAY (Violations limit exceeded, requires admin password to exit or unlock) */}
+      {/* 3. BLOCKED SCREEN OVERLAY (Violations limit exceeded, requires admin password to unlock) */}
       {hasStarted && isBlocked && (
-        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-6 text-center z-50">
-          <div className="w-full max-w-md bg-white border border-rose-300 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-5">
-            <div className="w-14 h-14 bg-rose-50 text-rose-600 border border-rose-200 rounded-2xl flex items-center justify-center mx-auto">
-              <Lock className="w-7 h-7" />
+        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 text-center z-50 overflow-y-auto">
+          <div className="w-full max-w-md bg-white border border-rose-300 rounded-2xl p-5 sm:p-7 shadow-2xl space-y-4 my-auto max-h-[92dvh] overflow-y-auto">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-rose-50 text-rose-600 border border-rose-200 rounded-2xl flex items-center justify-center mx-auto shrink-0">
+              <Lock className="w-6 h-6 sm:w-7 sm:h-7" />
             </div>
 
             <div className="space-y-1.5">
-              <h3 className="text-lg font-bold text-rose-700">Ujian Terkunci Sementara</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Pelanggaran keamanan telah mencapai batas maksimal (<strong className="text-rose-700 tabular-nums">{violationsCount} / 3</strong>). Mintalah PIN pembuka dari pengawas ujian.
+              <h3 className="text-base sm:text-lg font-bold text-rose-700">Ujian Terkunci Sementara</h3>
+              <p className="text-xs text-slate-600 leading-relaxed break-words">
+                Pelanggaran keamanan telah mencapai batas maksimal (<strong className="text-rose-700 tabular-nums">{violationsCount} / {MAX_VIOLATIONS}</strong>). Mintalah PIN pembuka dari pengawas ujian.
               </p>
+              {lastViolationReason && (
+                <p className="text-[11px] text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-3 py-1.5 break-words">
+                  Pemicu terakhir: {lastViolationReason}
+                </p>
+              )}
             </div>
 
             <form onSubmit={handleUnlockPin} className="space-y-3 text-left">
               <label className="block text-xs font-bold text-slate-700">PIN Reset Pengawas / Guru</label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2.5">
                 <input
                   type="password"
                   placeholder="Masukkan PIN pengawas"
@@ -836,13 +1048,13 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                     setAdminPin(e.target.value);
                     setPinError('');
                   }}
-                  className="flex-1 min-h-[42px] bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-center font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  className="w-full sm:flex-1 min-w-0 min-h-[42px] bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-center font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
                 <button
                   type="submit"
-                  className="min-h-[42px] bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0"
+                  className="w-full sm:w-auto min-h-[42px] bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0"
                 >
-                  <Unlock className="w-3.5 h-3.5" />
+                  <Unlock className="w-3.5 h-3.5 shrink-0" />
                   <span>Buka Kunci</span>
                 </button>
               </div>
@@ -856,15 +1068,40 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
         </div>
       )}
 
+      {/* ANTI-SCREENSHOT / FOCUS PRIVACY CURTAIN */}
+      {hasStarted && isPrivacyShieldActive && !isLocked && !isBlocked && !isCompleted && (
+        <div className="fixed inset-0 bg-slate-950 text-white z-[9998] flex flex-col items-center justify-center p-6 text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-400/40 text-rose-300 flex items-center justify-center">
+            <EyeOff className="w-7 h-7" />
+          </div>
+          <div className="space-y-1.5 max-w-sm">
+            <h3 className="text-base font-bold text-white">Layar Ujian Diamankan</h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Konten soal disembunyikan otomatis saat fokus halaman terganggu atau gesture tangkapan layar terdeteksi.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsPrivacyShieldActive(false);
+              lastInteractionAtRef.current = Date.now();
+            }}
+            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+          >
+            Kembali Fokus ke Ujian
+          </button>
+        </div>
+      )}
+
       {/* 4. MAIN EXAM HEADER & CONTENT AREA */}
       {hasStarted && !isLocked && !isBlocked && (
         <>
           {/* Compact Clean Exambro Header Bar */}
-          <header className="bg-white border-b border-slate-200 px-3 sm:px-5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0 shadow-xs">
-            <div className="flex items-center justify-between gap-2.5 min-w-0">
+          <header className="bg-white border-b border-slate-200 px-3 sm:px-5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0 shadow-xs">
+            <div className="flex items-center justify-between gap-2 min-w-0">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0">
-                  <Shield className="w-4 h-4" />
+                  <ClipboardCheck className="w-4 h-4" />
                 </div>
                 <div className="min-w-0 text-left">
                   <h2 className="text-sm font-bold text-slate-900 truncate leading-tight">{exam.subject}</h2>
@@ -887,7 +1124,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
             </div>
 
             {/* Clean Single-Row Action & Status Controls */}
-            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+            <div className="flex items-center justify-between sm:justify-end gap-1.5 sm:gap-2 shrink-0 min-w-0">
               {exam.questionBankId && (
                 <div className="flex items-center gap-1.5 bg-amber-50 text-amber-800 px-2.5 py-1.5 rounded-lg border border-amber-200 text-xs font-mono font-bold tabular-nums whitespace-nowrap shrink-0">
                   <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
@@ -896,10 +1133,12 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
               )}
 
               <div
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold tabular-nums whitespace-nowrap shrink-0 ${
+                title={`Pelanggaran: ${violationsCount} dari ${MAX_VIOLATIONS}`}
+                aria-label={`Pelanggaran ${violationsCount} dari ${MAX_VIOLATIONS}`}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-bold tabular-nums whitespace-nowrap shrink-0 ${
                   violationsCount === 0
                     ? 'bg-slate-50 text-slate-700 border-slate-200'
-                    : violationsCount < 3
+                    : violationsCount < MAX_VIOLATIONS
                     ? 'bg-amber-50 text-amber-800 border-amber-200'
                     : 'bg-rose-50 text-rose-700 border-rose-200'
                 }`}
@@ -908,12 +1147,12 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                   className={`w-3.5 h-3.5 shrink-0 ${
                     violationsCount === 0
                       ? 'text-slate-500'
-                      : violationsCount < 3
+                      : violationsCount < MAX_VIOLATIONS
                       ? 'text-amber-600'
                       : 'text-rose-600'
                   }`}
                 />
-                <span>Pelanggaran: {violationsCount}/3</span>
+                <span>{violationsCount}/{MAX_VIOLATIONS}</span>
               </div>
 
               {isGoogleFormExam && (
@@ -924,7 +1163,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                       setEmailVerifyNote('');
                       setIsEmailVerifyModalOpen(true);
                     }}
-                    className={`min-h-[34px] max-w-[155px] sm:max-w-[200px] px-2.5 py-1.5 rounded-lg border font-semibold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                    className={`min-h-[34px] max-w-[165px] sm:max-w-[210px] px-2.5 py-1.5 rounded-lg border font-semibold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer min-w-0 ${
                       verifiedEmail
                         ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
                         : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
@@ -941,11 +1180,11 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                       setIsFormLoading(true);
                       setFormReloadKey((prev) => prev + 1);
                     }}
-                    className="min-h-[34px] px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                    title="Muat ulang soal"
+                    className="w-8 h-8 sm:w-[34px] sm:h-[34px] rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 inline-flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                    title="Muat Ulang Soal"
+                    aria-label="Muat Ulang Soal"
                   >
                     <RefreshCw className="w-3.5 h-3.5 shrink-0" />
-                    <span>Muat Ulang</span>
                   </button>
                 </>
               )}
@@ -1531,10 +1770,10 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
 
           {/* EXIT PASSWORD MODAL */}
           {isExitPinOpen && (
-            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-6 z-[99999]">
-              <div className="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl text-left">
+            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 z-[99999] overflow-y-auto">
+              <div className="bg-white border border-slate-200 p-5 sm:p-6 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl text-left my-auto max-h-[90dvh] overflow-y-auto">
                 <div className="flex items-center gap-2 text-amber-600">
-                  <Lock className="w-5 h-5 animate-pulse" />
+                  <Lock className="w-5 h-5 animate-pulse shrink-0" />
                   <h4 className="font-bold text-sm text-slate-800">Verifikasi PIN Pengawas</h4>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed">
@@ -1547,7 +1786,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                         type="checkbox"
                         checked={markGoogleFormDoneOnExit}
                         onChange={(e) => setMarkGoogleFormDoneOnExit(e.target.checked)}
-                        className="mt-0.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
+                        className="mt-0.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500 shrink-0"
                       />
                       <span>Tandai ujian ini sudah selesai dikerjakan (ubah status menjadi <strong>Selesai</strong>)</span>
                     </label>
@@ -1562,20 +1801,20 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
                       setExitPin(e.target.value);
                       setExitPinError('');
                     }}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-mono text-center text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full min-h-[42px] bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-mono text-center text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
-                  {exitPinError && <p className="text-[10px] text-rose-600 font-bold font-mono text-center">{exitPinError}</p>}
-                  <div className="flex gap-2 pt-1">
+                  {exitPinError && <p className="text-[11px] text-rose-600 font-bold text-center">{exitPinError}</p>}
+                  <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
                     <button
                       type="button"
                       onClick={() => setIsExitPinOpen(false)}
-                      className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                      className="w-full sm:flex-1 min-h-[40px] py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
                     >
                       Batal (Kembali)
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                      className="w-full sm:flex-1 min-h-[40px] py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
                     >
                       Keluar Ujian
                     </button>

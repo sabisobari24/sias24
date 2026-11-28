@@ -16,7 +16,10 @@ import {
   CheckSquare,
   PlusCircle,
   X,
-  Type
+  Type,
+  FileUp,
+  Loader2,
+  Wand2
 } from 'lucide-react';
 import TextFormattingToolbar from './common/TextFormattingToolbar';
 import FormattedText from './common/FormattedText';
@@ -55,6 +58,19 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
   // Status flags
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [bankUploadFile, setBankUploadFile] = useState<File | null>(null);
+  const [isGeneratingFromBankForm, setIsGeneratingFromBankForm] = useState(false);
+
+  // Import & Auto-Generate modal inside selectedBank view
+  const [isDocImportOpen, setIsDocImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importWeight, setImportWeight] = useState<number>(10);
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+  const [generatedPreview, setGeneratedPreview] = useState<CbtQuestion[]>([]);
+  const [selectedGeneratedIds, setSelectedGeneratedIds] = useState<string[]>([]);
+  const [importError, setImportError] = useState('');
+  const [isSavingImported, setIsSavingImported] = useState(false);
+
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -90,7 +106,54 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
     return () => unsubscribe();
   }, [teacher.id, selectedBank?.id]);
 
-  // Handle saving new / edited Bank (Title, Subject, Class link)
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const res = String(reader.result || '');
+        resolve(res);
+      };
+      reader.onerror = () => reject(new Error('Gagal membaca file dokumen.'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const requestGeneratedQuestionsFromFile = async (
+    file: File,
+    subjectName: string,
+    titleName: string,
+    weightVal: number
+  ): Promise<CbtQuestion[]> => {
+    if (file.size > 15 * 1024 * 1024) {
+      throw new Error('Ukuran file maksimal 15 MB.');
+    }
+
+    const base64DataUrl = await readFileAsBase64(file);
+    const response = await fetch('/api/cbt/generate-questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType: file.type,
+        fileBase64: base64DataUrl,
+        subject: subjectName,
+        bankTitle: titleName,
+        defaultWeight: weightVal,
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.error || 'Gagal meng-generate soal dari dokumen.');
+    }
+    const questions = Array.isArray(data?.questions) ? (data.questions as CbtQuestion[]) : [];
+    if (questions.length === 0) {
+      throw new Error('Tidak ada butir soal yang berhasil dikenali dari dokumen.');
+    }
+    return questions;
+  };
+
+  // Handle saving new / edited Bank (Title, Subject, Class link + optional Doc/PDF auto-generate)
   const handleSaveBank = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -103,30 +166,52 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
 
     const bankId = formId || 'bank-' + Date.now();
     const existingBank = banks.find(b => b.id === bankId);
-
-    const newBank: QuestionBank = {
-      id: bankId,
-      teacherId: teacher.id,
-      teacherName: teacher.name,
-      title: formTitle.trim(),
-      subject: formSubject,
-      classId: formClassId,
-      createdAt: existingBank?.createdAt || new Date().toLocaleDateString('id-ID'),
-      questions: existingBank?.questions || []
-    };
+    let generatedQuestions: CbtQuestion[] = existingBank?.questions || [];
 
     try {
+      if (bankUploadFile) {
+        setIsGeneratingFromBankForm(true);
+        const extracted = await requestGeneratedQuestionsFromFile(
+          bankUploadFile,
+          formSubject,
+          formTitle.trim(),
+          10
+        );
+        generatedQuestions = [...generatedQuestions, ...extracted];
+      }
+
+      const newBank: QuestionBank = {
+        id: bankId,
+        teacherId: teacher.id,
+        teacherName: teacher.name,
+        title: formTitle.trim(),
+        subject: formSubject,
+        classId: formClassId,
+        createdAt: existingBank?.createdAt || new Date().toLocaleDateString('id-ID'),
+        questions: generatedQuestions
+      };
+
       await saveDocument('question_banks', bankId, newBank);
-      setSuccessMsg('Bank Soal berhasil disimpan!');
+      setSuccessMsg(
+        bankUploadFile
+          ? `Bank Soal disimpan & ${generatedQuestions.length} butir soal berhasil di-generate!`
+          : 'Bank Soal berhasil disimpan!'
+      );
       setTimeout(() => {
         setIsFormOpen(false);
         setFormId(null);
         setFormTitle('');
+        setBankUploadFile(null);
         setSuccessMsg('');
+        if (bankUploadFile) {
+          setSelectedBank(newBank);
+        }
       }, 1000);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorMsg('Gagal menyimpan bank soal ke database.');
+      setErrorMsg(err?.message || 'Gagal menyimpan bank soal ke database.');
+    } finally {
+      setIsGeneratingFromBankForm(false);
     }
   };
 
@@ -156,6 +241,9 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
 
   // Open editor for creating/editing a Bank Soal metadata
   const openBankForm = (bank?: QuestionBank) => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    setBankUploadFile(null);
     if (bank) {
       setFormId(bank.id);
       setFormTitle(bank.title);
@@ -168,6 +256,69 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
       setFormClassId('all');
     }
     setIsFormOpen(true);
+  };
+
+  const openDocImportModal = () => {
+    setImportFile(null);
+    setImportError('');
+    setGeneratedPreview([]);
+    setSelectedGeneratedIds([]);
+    setImportWeight(10);
+    setIsDocImportOpen(true);
+  };
+
+  const handleGenerateQuestionsFromDoc = async () => {
+    if (!selectedBank || !importFile) {
+      setImportError('Silakan pilih file PDF, DOCX, atau TXT terlebih dahulu.');
+      return;
+    }
+    setImportError('');
+    setIsGeneratingQuestions(true);
+    try {
+      const items = await requestGeneratedQuestionsFromFile(
+        importFile,
+        selectedBank.subject,
+        selectedBank.title,
+        importWeight
+      );
+      setGeneratedPreview(items);
+      setSelectedGeneratedIds(items.map((q) => q.id));
+    } catch (err: any) {
+      setImportError(err?.message || 'Gagal meng-generate butir soal dari dokumen.');
+    } finally {
+      setIsGeneratingQuestions(false);
+    }
+  };
+
+  const handleSaveGeneratedQuestions = async () => {
+    if (!selectedBank) return;
+    const toAppend = generatedPreview.filter((q) => selectedGeneratedIds.includes(q.id));
+    if (toAppend.length === 0) {
+      setImportError('Pilih minimal 1 butir soal untuk ditambahkan ke Bank Soal.');
+      return;
+    }
+
+    setIsSavingImported(true);
+    setImportError('');
+    try {
+      const updatedBank: QuestionBank = {
+        ...selectedBank,
+        questions: [...(selectedBank.questions || []), ...toAppend],
+      };
+      await saveDocument('question_banks', selectedBank.id, updatedBank);
+      setSelectedBank(updatedBank);
+      setBanks((prev) => prev.map((b) => (b.id === updatedBank.id ? updatedBank : b)));
+      setIsDocImportOpen(false);
+      setGeneratedPreview([]);
+      setImportFile(null);
+      setSuccessMsg(`${toAppend.length} butir soal berhasil ditambahkan ke Bank Soal!`);
+      setTimeout(() => setSuccessMsg(''), 3500);
+    } catch (err) {
+      console.error(err);
+      setImportError('Gagal menyimpan hasil generate ke database.');
+    } finally {
+      setIsSavingImported(false);
+    }
   };
 
   // Open Question creator or editor
@@ -472,28 +623,53 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
         <div className="space-y-6">
           
           {/* Bank Header Navigation */}
-          <div className="bg-white rounded-2xl p-5 border shadow-xs flex items-center justify-between gap-4">
-            <button
-              onClick={() => setSelectedBank(null)}
-              className="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold rounded-xl text-xs flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Kembali ke Direktori</span>
-            </button>
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={() => setSelectedBank(null)}
+                className="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold rounded-xl text-xs flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Kembali ke Direktori</span>
+              </button>
 
-            <div className="text-right hidden sm:block">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">JUDUL BANK AKTIF</p>
-              <p className="text-xs font-black text-slate-800">{selectedBank.title}</p>
+              <div className="text-right md:hidden min-w-0">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">BANK AKTIF</p>
+                <p className="text-xs font-black text-slate-800 truncate">{selectedBank.title}</p>
+              </div>
             </div>
 
-            <button
-              onClick={() => openQuestionForm()}
-              className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm shadow-teal-100 transition-all cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>Tambah Butir Soal</span>
-            </button>
+            <div className="text-center hidden md:block min-w-0">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">JUDUL BANK AKTIF</p>
+              <p className="text-xs font-black text-slate-800 truncate max-w-xs">{selectedBank.title}</p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={openDocImportModal}
+                className="flex-1 sm:flex-none px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <Wand2 className="w-4 h-4 shrink-0" />
+                <span>Upload PDF / Dokumen Soal</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openQuestionForm()}
+                className="flex-1 sm:flex-none px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm shadow-teal-100 transition-all cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4 shrink-0" />
+                <span>Tambah Butir Soal</span>
+              </button>
+            </div>
           </div>
+
+          {successMsg && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{successMsg}</span>
+            </div>
+          )}
 
           {/* List of questions in the active bank */}
           <div className="space-y-4">
@@ -687,21 +863,72 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
                     ))}
                   </select>
                 </div>
+
+                {!formId && (
+                  <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-3.5 space-y-2">
+                    <label className="block text-[10px] font-extrabold text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Wand2 className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Upload Dokumen / PDF Soal (Opsional - Auto Generate)</span>
+                    </label>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Upload file soal (.pdf, .docx, atau .txt) untuk otomatis mengubah isi dokumen menjadi butir-butir soal CBT.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-300 rounded-lg text-[11px] font-bold cursor-pointer transition-colors">
+                        <FileUp className="w-3.5 h-3.5" />
+                        <span>{bankUploadFile ? 'Ganti Dokumen' : 'Pilih PDF / DOCX / TXT'}</span>
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0] || null;
+                            setBankUploadFile(f);
+                            setErrorMsg('');
+                          }}
+                        />
+                      </label>
+                      {bankUploadFile && (
+                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 max-w-full">
+                          <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span className="truncate max-w-[170px]">{bankUploadFile.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setBankUploadFile(null)}
+                            className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                            title="Hapus file"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t">
                 <button
                   type="button"
+                  disabled={isGeneratingFromBankForm}
                   onClick={() => setIsFormOpen(false)}
-                  className="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 rounded-xl cursor-pointer"
+                  className="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 rounded-xl cursor-pointer disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow cursor-pointer transition-colors"
+                  disabled={isGeneratingFromBankForm}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-70 text-white font-bold text-xs rounded-xl shadow cursor-pointer transition-colors inline-flex items-center gap-1.5"
                 >
-                  Simpan Bank Soal
+                  {isGeneratingFromBankForm ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Meng-generate Soal...</span>
+                    </>
+                  ) : (
+                    <span>{bankUploadFile ? 'Buat & Generate Soal' : 'Simpan Bank Soal'}</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -979,6 +1206,232 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: IMPORT & AUTO-GENERATE BUTIR SOAL DARI PDF / DOKUMEN */}
+      {isDocImportOpen && selectedBank && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-100 overflow-hidden my-6 flex flex-col max-h-[90vh]">
+            <div className="bg-indigo-700 p-4 sm:p-5 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Wand2 className="w-5 h-5 shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="font-bold text-sm truncate">Import &amp; Generate Soal CBT dari Dokumen</h3>
+                  <p className="text-[11px] text-indigo-100 truncate">
+                    {selectedBank.title} &bull; {selectedBank.subject}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDocImportOpen(false)}
+                className="text-white/80 hover:text-white cursor-pointer p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+              {importError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{importError}</span>
+                </div>
+              )}
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                  <div className="sm:col-span-2 space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                      Pilih File Dokumen Soal (.pdf, .docx, .txt)
+                    </label>
+                    <label className="flex items-center justify-center gap-2 w-full min-h-[42px] px-4 py-2 bg-white hover:bg-indigo-50 border-2 border-dashed border-indigo-300 rounded-xl text-xs font-bold text-indigo-700 cursor-pointer transition-colors">
+                      <FileUp className="w-4 h-4 shrink-0" />
+                      <span className="truncate">
+                        {importFile ? importFile.name : 'Klik untuk Pilih File PDF / Word (.docx) / TXT'}
+                      </span>
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0] || null;
+                          setImportFile(f);
+                          setImportError('');
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                      Bobot Default Poin
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={importWeight}
+                      onChange={(e) => setImportWeight(Math.max(1, parseInt(e.target.value, 10) || 10))}
+                      className="w-full min-h-[42px] px-3 py-2 text-xs font-bold border border-slate-300 rounded-xl bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                  <p className="text-[11px] text-slate-500">
+                    Sistem otomatis membaca seluruh butir soal (PG, PG Kompleks, Isian, Essay), opsi jawaban A–E, rumus, dan kunci jawaban.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={!importFile || isGeneratingQuestions}
+                    onClick={handleGenerateQuestionsFromDoc}
+                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shrink-0 transition-colors"
+                  >
+                    {isGeneratingQuestions ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Memproses Dokumen...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Generate Butir Soal</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {generatedPreview.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                    <h4 className="font-bold text-xs text-slate-800">
+                      Pratinjau Hasil Generate ({selectedGeneratedIds.length} / {generatedPreview.length} soal dipilih)
+                    </h4>
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGeneratedIds(generatedPreview.map((q) => q.id))}
+                        className="text-indigo-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Pilih Semua
+                      </button>
+                      <span className="text-slate-300">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGeneratedIds([])}
+                        className="text-slate-500 font-bold hover:underline cursor-pointer"
+                      >
+                        Kosongkan
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 max-h-[42vh] overflow-y-auto pr-1">
+                    {generatedPreview.map((q, idx) => {
+                      const isChecked = selectedGeneratedIds.includes(q.id);
+                      return (
+                        <div
+                          key={q.id}
+                          onClick={() =>
+                            setSelectedGeneratedIds((prev) =>
+                              prev.includes(q.id) ? prev.filter((id) => id !== q.id) : [...prev, q.id]
+                            )
+                          }
+                          className={`p-3.5 rounded-xl border text-left space-y-2 cursor-pointer transition-colors ${
+                            isChecked
+                              ? 'bg-emerald-50/40 border-emerald-300'
+                              : 'bg-slate-50 border-slate-200 opacity-65'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {}}
+                                className="rounded border-slate-300 text-indigo-600"
+                              />
+                              <span className="text-xs font-black text-slate-700">#{idx + 1}</span>
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
+                                {q.type.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-teal-700">Bobot: {q.weight ?? 10}</span>
+                          </div>
+
+                          <p className="text-xs font-semibold text-slate-800 whitespace-pre-wrap">{q.text}</p>
+
+                          {q.formula && (
+                            <p className="text-[11px] font-mono bg-indigo-50 text-indigo-800 px-2.5 py-1 rounded-lg">
+                              Rumus: {q.formula}
+                            </p>
+                          )}
+
+                          {q.options && q.options.length > 0 ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              {q.options.map((opt, oIdx) => {
+                                const isAns = q.correctAnswers.includes(opt);
+                                return (
+                                  <div
+                                    key={oIdx}
+                                    className={`px-2.5 py-1.5 rounded-lg border text-[11px] flex items-center justify-between gap-1 ${
+                                      isAns
+                                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
+                                        : 'bg-white border-slate-200 text-slate-600'
+                                    }`}
+                                  >
+                                    <span>{opt}</span>
+                                    {isAns && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            q.correctAnswers[0] && (
+                              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                                Kunci Referensi: {q.correctAnswers[0]}
+                              </p>
+                            )
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsDocImportOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer"
+              >
+                Tutup
+              </button>
+              <button
+                type="button"
+                disabled={selectedGeneratedIds.length === 0 || isSavingImported}
+                onClick={handleSaveGeneratedQuestions}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow cursor-pointer inline-flex items-center justify-center gap-1.5"
+              >
+                {isSavingImported ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Menyimpan Soal...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Tambahkan {selectedGeneratedIds.length} Soal ke Bank Soal</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

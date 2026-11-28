@@ -98,6 +98,36 @@ export function compressImageBase64(canvas: HTMLCanvasElement, maxKb: number = 1
   return dataUrl;
 }
 
+export function isExamScheduleExpired(exam: ExamSchedule, now: Date = new Date()): boolean {
+  if (!exam?.date) return false;
+  const dateParts = exam.date.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!dateParts) return false;
+
+  const year = Number(dateParts[1]);
+  const month = Number(dateParts[2]) - 1;
+  const day = Number(dateParts[3]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return false;
+
+  const timeMatches = Array.from(String(exam.time || '').matchAll(/(\d{1,2})[:.](\d{2})/g));
+  let endHour = 23;
+  let endMinute = 59;
+
+  if (timeMatches.length >= 2) {
+    const lastMatch = timeMatches[timeMatches.length - 1];
+    endHour = Math.min(23, Math.max(0, Number(lastMatch[1])));
+    endMinute = Math.min(59, Math.max(0, Number(lastMatch[2])));
+  } else if (timeMatches.length === 1) {
+    const startHour = Math.min(23, Math.max(0, Number(timeMatches[0][1])));
+    const startMinute = Math.min(59, Math.max(0, Number(timeMatches[0][2])));
+    const plus2Hours = Math.min(23 * 60 + 59, startHour * 60 + startMinute + 120);
+    endHour = Math.floor(plus2Hours / 60);
+    endMinute = plus2Hours % 60;
+  }
+
+  const deadline = new Date(year, month, day, endHour, endMinute, 59, 999);
+  return now.getTime() > deadline.getTime();
+}
+
 interface SiswaPanelProps {
   student: Student;
   classes: SchoolClass[];
@@ -229,8 +259,10 @@ export default function SiswaPanel({
       const matched = examSchedules.find((ex) => ex.id === parsed.examId);
       if (matched) {
         localStorage.removeItem('siakad_cbt_pending_resume');
-        setActiveTab('cbt-ujian');
-        setActiveExamForBrowser(matched);
+        if (!isExamScheduleExpired(matched)) {
+          setActiveTab('cbt-ujian');
+          setActiveExamForBrowser(matched);
+        }
       }
     } catch {
       /* ignore */
@@ -240,6 +272,7 @@ export default function SiswaPanel({
   const [selfStatus, setSelfStatus] = useState<'Hadir' | 'Sakit' | 'Izin'>('Hadir');
   const [selfNotes, setSelfNotes] = useState('');
   const [liveTime, setLiveTime] = useState('');
+  const [currentNow, setCurrentNow] = useState<Date>(() => new Date());
   const [isResubmitting, setIsResubmitting] = useState(false);
 
   // QR Code Kartu Pelajar & Attendance Method Choice
@@ -297,6 +330,7 @@ export default function SiswaPanel({
   useEffect(() => {
     const updateClock = () => {
       const now = new Date();
+      setCurrentNow(now);
       setLiveTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB');
     };
     updateClock();
@@ -2152,7 +2186,9 @@ export default function SiswaPanel({
 
         {/* CBT EXAM TAB */}
         {activeTab === 'cbt-ujian' && (() => {
-          const todayIso = new Date().toISOString().split('T')[0];
+          const d = currentNow;
+          const todayIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          const activeScheduleCount = matchedExams.filter((ex) => !isExamScheduleExpired(ex, currentNow)).length;
           const avgScore =
             matchedGrades.length > 0
               ? Math.round(matchedGrades.reduce((sum, g) => sum + (Number(g.score) || 0), 0) / matchedGrades.length)
@@ -2179,7 +2215,7 @@ export default function SiswaPanel({
                   <div>
                     <span className="text-xs text-slate-500 block">Jadwal Aktif</span>
                     <span className="text-lg font-bold text-slate-900 tabular-nums">
-                      {matchedExams.length}
+                      {activeScheduleCount}
                     </span>
                   </div>
                   <div className="border-l border-slate-200 pl-4 sm:pl-6">
@@ -2204,10 +2240,10 @@ export default function SiswaPanel({
                   <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2">
                     <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <span>Jadwal Ujian Aktif</span>
+                      <span>Jadwal Ujian CBT</span>
                     </h4>
                     <span className="text-xs text-slate-500 tabular-nums">
-                      {matchedExams.length} Ujian
+                      {activeScheduleCount} Aktif / {matchedExams.length} Total
                     </span>
                   </div>
 
@@ -2221,6 +2257,7 @@ export default function SiswaPanel({
                       </div>
                     ) : (
                       matchedExams.map((exam) => {
+                        const isExpired = isExamScheduleExpired(exam, currentNow);
                         const isToday = exam.date === todayIso;
                         const modeLabel = exam.questionBankId
                           ? 'CBT Mandiri'
@@ -2246,23 +2283,32 @@ export default function SiswaPanel({
                           <div
                             key={exam.id}
                             className={`p-5 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                              isToday ? 'bg-indigo-50/35' : 'hover:bg-slate-50/70'
+                              isExpired
+                                ? 'bg-slate-50/75 opacity-80'
+                                : isToday
+                                ? 'bg-indigo-50/35'
+                                : 'hover:bg-slate-50/70'
                             }`}
                           >
                             <div className="space-y-1.5 min-w-0 text-left">
                               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                                <span className="font-semibold text-indigo-700">{exam.type}</span>
+                                <span className={`font-semibold ${isExpired ? 'text-slate-500' : 'text-indigo-700'}`}>{exam.type}</span>
                                 <span aria-hidden="true">&middot;</span>
                                 <span>{modeLabel}</span>
-                                {isToday && (
+                                {isExpired ? (
+                                  <>
+                                    <span aria-hidden="true">&middot;</span>
+                                    <span className="font-bold text-rose-600">Tidak Aktif (Waktu Habis)</span>
+                                  </>
+                                ) : isToday ? (
                                   <>
                                     <span aria-hidden="true">&middot;</span>
                                     <span className="font-bold text-emerald-700">Berlangsung Hari Ini</span>
                                   </>
-                                )}
+                                ) : null}
                               </div>
 
-                              <h5 className="text-sm font-bold text-slate-900 leading-snug">
+                              <h5 className={`text-sm font-bold leading-snug ${isExpired ? 'text-slate-500' : 'text-slate-900'}`}>
                                 {exam.subject}
                               </h5>
 
@@ -2296,6 +2342,15 @@ export default function SiswaPanel({
                                 <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                                 <span>Selesai</span>
                               </div>
+                            ) : isExpired ? (
+                              <button
+                                type="button"
+                                disabled
+                                className="w-full sm:w-auto min-h-[40px] bg-slate-100 text-slate-400 border border-slate-200 text-xs font-bold px-4 py-2 rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed shrink-0 whitespace-nowrap"
+                              >
+                                <Clock className="w-3.5 h-3.5 shrink-0" />
+                                <span>Waktu Berakhir</span>
+                              </button>
                             ) : (
                               <button
                                 type="button"

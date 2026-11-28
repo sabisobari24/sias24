@@ -3629,7 +3629,14 @@ export default function App({ initialMode }: AppProps = {}) {
       <AnimatePresence mode="wait">
         {pageMode === 'landing' ? (
           /* PUBLIC SCHOOL WEBSITE LAYOUT (index.html) */
-          <div key="public-site" className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
+          <motion.div
+            key="public-site"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.28, ease: 'easeOut' }}
+            className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased"
+          >
             {/* Header / Navigation Bar */}
             <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs px-3 sm:px-6 md:px-8 2xl:px-12 py-2.5 sm:py-3.5">
               <div className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex flex-col md:flex-row items-center justify-between gap-2.5 md:gap-4">
@@ -3729,10 +3736,10 @@ export default function App({ initialMode }: AppProps = {}) {
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={publicTab}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.28, ease: 'easeOut' }}
                 >
                   {publicTab === 'beranda' && (
                     <WebHome 
@@ -3824,10 +3831,17 @@ export default function App({ initialMode }: AppProps = {}) {
                 </div>
               </div>
             </footer>
-          </div>
+          </motion.div>
         ) : !activeRole ? (
           /* PORTAL LOGIN SCREEN (login.html) */
-          <div key="portal-login-site" className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
+          <motion.div
+            key="portal-login-site"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.28, ease: 'easeOut' }}
+            className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased"
+          >
             {/* Dedicated Top Navigation for Login Portal */}
             <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs px-3 sm:px-6 md:px-8 2xl:px-12 py-2.5 sm:py-3.5">
               <div className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex items-center justify-between gap-2 sm:gap-4">
@@ -3866,7 +3880,12 @@ export default function App({ initialMode }: AppProps = {}) {
             <main className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto px-4 sm:px-6 md:px-8 2xl:px-12 py-6 md:py-8 flex-grow">
               <div className="space-y-8">
                       {/* School Hero Brand Header styled for SMPN 50 Jakarta */}
-                      <div className="bg-gradient-to-r from-blue-700 via-indigo-800 to-indigo-900 rounded-3xl p-6 md:p-8 text-white shadow-xl shadow-indigo-100 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                      <motion.div
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.35, ease: 'easeOut' }}
+                        className="bg-gradient-to-r from-blue-700 via-indigo-800 to-indigo-900 rounded-3xl p-6 md:p-8 text-white shadow-xl shadow-indigo-100 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden"
+                      >
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.08),transparent_50%)]" />
                         <div className="flex items-center gap-4 md:gap-5 relative z-10">
                           <div className="w-14 h-14 md:w-16 md:h-16 bg-white rounded-2xl flex items-center justify-center border border-white/40 shadow-md shrink-0 overflow-hidden">
@@ -3899,10 +3918,15 @@ export default function App({ initialMode }: AppProps = {}) {
                           <p>NPSN: <span className="text-white font-bold">20103599</span></p>
                           <p>Wilayah: <span className="text-white font-bold">Jakarta Timur</span></p>
                         </div>
-                      </div>
+                      </motion.div>
 
                       {/* SECTION 1: INFOGRAFIS UTAMA & INDIKATOR KINERJA SEKOLAH */}
-                      <div className="space-y-4">
+                      <motion.div
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.35, delay: 0.08, ease: 'easeOut' }}
+                        className="space-y-4"
+                      >
                         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 text-left">
                           <TrendingUp className="w-4 h-4 text-indigo-600" />
                           <span>Info Grafis &amp; Statistik Real-time Sekolah</span>
@@ -3999,10 +4023,15 @@ export default function App({ initialMode }: AppProps = {}) {
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
 
                       {/* SECTION 2: PERAN AKSES UTAMA */}
-                      <div className="space-y-4">
+                      <motion.div
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.35, delay: 0.14, ease: 'easeOut' }}
+                        className="space-y-4"
+                      >
                         <div className="text-center md:text-left space-y-1">
                           <h2 className="text-lg font-bold text-slate-800 flex items-center justify-center md:justify-start gap-2">
                             <Users className="w-5 h-5 text-indigo-600" />
@@ -4066,7 +4095,7 @@ export default function App({ initialMode }: AppProps = {}) {
                             Ajukan Pendaftaran Akun
                           </button>
                         </div>
-                      </div>
+                      </motion.div>
 
                       {/* SECTION 3: LOGIN FORM MODAL (POP UP FLOW) */}
                       <AnimatePresence>
@@ -4460,7 +4489,7 @@ export default function App({ initialMode }: AppProps = {}) {
                 </div>
               </div>
             </footer>
-          </div>
+          </motion.div>
         ) : activeRole === 'pelatih' ? (
           <CoachPanel
             activeUser={activeUser}
@@ -4473,9 +4502,13 @@ export default function App({ initialMode }: AppProps = {}) {
           />
         ) : (
           /* PORTAL APP MAIN LAYOUT */
-          <div
+          <motion.div
             key="portal"
-            className="min-h-screen bg-slate-50/70 flex font-sans text-slate-900 overflow-hidden relative"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="min-h-dvh bg-slate-50/70 flex font-sans text-slate-900 overflow-hidden relative"
           >
             {/* REALTIME SYNC ERROR BANNER */}
             <AnimatePresence>
@@ -4549,7 +4582,7 @@ export default function App({ initialMode }: AppProps = {}) {
             <aside 
               onClick={() => setIsMobileMenuOpen(false)}
               className={`
-              w-64 max-w-[85vw] lg:w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-col shrink-0 h-screen transition-all duration-300
+              w-64 max-w-[85vw] lg:w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-col shrink-0 h-dvh transition-all duration-300
               ${isMobileMenuOpen ? 'fixed left-0 top-0 bottom-0 z-50 flex shadow-2xl' : 'hidden md:sticky md:top-0'}
               ${isSidebarVisible ? 'md:flex' : 'md:hidden'}
             `}>
@@ -4598,7 +4631,7 @@ export default function App({ initialMode }: AppProps = {}) {
               </div>
 
               {/* Sidebar Middle Content: Current Session & Role Switcher */}
-              <div className="flex-1 p-5 space-y-6 overflow-y-auto">
+              <div className="flex-1 min-h-0 p-4 sm:p-5 space-y-5 overflow-y-auto overscroll-contain">
                 <div>
                   <h3 className="px-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Peran Aktif</h3>
                   <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 space-y-3 shadow-sm">
@@ -5184,19 +5217,11 @@ export default function App({ initialMode }: AppProps = {}) {
               </div>
 
               {/* Sidebar Footer Operations */}
-              <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setIsProfileModalOpen(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300 rounded-xl text-xs font-bold text-indigo-700 transition-colors shadow-sm cursor-pointer"
-                >
-                  <User className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                  <span>Edit Profil & Sandi</span>
-                </button>
+              <div className="p-3.5 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-2 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-800 transition-colors shadow-sm cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-800 transition-colors shadow-sm cursor-pointer"
                 >
                   <LogOut className="w-4 h-4 shrink-0" />
                   <span>Logout</span>
@@ -5205,7 +5230,7 @@ export default function App({ initialMode }: AppProps = {}) {
             </aside>
 
             {/* Main Content Pane */}
-            <main className="flex-1 min-w-0 flex flex-col h-screen overflow-y-auto overflow-x-hidden">
+            <main className="flex-1 min-w-0 flex flex-col h-dvh overflow-y-auto overflow-x-hidden">
               {/* Top Mobile/Header Nav */}
               <header className="h-14 sm:h-16 md:h-20 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2.5 sm:px-6 md:px-8 2xl:px-12 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-xs gap-2 sm:gap-3 w-full max-w-full">
                 {/* Mobile Drawer Toggle Button (Guaranteed fixed slot on small screens, never overlapped) */}
@@ -5490,29 +5515,24 @@ export default function App({ initialMode }: AppProps = {}) {
                     variant="navbar"
                   />
 
-                  {/* Profile info & Mobile Logout */}
-                  <div className="flex items-center gap-1 sm:gap-2.5 border-l border-slate-200/80 dark:border-slate-700 pl-1.5 sm:pl-3 shrink-0">
+                  {/* Unified Single Top-Right Profile Button & Mobile Logout */}
+                  <div className="flex items-center gap-1 sm:gap-2 border-l border-slate-200/80 dark:border-slate-700 pl-1.5 sm:pl-3 shrink-0">
                     <button
                       type="button"
                       onClick={() => setIsProfileModalOpen(true)}
-                      className="text-right hidden sm:block hover:text-indigo-600 transition-colors group cursor-pointer max-w-[140px] xl:max-w-[200px]"
-                      title="Klik untuk Edit Profil & Kata Sandi"
-                    >
-                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center justify-end gap-1 truncate">
-                        <span className="truncate">{activeUser?.name || 'User'}</span>
-                      </p>
-                      <p className="text-[10px] text-slate-400 capitalize mt-0.5 truncate">{activeRole?.replace('_', ' ')}</p>
-                    </button>
-
-                    {/* Compact profile button for mobile */}
-                    <button
-                      type="button"
-                      onClick={() => setIsProfileModalOpen(true)}
-                      className="sm:hidden w-8 h-8 flex items-center justify-center text-slate-500 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer shrink-0"
+                      className="flex items-center gap-2 rounded-xl px-1.5 sm:px-2 py-1 text-slate-600 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all group cursor-pointer max-w-[190px] xl:max-w-[240px]"
                       title="Edit Profil & Kata Sandi"
                       aria-label="Edit Profil & Kata Sandi"
                     >
-                      <User className="w-4 h-4 shrink-0" />
+                      <div className="text-right hidden sm:block min-w-0">
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                          {activeUser?.name || 'User'}
+                        </p>
+                        <p className="text-[10px] text-slate-400 capitalize mt-0.5 truncate">{activeRole?.replace('_', ' ')}</p>
+                      </div>
+                      <span className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4 shrink-0" />
+                      </span>
                     </button>
 
                     <button
@@ -6020,7 +6040,7 @@ export default function App({ initialMode }: AppProps = {}) {
                 </p>
               </footer>
             </main>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

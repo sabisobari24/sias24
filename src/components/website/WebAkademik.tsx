@@ -82,7 +82,10 @@ export default function WebAkademik() {
     <div className="space-y-10 pb-12 font-sans text-left">
       
       {/* BANNER HEADER */}
-      <div 
+      <motion.div 
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
         className="bg-cover bg-center rounded-3xl p-10 text-white relative overflow-hidden border-b-6 border-amber-400"
         style={{ 
           backgroundImage: `linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 58, 138, 0.75) 100%), url('${getHighResMediaUrl(webContent.headerBgImage || 'https://lh3.googleusercontent.com/d/18Ky3AJ-jAzh49hAhH6_R_K24aSUp4OTz', 1920)}')` 
@@ -93,10 +96,16 @@ export default function WebAkademik() {
           <h1 className="text-2xl md:text-3xl lg:text-4xl font-black tracking-tight">{webContent.headerTitle || 'Bidang Akademik & Kurikulum'}</h1>
           <p className="text-xs md:text-sm text-slate-200">{webContent.headerSubtitle || 'Mewujudkan Standar Pendidikan Berkualitas Tinggi, Inovatif, dan Berpusat pada Murid.'}</p>
         </div>
-      </div>
+      </motion.div>
 
       {/* TWO COLUMN: WAKA KESISWAAN PROFILE & PROGRAM KERJA */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+      >
         
         {/* SIDEBAR: WAKA AKADEMIK */}
         <aside className="lg:col-span-4 space-y-6">
@@ -322,10 +331,16 @@ export default function WebAkademik() {
 
         </section>
 
-      </div>
+      </motion.div>
 
       {/* TEN SUBJECTS GRID */}
-      <div className="bg-white border border-slate-200/80 rounded-3xl p-6 md:p-8 shadow-xs space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="bg-white border border-slate-200/80 rounded-3xl p-6 md:p-8 shadow-xs space-y-6"
+      >
         <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
           <BookOpen className="w-5.5 h-5.5 text-blue-700" />
           <span>Struktur 10 Mata Pelajaran Kurikulum Merdeka</span>
@@ -350,7 +365,7 @@ export default function WebAkademik() {
             </button>
           ))}
         </div>
-      </div>
+      </motion.div>
 
       {/* POPUP MODALS (PORTAL TO BODY AGAR TIDAK TERTUTUP HEADER / TAMPILAN LAIN) */}
       {typeof document !== 'undefined' && createPortal(

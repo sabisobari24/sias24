@@ -266,3 +266,10 @@ html.dark .scrollbar-thin {
   scrollbar-color: #6366f1 #1e293b !important;
 }
 
+@media print {
+  #exambro-container {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}
+

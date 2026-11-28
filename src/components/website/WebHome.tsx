@@ -519,7 +519,13 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
       </div>
 
       {/* TWO COLUMN CONTENT: VISI-MISI & PROFIL KEPSEK */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+      >
         
         {/* LEFT COLUMN: VISI & MISI (7/12) */}
         <div className="lg:col-span-7 space-y-8 text-left">
@@ -907,10 +913,16 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
 
         </div>
 
-      </div>
+      </motion.div>
 
       {/* STATS OVERVIEW SECTION */}
-      <div className="bg-white border border-slate-200/80 rounded-3xl p-6 md:p-8 shadow-sm text-left">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="bg-white border border-slate-200/80 rounded-3xl p-6 md:p-8 shadow-sm text-left"
+      >
         <h2 className="text-sm font-bold text-blue-800 uppercase tracking-widest flex items-center gap-2 mb-6 border-b border-slate-100 pb-3">
           <TrendingUp className="w-4.5 h-4.5" />
           <span>Statistik Profil &amp; Status Satuan Pendidikan</span>
@@ -985,10 +997,16 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
             showFeedbackPreview
           />
         </div>
-      </div>
+      </motion.div>
 
       {/* SECTION 1: PERSENTASE SISWA PENERIMA KJP PLUS */}
-      <div className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 md:p-8 shadow-sm text-left space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 md:p-8 shadow-sm text-left space-y-6"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -1129,10 +1147,16 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* SECTION 2: LAPORAN KEUANGAN BOS & BOP */}
-      <div className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 md:p-8 shadow-sm text-left space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 md:p-8 shadow-sm text-left space-y-6"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -1245,7 +1269,7 @@ export default function WebHome({ onNavigateToTab, totalStudents, totalTeachers,
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* POPUP MODALS (PORTAL TO BODY AGAR TIDAK TERTUTUP HEADER / TAMPILAN LAIN) */}
       {typeof document !== 'undefined' && createPortal(

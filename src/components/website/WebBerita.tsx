@@ -90,14 +90,24 @@ export default function WebBerita() {
     <div className="space-y-8 pb-12 font-sans text-left">
       
       {/* BANNER HEADER */}
-      <div className="bg-white border border-slate-200/80 p-6 md:p-8 rounded-3xl shadow-xs">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="bg-white border border-slate-200/80 p-6 md:p-8 rounded-3xl shadow-xs"
+      >
         <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Pusat Pengumuman &amp; Berita</h1>
         <p className="text-xs sm:text-sm text-slate-500 mt-1.5 font-medium">Informasi resmi sekolah, berita pendidikan, agenda pekanan, serta kegiatan mendatang.</p>
-      </div>
+      </motion.div>
 
       {/* HOT NEWS BANNER TICKER */}
       {tickers.length > 0 && (
-        <div className="bg-gradient-to-r from-blue-800 via-indigo-900 to-slate-900 border-l-6 border-amber-400 text-white rounded-2xl px-5 py-3.5 flex items-center gap-4 shadow-md overflow-hidden relative">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+          className="bg-gradient-to-r from-blue-800 via-indigo-900 to-slate-900 border-l-6 border-amber-400 text-white rounded-2xl px-5 py-3.5 flex items-center gap-4 shadow-md overflow-hidden relative"
+        >
           <span className="bg-rose-500 text-white font-extrabold text-xs uppercase tracking-wider px-3.5 py-1.5 rounded-full shrink-0 flex items-center gap-1.5 shadow-sm z-10">
             <Flame className="w-4 h-4 text-amber-300 animate-pulse" />
             <span>Hot News</span>
@@ -141,11 +151,17 @@ export default function WebBerita() {
               })}
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* MAIN LAYOUT GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+      >
         
         {/* LEFT PANEL: MAIN ARTICLES (8/12) */}
         <section className="lg:col-span-8 space-y-8">
@@ -334,7 +350,7 @@ export default function WebBerita() {
 
         </aside>
 
-      </div>
+      </motion.div>
 
       {/* POPUP MODALS (PORTAL TO BODY AGAR TIDAK TERTUTUP HEADER / TAMPILAN LAIN) */}
       {typeof document !== 'undefined' && createPortal(
