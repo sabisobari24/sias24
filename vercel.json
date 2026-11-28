@@ -13,7 +13,7 @@
       "destination": "/login.html"
     },
     {
-      "source": "/((?!login|assets|.*\\..*).*)",
+      "source": "/((?!api|login|assets|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],
