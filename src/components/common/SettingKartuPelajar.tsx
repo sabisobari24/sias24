@@ -966,12 +966,12 @@ export default function SettingKartuPelajar({ classes = [] }: { classes?: School
                         </div>
                       )}
 
-                      {/* Foto Siswa */}
-                      <div className="w-18 aspect-[3/4] bg-slate-200 rounded-lg overflow-hidden border-2 border-slate-700/30 shadow-xs shrink-0 flex items-center justify-center relative z-10">
+                      {/* Foto Siswa (Presisi 3:4) */}
+                      <div className="w-[84px] aspect-[3/4] bg-slate-200 rounded-lg overflow-hidden border-2 border-slate-700/30 shadow-xs shrink-0 flex items-center justify-center relative z-10">
                         <img
                           src={sampleStudent.avatarUrl}
                           alt="Foto Siswa"
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover object-top"
                         />
                       </div>
 

@@ -12,6 +12,7 @@ import {
   getRangeTitleSuffix
 } from '../utils/exportDateFilter';
 import { getSchoolClassName, isSameClass } from '../utils/classUtils';
+import { resolveStudentAvatarUrl } from '../utils/avatarHelper';
 
 interface GuruWaliPanelProps {
   teacher: Teacher;
@@ -577,7 +578,7 @@ export default function GuruWaliPanel({
                         return (
                           <tr key={s.id} className="hover:bg-slate-50/50">
                             <td className="px-4 py-3 font-bold text-slate-800 flex items-center gap-2">
-                              <img src={s.avatarUrl} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                              <img src={resolveStudentAvatarUrl(s.avatarUrl, s.gender)} alt="" className="w-6 h-6 rounded-full object-cover object-top shrink-0" />
                               <span>{s.name}</span>
                             </td>
                             <td className="px-4 py-3 text-slate-500 font-mono">{s.nisn}</td>
@@ -787,7 +788,7 @@ export default function GuruWaliPanel({
                       return (
                         <tr key={s.id} className="hover:bg-slate-50">
                           <td className="px-4 py-3 font-bold text-slate-900 flex items-center gap-2">
-                            <img src={s.avatarUrl} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                            <img src={resolveStudentAvatarUrl(s.avatarUrl, s.gender)} alt="" className="w-6 h-6 rounded-full object-cover object-top shrink-0" />
                             <span>{s.name}</span>
                           </td>
                           <td className="px-4 py-3 font-mono text-slate-500">{s.nisn}</td>
@@ -1345,7 +1346,7 @@ export default function GuruWaliPanel({
               {myStudents.map((s) => (
                 <div key={s.id} className="p-4 rounded-xl border border-purple-100 bg-purple-50/20 space-y-2.5 text-xs">
                   <div className="flex items-center gap-2 border-b border-purple-100 pb-2">
-                    <img src={s.avatarUrl} alt="" className="w-6 h-6 rounded-full shrink-0" />
+                    <img src={resolveStudentAvatarUrl(s.avatarUrl, s.gender)} alt="" className="w-6 h-6 rounded-full object-cover object-top shrink-0" />
                     <div>
                       <p className="font-bold text-slate-800">{s.name}</p>
                       <p className="text-[10px] text-slate-400">Kelas: {getSchoolClassName(s.classId, classes)}</p>

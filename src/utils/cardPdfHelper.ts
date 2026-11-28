@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { Student, SchoolClass } from '../types';
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from './schoolLogoHelper';
 import { getSchoolClassName } from './classUtils';
+import { isCartoonOrPlaceholderAvatar, isFemaleGender } from './avatarHelper';
 
 const escapeHtml = (val: unknown): string => {
   if (val === null || val === undefined) return '';
@@ -206,92 +207,149 @@ export function getFullCardAdminConfig(overrides?: Partial<CardAdminConfig>): Ca
 }
 
 /**
- * Generate a pristine high-resolution PNG Avatar data URL using pure HTML5 Canvas.
- * Unlike SVG data URLs, PNG data URLs are 100% rendered by html2canvas without CORS or blank box issues.
+ * Generate a pristine high-resolution 3:4 PNG gender-matched student portrait using HTML5 Canvas.
+ * Non-cartoon formal school portrait silhouette so html2canvas renders 100% reliably without external CORS issues.
  */
-export function createStudentAvatarPng(name: string, gender?: string): string {
+export function createStudentAvatarPng(_name: string, gender?: string): string {
   const canvas = document.createElement('canvas');
   canvas.width = 240;
-  canvas.height = 300;
+  canvas.height = 320;
   const ctx = canvas.getContext('2d');
   if (!ctx) return '';
 
-  // Background gradient: Deep royal navy blue formal student backdrop
-  const grad = ctx.createLinearGradient(0, 0, 0, 300);
+  const isFemale = isFemaleGender(gender);
+
+  // Formal studio navy-slate gradient backdrop
+  const grad = ctx.createLinearGradient(0, 0, 0, 320);
   grad.addColorStop(0, '#1e3a8a');
-  grad.addColorStop(0.6, '#1e293b');
   grad.addColorStop(1, '#0f172a');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 240, 300);
+  ctx.fillRect(0, 0, 240, 320);
 
-  // Soft studio light radial highlight behind portrait
-  const glow = ctx.createRadialGradient(120, 110, 15, 120, 110, 95);
-  glow.addColorStop(0, 'rgba(99, 102, 241, 0.45)');
+  // Soft studio rim light behind portrait
+  const glow = ctx.createRadialGradient(120, 122, 12, 120, 122, 92);
+  glow.addColorStop(0, isFemale ? 'rgba(99, 102, 241, 0.25)' : 'rgba(59, 130, 246, 0.25)');
   glow.addColorStop(1, 'rgba(30, 58, 138, 0)');
   ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.arc(120, 110, 95, 0, Math.PI * 2);
+  ctx.arc(120, 122, 92, 0, Math.PI * 2);
   ctx.fill();
 
-  // White Uniform Shoulders & Torso (Indonesian School Uniform style)
-  ctx.fillStyle = '#ffffff';
+  if (isFemale) {
+    // Neat shoulder-length female hair back silhouette
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.moveTo(68, 134);
+    ctx.bezierCurveTo(66, 80, 88, 52, 120, 52);
+    ctx.bezierCurveTo(152, 52, 174, 80, 172, 134);
+    ctx.lineTo(176, 208);
+    ctx.quadraticCurveTo(168, 217, 148, 214);
+    ctx.lineTo(92, 214);
+    ctx.quadraticCurveTo(72, 217, 64, 208);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    // Short neat male hair back contour & ears
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.ellipse(120, 102, 43, 48, 0, Math.PI * 0.9, Math.PI * 2.1);
+    ctx.fill();
+
+    ctx.fillStyle = '#cbd5e1';
+    ctx.beginPath();
+    ctx.ellipse(79, 124, 5, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(161, 124, 5, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Neck
+  ctx.fillStyle = '#cbd5e1';
   ctx.beginPath();
-  ctx.moveTo(25, 300);
-  ctx.quadraticCurveTo(45, 185, 120, 170);
-  ctx.quadraticCurveTo(195, 185, 215, 300);
+  ctx.moveTo(102, 166);
+  ctx.lineTo(138, 166);
+  ctx.lineTo(142, 216);
+  ctx.lineTo(98, 216);
   ctx.closePath();
   ctx.fill();
 
-  // School Uniform Collar details
-  ctx.strokeStyle = '#cbd5e1';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(90, 175);
-  ctx.lineTo(120, 215);
-  ctx.lineTo(150, 175);
-  ctx.stroke();
-
-  // Formal School Tie (Navy Blue)
-  ctx.fillStyle = '#1e3a8a';
-  ctx.beginPath();
-  ctx.moveTo(112, 195);
-  ctx.lineTo(128, 195);
-  ctx.lineTo(124, 265);
-  ctx.lineTo(120, 280);
-  ctx.lineTo(116, 265);
-  ctx.closePath();
-  ctx.fill();
-
-  // Avatar Head Circle
+  // Formal clean face silhouette (non-cartoon)
   ctx.fillStyle = '#e2e8f0';
   ctx.beginPath();
-  ctx.arc(120, 100, 48, 0, Math.PI * 2);
+  ctx.moveTo(83, 114);
+  ctx.bezierCurveTo(83, 90, 99, 76, 120, 76);
+  ctx.bezierCurveTo(141, 76, 157, 90, 157, 114);
+  ctx.bezierCurveTo(157, 145, 141, 173, 120, 175);
+  ctx.bezierCurveTo(99, 173, 83, 145, 83, 114);
+  ctx.closePath();
   ctx.fill();
 
-  // Head contour border
-  ctx.strokeStyle = '#94a3b8';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
+  // Front hair contour
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath();
+  if (isFemale) {
+    ctx.moveTo(82, 114);
+    ctx.bezierCurveTo(82, 82, 99, 66, 120, 66);
+    ctx.bezierCurveTo(141, 66, 158, 82, 158, 114);
+    ctx.quadraticCurveTo(142, 92, 124, 85);
+    ctx.quadraticCurveTo(102, 91, 82, 114);
+  } else {
+    ctx.moveTo(81, 108);
+    ctx.bezierCurveTo(84, 82, 100, 68, 120, 68);
+    ctx.bezierCurveTo(140, 68, 156, 82, 159, 108);
+    ctx.quadraticCurveTo(142, 88, 120, 87);
+    ctx.quadraticCurveTo(98, 88, 81, 108);
+  }
+  ctx.closePath();
+  ctx.fill();
 
-  // Student Initials in Head
-  const initials = (name || 'S')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(w => w[0]?.toUpperCase() || '')
-    .join('') || 'S';
+  // White SMP uniform shirt shoulders
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.moveTo(26, 320);
+  ctx.bezierCurveTo(32, 246, 66, 210, 100, 206);
+  ctx.lineTo(120, 232);
+  ctx.lineTo(140, 206);
+  ctx.bezierCurveTo(174, 210, 208, 246, 214, 320);
+  ctx.closePath();
+  ctx.fill();
 
-  ctx.fillStyle = '#1e1b4b';
-  ctx.font = 'bold 36px Arial, Helvetica, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(initials, 120, 100);
+  // Shirt collar
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath();
+  ctx.moveTo(98, 206);
+  ctx.lineTo(120, 242);
+  ctx.lineTo(103, 248);
+  ctx.lineTo(88, 216);
+  ctx.closePath();
+  ctx.fill();
 
-  // Outer border frame for the photo
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.beginPath();
+  ctx.moveTo(142, 206);
+  ctx.lineTo(120, 242);
+  ctx.lineTo(137, 248);
+  ctx.lineTo(152, 216);
+  ctx.closePath();
+  ctx.fill();
+
+  // Navy school tie
+  ctx.fillStyle = '#1e3a8a';
+  ctx.beginPath();
+  ctx.moveTo(113, 230);
+  ctx.lineTo(127, 230);
+  ctx.lineTo(124, 244);
+  ctx.lineTo(128, 296);
+  ctx.lineTo(120, 310);
+  ctx.lineTo(112, 296);
+  ctx.lineTo(116, 244);
+  ctx.closePath();
+  ctx.fill();
+
+  // Subtle frame border
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
   ctx.lineWidth = 4;
-  ctx.strokeRect(2, 2, 236, 296);
+  ctx.strokeRect(2, 2, 236, 316);
 
   return canvas.toDataURL('image/png');
 }
@@ -301,11 +359,11 @@ export function createStudentAvatarPng(name: string, gender?: string): string {
  * Guarantees zero blank grey boxes in PDF generation.
  */
 async function toSafeDataURL(src: string, fallbackGenerator: () => string): Promise<string> {
-  if (!src || src.trim() === '') {
+  if (!src || src.trim() === '' || isCartoonOrPlaceholderAvatar(src)) {
     return fallbackGenerator();
   }
 
-  // Already a safe Base64 image
+  // Already a safe Base64 PNG/JPEG image
   if (src.startsWith('data:image/png') || src.startsWith('data:image/jpeg')) {
     return src;
   }
@@ -462,17 +520,17 @@ async function createCardElements(
         </div>
       ` : ''}
 
-      <!-- Left: Photo Column -->
-      <div style="width: 170px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; position: relative; z-index: 1;">
-        <div style="width: 170px; height: 215px; border-radius: 12px; border: 2.5px solid #1e1b4b; overflow: hidden; background: #e2e8f0; box-shadow: 0 4px 10px rgba(0,0,0,0.12);">
-          <img src="${safeAvatarUrl}" alt="${safeStudentName}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+      <!-- Left: Precision 3:4 Photo Column -->
+      <div style="width: 210px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; position: relative; z-index: 1;">
+        <div style="width: 210px; height: 280px; border-radius: 12px; border: 2.5px solid #1e1b4b; overflow: hidden; background: #e2e8f0; box-shadow: 0 4px 10px rgba(0,0,0,0.12);">
+          <img src="${safeAvatarUrl}" alt="${safeStudentName}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block;" />
         </div>
         ${student.isKjpRecipient ? `
-          <div style="width: 170px; margin-top: 8px; background: #059669; color: #ffffff; font-size: 12.5px; font-weight: 800; padding: 5px 0; border-radius: 8px; text-align: center; letter-spacing: 0.5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+          <div style="width: 210px; margin-top: 8px; background: #059669; color: #ffffff; font-size: 12.5px; font-weight: 800; padding: 5px 0; border-radius: 8px; text-align: center; letter-spacing: 0.5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
             KJP PLUS
           </div>
         ` : `
-          <div style="width: 170px; margin-top: 10px; text-align: center; font-size: 11px; font-weight: 700; color: #4338ca; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); padding: 5px 6px; border-radius: 6px; box-sizing: border-box;">
+          <div style="width: 210px; margin-top: 8px; text-align: center; font-size: 11px; font-weight: 700; color: #4338ca; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); padding: 5px 6px; border-radius: 6px; box-sizing: border-box;">
             ${safeCardValidity}
           </div>
         `}

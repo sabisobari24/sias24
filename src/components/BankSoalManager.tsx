@@ -128,13 +128,24 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
       throw new Error('Ukuran file maksimal 15 MB.');
     }
 
+    const lowerName = file.name.toLowerCase();
+    const inferredMime =
+      file.type ||
+      (lowerName.endsWith('.pdf')
+        ? 'application/pdf'
+        : lowerName.endsWith('.docx')
+          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          : lowerName.endsWith('.txt')
+            ? 'text/plain'
+            : '');
+
     const base64DataUrl = await readFileAsBase64(file);
     const response = await fetch('/api/cbt/generate-questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         fileName: file.name,
-        mimeType: file.type,
+        mimeType: inferredMime,
         fileBase64: base64DataUrl,
         subject: subjectName,
         bankTitle: titleName,
@@ -144,7 +155,7 @@ export default function BankSoalManager({ teacher, classes = [] }: BankSoalManag
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data?.error || 'Gagal meng-generate soal dari dokumen.');
+      throw new Error(data?.error || `Gagal meng-generate soal dari dokumen (HTTP ${response.status}).`);
     }
     const questions = Array.isArray(data?.questions) ? (data.questions as CbtQuestion[]) : [];
     if (questions.length === 0) {

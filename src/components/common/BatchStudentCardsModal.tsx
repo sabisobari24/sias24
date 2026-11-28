@@ -5,6 +5,7 @@ import { printBatchStudentCards } from '../../utils/qrHelper';
 import { downloadBatchStudentCardsPDF } from '../../utils/cardPdfHelper';
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from '../../utils/schoolLogoHelper';
 import { getCardDesignConfig, getPresetById, CardDesignConfig } from '../../utils/cardDesignHelper';
+import { resolveStudentAvatarUrl } from '../../utils/avatarHelper';
 import {
   Printer,
   X,
@@ -160,7 +161,7 @@ export default function BatchStudentCardsModal({
   // Sample student for live preview
   const previewStudent = filteredStudents.find(s => selectedStudentIds.has(s.id)) || filteredStudents[0] || students[0];
   const previewClass = previewStudent ? getSchoolClassName(previewStudent.classId, classes) : '-';
-  const previewAvatar = previewStudent?.avatarUrl || (previewStudent ? `https://ui-avatars.com/api/?name=${encodeURIComponent(previewStudent.name)}&background=4f46e5&color=fff&size=200&bold=true` : '');
+  const previewAvatar = previewStudent ? resolveStudentAvatarUrl(previewStudent.avatarUrl, previewStudent.gender) : '';
 
   const handlePrintBatch = async () => {
     const targetStudents = filteredStudents.filter(s => selectedStudentIds.has(s.id));
@@ -368,7 +369,7 @@ export default function BatchStudentCardsModal({
                   filteredStudents.map((student) => {
                     const isChecked = selectedStudentIds.has(student.id);
                     const cName = getSchoolClassName(student.classId, classes) || '-';
-                    const avatar = student.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=4f46e5&color=fff&size=100&bold=true`;
+                    const avatar = resolveStudentAvatarUrl(student.avatarUrl, student.gender);
 
                     return (
                       <div
@@ -554,12 +555,12 @@ export default function BatchStudentCardsModal({
                           </div>
                         )}
 
-                        {/* Student Photo */}
-                        <div className="w-14 shrink-0 flex flex-col items-center relative z-10">
+                        {/* Student Photo (3:4) */}
+                        <div className="w-[72px] shrink-0 flex flex-col items-center relative z-10">
                           <img
                             src={previewAvatar}
                             alt={previewStudent.name}
-                            className="w-14 h-16 object-cover rounded-md border border-slate-700/40 shadow-xs bg-slate-100"
+                            className="w-[72px] aspect-[3/4] object-cover object-top rounded-md border border-slate-700/40 shadow-xs bg-slate-100"
                           />
                           {previewStudent.isKjpRecipient && (
                             <span className="mt-1 text-[7px] font-black bg-emerald-600 text-white px-1 py-0.2 rounded shadow-xs w-full text-center">

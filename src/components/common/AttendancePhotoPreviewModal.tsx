@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Attendance, Student, SchoolClass } from '../../types';
+import { resolveStudentAvatarUrl } from '../../utils/avatarHelper';
 import { 
   X, 
   ZoomIn, 
@@ -170,17 +171,11 @@ export default function AttendancePhotoPreviewModal({
             {/* Header / Student Info */}
             <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
-                {student?.avatarUrl ? (
-                  <img
-                    src={student.avatarUrl}
-                    alt={student.name}
-                    className="w-12 h-12 rounded-full object-cover border-2 border-slate-700 shadow-md shrink-0"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-lg shrink-0">
-                    {student?.name?.charAt(0) || 'S'}
-                  </div>
-                )}
+                <img
+                  src={resolveStudentAvatarUrl(student?.avatarUrl, student?.gender)}
+                  alt={student?.name || 'Siswa'}
+                  className="w-12 h-12 rounded-full object-cover object-top border-2 border-slate-700 shadow-md shrink-0"
+                />
                 <div className="text-left space-y-0.5">
                   <h3 className="font-extrabold text-white text-sm line-clamp-1">
                     {student?.name || 'Siswa'}

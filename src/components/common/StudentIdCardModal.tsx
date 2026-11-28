@@ -5,6 +5,7 @@ import { generateNISNQRCode, printSingleStudentCard } from '../../utils/qrHelper
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from '../../utils/schoolLogoHelper';
 import { getCardDesignConfig, getPresetById, CardDesignConfig } from '../../utils/cardDesignHelper';
 import { downloadSingleStudentCardPDF } from '../../utils/cardPdfHelper';
+import { resolveStudentAvatarUrl } from '../../utils/avatarHelper';
 import { X, Printer, QrCode, CreditCard, RotateCw, CheckCircle2, ShieldCheck, Download, Sparkles, FileDown, Loader2, ChevronDown, Check, AlertCircle } from 'lucide-react';
 
 interface StudentIdCardModalProps {
@@ -99,8 +100,8 @@ export default function StudentIdCardModal({
   if (!isOpen || !student) return null;
 
   const className = getSchoolClassName(student.classId, classes);
-  const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=4f46e5&color=fff&size=200&bold=true`;
-  const avatarUrl = student.avatarUrl || defaultAvatar;
+  const defaultAvatar = resolveStudentAvatarUrl('', student.gender);
+  const avatarUrl = resolveStudentAvatarUrl(student.avatarUrl, student.gender);
 
   const handleDownloadPdf = async (format: 'card' | 'a4' = 'card') => {
     if (!student) return;
@@ -214,15 +215,15 @@ export default function StudentIdCardModal({
                     </div>
                   )}
 
-                  {/* Foto Siswa */}
-                  <div className="w-20 shrink-0 flex flex-col items-center relative z-10">
+                  {/* Foto Siswa (Presisi 3:4) */}
+                  <div className="w-[84px] shrink-0 flex flex-col items-center relative z-10">
                     <img
                       src={avatarUrl}
                       alt={student.name}
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = defaultAvatar;
                       }}
-                      className="w-20 h-24 object-cover rounded-lg border-2 border-slate-700/40 shadow-sm bg-slate-200"
+                      className="w-[84px] aspect-[3/4] object-cover object-top rounded-lg border-2 border-slate-700/40 shadow-sm bg-slate-200"
                     />
                     {student.isKjpRecipient && (
                       <span className="mt-1 text-[8px] font-black bg-emerald-600 text-white px-1.5 py-0.5 rounded shadow-xs w-full text-center">

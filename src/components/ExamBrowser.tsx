@@ -64,6 +64,9 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   const lastTickAtRef = useRef(Date.now());
   const lastInteractionAtRef = useRef(Date.now());
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const sirenNodesRef = useRef<Array<{ stop?: () => void; disconnect?: () => void }>>([]);
+  const sirenStopTimerRef = useRef<number | null>(null);
+  const vibrateIntervalRef = useRef<number | null>(null);
   const usedFullscreenRef = useRef(false);
   const isEmailVerifyingRef = useRef(false);
   const isGoogleFormExam = Boolean(!exam.questionBankId && exam.googleFormUrl);
@@ -267,6 +270,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
       };
       await saveDocument('exam_grades', gradeId, newGrade);
       
+      stopWarningSiren();
       setIsCompleted(true);
       onExamCompleted?.(exam.id);
     } catch (err) {
@@ -304,59 +308,142 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     }
   };
 
-  // Play loud multi-cycle emergency siren at full gain when a violation occurs
+  const stopWarningSiren = () => {
+    if (sirenStopTimerRef.current !== null) {
+      window.clearTimeout(sirenStopTimerRef.current);
+      sirenStopTimerRef.current = null;
+    }
+    if (vibrateIntervalRef.current !== null) {
+      window.clearInterval(vibrateIntervalRef.current);
+      vibrateIntervalRef.current = null;
+    }
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try {
+        navigator.vibrate(0);
+      } catch {
+        /* ignore */
+      }
+    }
+    for (const node of sirenNodesRef.current) {
+      try {
+        node.stop?.();
+      } catch {
+        /* already stopped */
+      }
+      try {
+        node.disconnect?.();
+      } catch {
+        /* ignore */
+      }
+    }
+    sirenNodesRef.current = [];
+  };
+
+  useEffect(() => {
+    return () => {
+      stopWarningSiren();
+    };
+  }, []);
+
+  // Play firm, authoritative 15-second security warning klaxon at full volume
   const playWarningBeep = () => {
     try {
-      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-        navigator.vibrate([350, 120, 350, 120, 500]);
-      }
+      stopWarningSiren();
+
+      const triggerVibration = () => {
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+          try {
+            navigator.vibrate([450, 150, 450, 450]);
+          } catch {
+            /* ignore */
+          }
+        }
+      };
+      triggerVibration();
+      vibrateIntervalRef.current = window.setInterval(triggerVibration, 1500);
 
       const audioCtx = unlockAudioContext();
-      if (!audioCtx) return;
+      if (!audioCtx) {
+        sirenStopTimerRef.current = window.setTimeout(() => stopWarningSiren(), 15000);
+        return;
+      }
 
       const now = audioCtx.currentTime;
-      const duration = 2.4;
+      const duration = 15.0;
 
       const compressor = audioCtx.createDynamicsCompressor();
-      compressor.threshold.setValueAtTime(-6, now);
-      compressor.knee.setValueAtTime(6, now);
-      compressor.ratio.setValueAtTime(12, now);
-      compressor.attack.setValueAtTime(0.002, now);
-      compressor.release.setValueAtTime(0.15, now);
+      compressor.threshold.setValueAtTime(-4, now);
+      compressor.knee.setValueAtTime(4, now);
+      compressor.ratio.setValueAtTime(16, now);
+      compressor.attack.setValueAtTime(0.001, now);
+      compressor.release.setValueAtTime(0.08, now);
+
+      const pulseGain = audioCtx.createGain();
+      pulseGain.gain.setValueAtTime(0.0001, now);
 
       const masterGain = audioCtx.createGain();
       masterGain.gain.setValueAtTime(1.0, now);
       masterGain.gain.setValueAtTime(1.0, now + duration - 0.08);
-      masterGain.gain.linearRampToValueAtTime(0.001, now + duration);
+      masterGain.gain.linearRampToValueAtTime(0.0001, now + duration);
 
+      pulseGain.connect(compressor);
       compressor.connect(masterGain);
       masterGain.connect(audioCtx.destination);
 
-      const osc1 = audioCtx.createOscillator();
-      const osc2 = audioCtx.createOscillator();
-      osc1.type = 'sawtooth';
-      osc2.type = 'square';
+      // Authoritative 3-harmonic klaxon stack (fundamental + fifth + crisp octave edge)
+      const oscLow = audioCtx.createOscillator();
+      const oscMid = audioCtx.createOscillator();
+      const oscHigh = audioCtx.createOscillator();
+      oscLow.type = 'square';
+      oscMid.type = 'sawtooth';
+      oscHigh.type = 'square';
 
-      // 3 rapid high-low emergency siren cycles (680Hz <-> 1280Hz)
-      osc1.frequency.setValueAtTime(680, now);
-      osc2.frequency.setValueAtTime(692, now);
-      for (let i = 0; i < 3; i++) {
-        const start = now + i * 0.8;
-        const peak = start + 0.4;
-        const end = start + 0.8;
-        osc1.frequency.linearRampToValueAtTime(1280, peak);
-        osc1.frequency.linearRampToValueAtTime(680, end);
-        osc2.frequency.linearRampToValueAtTime(1292, peak);
-        osc2.frequency.linearRampToValueAtTime(692, end);
+      const oscMidGain = audioCtx.createGain();
+      const oscHighGain = audioCtx.createGain();
+      oscMidGain.gain.setValueAtTime(0.8, now);
+      oscHighGain.gain.setValueAtTime(0.45, now);
+
+      oscLow.connect(pulseGain);
+      oscMid.connect(oscMidGain);
+      oscMidGain.connect(pulseGain);
+      oscHigh.connect(oscHighGain);
+      oscHighGain.connect(pulseGain);
+
+      // 15 cycles of sharp dual-tone command warning bursts: "BEEP-BEEP! ... BEEP-BEEP!"
+      for (let sec = 0; sec < 15; sec++) {
+        const t = now + sec;
+
+        // First firm warning burst (540 Hz / 810 Hz / 1080 Hz)
+        oscLow.frequency.setValueAtTime(540, t);
+        oscMid.frequency.setValueAtTime(810, t);
+        oscHigh.frequency.setValueAtTime(1080, t);
+        pulseGain.gain.setValueAtTime(0.0001, t);
+        pulseGain.gain.linearRampToValueAtTime(1.0, t + 0.015);
+        pulseGain.gain.setValueAtTime(1.0, t + 0.25);
+        pulseGain.gain.linearRampToValueAtTime(0.0001, t + 0.27);
+
+        // Second stepped urgent warning burst (660 Hz / 990 Hz / 1320 Hz)
+        const t2 = t + 0.34;
+        oscLow.frequency.setValueAtTime(660, t2);
+        oscMid.frequency.setValueAtTime(990, t2);
+        oscHigh.frequency.setValueAtTime(1320, t2);
+        pulseGain.gain.setValueAtTime(0.0001, t2);
+        pulseGain.gain.linearRampToValueAtTime(1.0, t2 + 0.015);
+        pulseGain.gain.setValueAtTime(1.0, t2 + 0.62);
+        pulseGain.gain.linearRampToValueAtTime(0.0001, t2 + 0.64);
       }
 
-      osc1.connect(compressor);
-      osc2.connect(compressor);
+      oscLow.start(now);
+      oscMid.start(now);
+      oscHigh.start(now);
+      oscLow.stop(now + duration);
+      oscMid.stop(now + duration);
+      oscHigh.stop(now + duration);
 
-      osc1.start(now);
-      osc2.start(now);
-      osc1.stop(now + duration);
-      osc2.stop(now + duration);
+      sirenNodesRef.current = [oscLow, oscMid, oscHigh, pulseGain, compressor, masterGain];
+      sirenStopTimerRef.current = window.setTimeout(() => {
+        stopWarningSiren();
+      }, duration * 1000 + 150);
     } catch (e) {
       console.warn('Audio Context blocked or not supported:', e);
     }
@@ -715,6 +802,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
     
     const savedPin = cbtBypassPin || localStorage.getItem('siakad_cbt_bypass_pin') || '9999';
     if (adminPin === savedPin || adminPin === 'exambro123' || adminPin === '9999' || (cbtBypassPin && adminPin === cbtBypassPin)) {
+      stopWarningSiren();
       setIsBlocked(false);
       setIsLocked(false);
       setViolationsCount(0);
@@ -727,6 +815,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
   };
 
   const recordGoogleFormCompletion = async () => {
+    stopWarningSiren();
     onExamCompleted?.(exam.id);
     const safeSlug = studentName.replace(/\s+/g, '-').toLowerCase();
     const submissionId = `sub-${safeSlug}-${exam.id}`;
@@ -844,6 +933,7 @@ export default function ExamBrowser({ exam, studentName, studentId, onClose, cbt
       if (isGoogleFormExam && markGoogleFormDoneOnExit) {
         await recordGoogleFormCompletion();
       }
+      stopWarningSiren();
       setIsExitPinOpen(false);
       try {
         (window.screen as any)?.orientation?.unlock?.();

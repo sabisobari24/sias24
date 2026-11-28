@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode, Html5QrcodeCameraScanConfig, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Student, SchoolClass, Attendance } from '../../types';
 import { playScannerBeep } from '../../utils/qrHelper';
+import { resolveStudentAvatarUrl } from '../../utils/avatarHelper';
 import {
   X,
   Camera,
@@ -931,14 +932,9 @@ export default function AttendanceQrScannerModal({
                   }`}
                 >
                   <img
-                    src={
-                      lastScannedEntry.student.avatarUrl ||
-                      `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        lastScannedEntry.student.name
-                      )}&background=4f46e5&color=fff&size=120&bold=true`
-                    }
+                    src={resolveStudentAvatarUrl(lastScannedEntry.student.avatarUrl, lastScannedEntry.student.gender)}
                     alt={lastScannedEntry.student.name}
-                    className="w-14 h-18 object-cover rounded-lg border border-slate-300 bg-white shrink-0"
+                    className="w-16 aspect-[3/4] object-cover object-top rounded-lg border border-slate-300 bg-white shrink-0"
                   />
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-start justify-between gap-1">

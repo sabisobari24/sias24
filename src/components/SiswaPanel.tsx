@@ -63,6 +63,7 @@ import {
 import ExamBrowser from './ExamBrowser';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import StudentIdCardModal from './common/StudentIdCardModal';
+import { resolveStudentAvatarUrl } from '../utils/avatarHelper';
 import { generateNISNQRCode } from '../utils/qrHelper';
 import { downloadSingleStudentCardPDF } from '../utils/cardPdfHelper';
 import ELearningPanel from './ELearningPanel';
@@ -1014,9 +1015,9 @@ export default function SiswaPanel({
           <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex flex-col md:flex-row items-center gap-6">
               <img
-                src={student.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=4f46e5&color=fff&size=160&bold=true`}
+                src={resolveStudentAvatarUrl(student.avatarUrl, student.gender)}
                 alt={student.name}
-                className="w-20 h-20 rounded-full border-4 border-white/30 object-cover shadow-lg"
+                className="w-20 h-20 rounded-full border-4 border-white/30 object-cover object-top shadow-lg"
               />
               <div className="text-center md:text-left space-y-1">
                 <p className="text-blue-100 text-sm font-medium tracking-wide uppercase">Selamat Datang di Portal Siswa</p>
@@ -1514,9 +1515,9 @@ export default function SiswaPanel({
 
                   <div className="flex gap-2.5 items-center">
                     <img
-                      src={student.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=4f46e5&color=fff&size=120&bold=true`}
+                      src={resolveStudentAvatarUrl(student.avatarUrl, student.gender)}
                       alt={student.name}
-                      className="w-14 h-16 rounded-md object-cover border border-slate-200 shrink-0"
+                      className="w-[66px] aspect-[3/4] rounded-md object-cover object-top border border-slate-200 shrink-0"
                     />
                     <div className="min-w-0 flex-1 text-[11px] leading-tight space-y-0.5">
                       <p className="font-bold text-slate-900 truncate">{student.name}</p>

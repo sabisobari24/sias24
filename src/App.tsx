@@ -182,6 +182,7 @@ import WebSarpras from './components/website/WebSarpras';
 import WebBerita from './components/website/WebBerita';
 import { syncCollection, syncHeadmaster, syncCbtConfig, saveCbtBypassPin, syncCollectionWithArray, saveDocument, deleteDocument, saveDocumentsBatch, deleteDocumentsBatch, clearAllCollections, clearDeletedIds, trackDeletedId, untrackDeletedId, deduplicateStudents, onFirestoreStatusChange, syncCardDesign } from './lib/firebase';
 import { saveSchoolCardLogo } from './utils/schoolLogoHelper';
+import { resolveStudentAvatarUrl } from './utils/avatarHelper';
 import { INITIAL_WEB_CONTENT } from './data/initialWebContent';
 
 export interface AppProps {
@@ -2785,7 +2786,7 @@ export default function App({ initialMode }: AppProps = {}) {
         parentNik: '',
         parentPhone: '',
         parentEmail: '',
-        avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(reg.name || 'siswa')}`,
+        avatarUrl: '',
         password: (reg.password || 'siswa123').slice(0, 150)
       };
       await saveDocument('students', newStudent.id, newStudent);
@@ -2923,7 +2924,7 @@ export default function App({ initialMode }: AppProps = {}) {
           parentNik: '',
           parentPhone: '',
           parentEmail: '',
-          avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(reg.name || 'siswa')}`,
+          avatarUrl: '',
           password: (reg.password || 'siswa123').slice(0, 150)
         });
         approvedRegIds.push(reg.id);
@@ -5530,9 +5531,17 @@ export default function App({ initialMode }: AppProps = {}) {
                         </p>
                         <p className="text-[10px] text-slate-400 capitalize mt-0.5 truncate">{activeRole?.replace('_', ' ')}</p>
                       </div>
-                      <span className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
-                        <User className="w-4 h-4 shrink-0" />
-                      </span>
+                      {activeRole === 'siswa' ? (
+                        <img
+                          src={resolveStudentAvatarUrl(activeUser?.avatarUrl, activeUser?.gender)}
+                          alt={activeUser?.name || 'Siswa'}
+                          className="w-8 h-8 rounded-xl border border-indigo-200 dark:border-indigo-700 object-cover object-top shrink-0"
+                        />
+                      ) : (
+                        <span className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
+                          <User className="w-4 h-4 shrink-0" />
+                        </span>
+                      )}
                     </button>
 
                     <button

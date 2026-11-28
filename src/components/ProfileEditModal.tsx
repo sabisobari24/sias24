@@ -3,6 +3,7 @@ import { X, User, Lock, Mail, Phone, MapPin, Key, Check, AlertCircle, Shield, Ca
 import { Student, Teacher, UserRole, SchoolClass } from '../types';
 import { compressImageFile, compressBase64Image, convertGoogleDriveLink } from '../utils/imageHelper';
 import { getSchoolClassName } from '../utils/classUtils';
+import { resolveStudentAvatarUrl, isCartoonOrPlaceholderAvatar } from '../utils/avatarHelper';
 
 interface ProfileEditModalProps {
   isOpen: boolean;
@@ -77,7 +78,7 @@ export default function ProfileEditModal({
       setConfirmPassword('');
 
       // Populate avatar
-      const currentAvatar = activeUser.avatarUrl || '';
+      const currentAvatar = isCartoonOrPlaceholderAvatar(activeUser.avatarUrl) ? '' : (activeUser.avatarUrl || '');
       setAvatarUrl(currentAvatar);
       setLinkInputVal(currentAvatar.startsWith('data:') ? '' : currentAvatar);
 
@@ -280,10 +281,16 @@ export default function ProfileEditModal({
                   <RefreshCw className="w-6 h-6 text-indigo-600 animate-spin" />
                 ) : (
                   <img 
-                    src={avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || parentName || activeUser.name || 'User')}&background=4f46e5&color=fff`} 
+                    src={
+                      avatarUrl
+                        ? avatarUrl
+                        : (activeRole === 'siswa' || activeUser?.gender)
+                          ? resolveStudentAvatarUrl('', activeUser?.gender)
+                          : `https://ui-avatars.com/api/?name=${encodeURIComponent(name || parentName || activeUser.name || 'User')}&background=4f46e5&color=fff`
+                    }
                     alt="Avatar Preview" 
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover object-top"
                   />
                 )}
               </div>

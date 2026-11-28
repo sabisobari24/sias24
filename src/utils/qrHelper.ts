@@ -4,6 +4,7 @@ import { printHTML } from './printHelper';
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from './schoolLogoHelper';
 import { getCardDesignConfig, getPresetById } from './cardDesignHelper';
 import { getSchoolClassName } from './classUtils';
+import { resolveStudentAvatarUrl } from './avatarHelper';
 
 /**
  * Generate high-resolution Data URL for a given NISN QR code.
@@ -104,8 +105,8 @@ export async function printSingleStudentCard(
   const schoolLogo = customSchoolLogo && customSchoolLogo.trim() !== '' && !customSchoolLogo.includes('/logo.png')
     ? customSchoolLogo
     : getEffectiveSchoolLogo();
-  const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=4f46e5&color=fff&size=200&bold=true`;
-  const avatarUrl = student.avatarUrl || defaultAvatar;
+  const defaultAvatar = resolveStudentAvatarUrl('', student.gender);
+  const avatarUrl = resolveStudentAvatarUrl(student.avatarUrl, student.gender);
 
   const cardConfig = getCardDesignConfig();
   const preset = getPresetById(cardConfig.presetId);
@@ -242,15 +243,16 @@ export async function printSingleStudentCard(
             position: relative;
           }
           .student-photo-wrapper {
-            width: 19mm;
+            width: 21mm;
             display: flex;
             flex-direction: column;
             align-items: center;
           }
           .student-photo {
-            width: 19mm;
-            height: 24mm;
+            width: 21mm;
+            height: 28mm;
             object-fit: cover;
+            object-position: center top;
             border-radius: 2mm;
             border: 1.5px solid #1e1b4b;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -538,12 +540,12 @@ export async function printBatchStudentCards(
     studentList.map(async (student) => {
       const qrDataUrl = await generateNISNQRCode(student.nisn || student.id, 240);
       const cName = getSchoolClassName(student.classId, classes, '-');
-      const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=4f46e5&color=fff&size=160&bold=true`;
+      const defaultAvatar = resolveStudentAvatarUrl('', student.gender);
       return {
         student,
         className: cName,
         qrDataUrl,
-        avatarUrl: student.avatarUrl || defaultAvatar,
+        avatarUrl: resolveStudentAvatarUrl(student.avatarUrl, student.gender),
         defaultAvatar
       };
     })
@@ -771,15 +773,16 @@ export async function printBatchStudentCards(
             position: relative;
           }
           .student-photo-wrapper {
-            width: 17mm;
+            width: 20.25mm;
             display: flex;
             flex-direction: column;
             align-items: center;
           }
           .student-photo {
-            width: 17mm;
-            height: 22mm;
+            width: 20.25mm;
+            height: 27mm;
             object-fit: cover;
+            object-position: center top;
             border-radius: 1.5mm;
             border: 1.2px solid #1e1b4b;
             background: #e2e8f0;

@@ -7,6 +7,7 @@ import {
   buildSchedulesForStudent,
   downloadExamCardsPdfA4
 } from '../../utils/examCardPdfHelper';
+import { resolveStudentAvatarUrl } from '../../utils/avatarHelper';
 import {
   Printer,
   X,
@@ -227,21 +228,20 @@ export default function ExamCardGeneratorModal({
             <p className="text-[8px] font-bold text-slate-500">Tahun Pelajaran: {examYear}</p>
           </div>
 
-          {/* Student Photo & Details */}
-          <div className="flex items-center gap-2.5 bg-purple-50/60 border border-purple-100 rounded-xl p-2 mb-2">
-            <div className="w-16 h-20 bg-white border border-slate-300 rounded-lg shrink-0 overflow-hidden flex flex-col items-center justify-center p-0.5 text-center shadow-2xs">
-              {student.avatarUrl ? (
-                <img
-                  src={student.avatarUrl}
-                  alt={student.name}
-                  className="w-full h-full object-cover rounded"
-                />
-              ) : (
-                <div className="text-center">
-                  <GraduationCap className="w-6 h-6 text-slate-400 mx-auto" />
-                  <span className="text-[7px] font-bold text-slate-400 uppercase">Pasfoto</span>
-                </div>
-              )}
+          {/* Student Photo (3:4 Pasfoto) & Details */}
+          <div className="flex items-center gap-3 bg-purple-50/60 border border-purple-100 rounded-xl p-2 mb-2">
+            <div className="w-[88px] sm:w-[96px] aspect-[3/4] bg-white border border-slate-300 rounded-lg shrink-0 overflow-hidden shadow-2xs">
+              <img
+                src={resolveStudentAvatarUrl(student.avatarUrl, student.gender)}
+                alt={student.name}
+                onError={(e) => {
+                  const fallback = resolveStudentAvatarUrl('', student.gender);
+                  if ((e.currentTarget as HTMLImageElement).src !== fallback) {
+                    (e.currentTarget as HTMLImageElement).src = fallback;
+                  }
+                }}
+                className="w-full h-full object-cover object-top"
+              />
             </div>
 
             <div className="flex-1 min-w-0 text-[9.5px] space-y-1 text-slate-800">

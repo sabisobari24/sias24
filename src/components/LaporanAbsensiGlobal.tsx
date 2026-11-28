@@ -3,6 +3,7 @@ import { Attendance, Student, SchoolClass } from '../types';
 import { ShieldCheck, Clock, CheckCircle2, XCircle, Info, Image, MapPin, Eye } from 'lucide-react';
 import AttendancePhotoPreviewModal from './common/AttendancePhotoPreviewModal';
 import { getSchoolClassName, isSameClass } from '../utils/classUtils';
+import { resolveStudentAvatarUrl } from '../utils/avatarHelper';
 
 interface LaporanAbsensiGlobalProps {
   attendance: Attendance[];
@@ -73,17 +74,11 @@ export default function LaporanAbsensiGlobal({
                     <tr key={record.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-4 font-medium">
                         <div className="flex items-center gap-2.5">
-                          {student?.avatarUrl ? (
-                            <img
-                              src={student.avatarUrl}
-                              alt={student.name}
-                              className="w-7 h-7 rounded-full object-cover border"
-                            />
-                          ) : (
-                            <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600">
-                              {student?.name?.charAt(0) || 'S'}
-                            </div>
-                          )}
+                          <img
+                            src={resolveStudentAvatarUrl(student?.avatarUrl, student?.gender)}
+                            alt={student?.name || 'Siswa'}
+                            className="w-7 h-7 rounded-full object-cover object-top border"
+                          />
                           <div>
                             <span className="font-bold text-slate-800 block">{student?.name || 'Siswa'}</span>
                             <span className="text-[10px] text-slate-400 font-semibold">{classDisplayName}</span>

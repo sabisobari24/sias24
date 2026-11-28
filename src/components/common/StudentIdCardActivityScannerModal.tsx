@@ -10,6 +10,7 @@ import {
 } from '../../types';
 import { playScannerBeep } from '../../utils/qrHelper';
 import { getSchoolClassName } from '../../utils/classUtils';
+import { resolveStudentAvatarUrl } from '../../utils/avatarHelper';
 import {
   X,
   Camera,
@@ -671,9 +672,9 @@ export default function StudentIdCardActivityScannerModal({
                 <div className="p-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl border border-indigo-900/60 shadow-md flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <img
-                      src={scannedStudent.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(scannedStudent.name)}`}
+                      src={resolveStudentAvatarUrl(scannedStudent.avatarUrl, scannedStudent.gender)}
                       alt={scannedStudent.name}
-                      className="w-12 h-12 rounded-xl object-cover bg-white/10 border border-white/20 shrink-0"
+                      className="w-12 h-12 rounded-xl object-cover object-top bg-white/10 border border-white/20 shrink-0"
                     />
                     <div>
                       <div className="flex items-center gap-2">

@@ -5,6 +5,7 @@ import { Student, SchoolClass, ExamSchedule } from '../types';
 import { getEffectiveSchoolLogo, DEFAULT_SCHOOL_LOGO } from './schoolLogoHelper';
 import { getSchoolClassName, isSameClass } from './classUtils';
 import { createStudentAvatarPng } from './cardPdfHelper';
+import { isCartoonOrPlaceholderAvatar } from './avatarHelper';
 
 const escapeHtml = (val: unknown): string => {
   if (val === null || val === undefined) return '';
@@ -31,7 +32,7 @@ const isSafeMediaUrl = (url: unknown, fallback: string = ''): string => {
 };
 
 async function toSafeDataURL(src: string, fallbackGenerator: () => string): Promise<string> {
-  if (!src || src.trim() === '') {
+  if (!src || src.trim() === '' || isCartoonOrPlaceholderAvatar(src)) {
     return fallbackGenerator();
   }
   if (src.startsWith('data:image/png') || src.startsWith('data:image/jpeg') || src.startsWith('data:image/webp')) {
@@ -214,10 +215,10 @@ function buildFrontCardHtml(params: {
           </div>
         </div>
 
-        <!-- BIODATA & FOTO -->
-        <div style="display:flex;gap:10px;align-items:stretch;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:9px;">
-          <div style="width:72px;height:94px;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#ffffff;flex-shrink:0;">
-            <img src="${isSafeMediaUrl(safeAvatar)}" style="width:100%;height:100%;object-fit:cover;display:block;" />
+        <!-- BIODATA & FOTO 3x4 -->
+        <div style="display:flex;gap:11px;align-items:stretch;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:9px;">
+          <div style="width:96px;height:128px;border:1.5px solid #94a3b8;border-radius:6px;overflow:hidden;background:#ffffff;flex-shrink:0;">
+            <img src="${isSafeMediaUrl(safeAvatar)}" style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block;" />
           </div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:5px;font-size:9.5px;">
             <div>
